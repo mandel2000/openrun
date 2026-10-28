@@ -2,6 +2,7 @@
 no API cost), Gemini CLI (free with a Google account) or any MCP client.
 
     backend/.venv/bin/python -m app.mcp_server
+    OPENRUN_URL=https://run.example.com OPENRUN_API_TOKEN=... backend/.venv/bin/python -m app.mcp_server   # remote
 
 The same tools and evidence-based rules as the in-app coach; the client's model does the talking.
 """
@@ -11,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import json
+import os
 
 from mcp import types
 from mcp.server.lowlevel import Server
@@ -31,7 +33,28 @@ async def list_tools(ctx, params) -> types.ListToolsResult:
     ])
 
 
+REMOTE_URL = os.getenv("OPENRUN_URL", "").rstrip("/")  # e.g. https://run.example.com (OpenRun on a server)
+REMOTE_TOKEN = os.getenv("OPENRUN_API_TOKEN", "")
+
+
+def call_remote(name: str, args: dict) -> types.CallToolResult:
+    import httpx
+
+    try:
+        r = httpx.post(f"{REMOTE_URL}/api/tools/{name}", json={"args": args}, timeout=120,
+                       headers={"Authorization": f"Bearer {REMOTE_TOKEN}"})
+        r.raise_for_status()
+        out = r.json()
+    except Exception as e:  # noqa: BLE001
+        return types.CallToolResult(content=[types.TextContent(text=f"Error conectando con OpenRun: {e}")], isError=True)
+    if not out.get("ok"):
+        return types.CallToolResult(content=[types.TextContent(text=f"Error: {out.get('error')}")], isError=True)
+    return types.CallToolResult(content=[types.TextContent(text=json.dumps(out["result"], default=str, ensure_ascii=False)[:60000])])
+
+
 def call(name: str, args: dict) -> types.CallToolResult:
+    if REMOTE_URL:
+        return call_remote(name, args)
     with Session(engine) as s:
         try:
             out = coach.run_tool(s, name, args or {})
@@ -49,7 +72,8 @@ server = Server("openrun", version="0.2", title="OpenRun – entrenador de runni
 
 
 async def main() -> None:
-    init_db()
+    if not REMOTE_URL:
+        init_db()
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())
 

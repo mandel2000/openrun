@@ -1,0 +1,24 @@
+# Coolify (Docker Compose build pack) or `docker compose up -d` on any server behind a TLS proxy.
+# Secrets come from the environment (Coolify env vars), never from this file.
+services:
+  openrun:
+    build: .
+    restart: unless-stopped
+    environment:
+      OPENRUN_PASSWORD: ${OPENRUN_PASSWORD:?Define OPENRUN_PASSWORD (12+ caracteres)}
+      OPENRUN_API_TOKEN: ${OPENRUN_API_TOKEN:-}
+      OPENRUN_PUBLIC_URL: ${OPENRUN_PUBLIC_URL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENRUN_PROVIDER: ${OPENRUN_PROVIDER:-anthropic}
+      OPENRUN_MODEL: ${OPENRUN_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    volumes:
+      - openrun-data:/data
+    expose:
+      - "8000"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+volumes:
+  openrun-data:

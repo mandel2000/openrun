@@ -153,12 +153,60 @@ def test_scheduler_due():
 
 
 def test_lan_pin_auth(monkeypatch):
+    from app import auth
     c = TestClient(main.app)  # client host "testclient" = not this machine
     assert c.get("/api/athlete").status_code == 401
-    monkeypatch.setattr(main, "PIN", "4321")
-    monkeypatch.setattr(main, "_secret", "s3cret")
-    monkeypatch.setattr(main.time, "sleep", lambda _: None)
+    monkeypatch.setattr(auth, "PASSWORD", "4321")
+    monkeypatch.setattr(auth.time, "sleep", lambda _: None)
     assert c.post("/api/auth", json={"pin": "0000"}).status_code == 401
     r = c.post("/api/auth", json={"pin": "4321"})
     assert r.status_code == 200 and c.get("/api/athlete").status_code == 200
     assert c.get("/api/auth").json()["authed"] is True
+    assert c.get("/api/health").status_code == 200 and r.headers["x-frame-options"] == "DENY"
+
+
+def test_public_server_mode(monkeypatch):
+    """Behind a reverse proxy nothing is trusted as local; password session or API token required."""
+    from app import auth
+    monkeypatch.setattr(auth, "PASSWORD", "correct horse battery")
+    monkeypatch.setattr(auth, "TRUST_LOCAL", False)
+    monkeypatch.setattr(auth, "TRUST_PROXY", True)
+    monkeypatch.setattr(auth, "API_TOKEN", "t" * 40)
+    monkeypatch.setattr(auth.time, "sleep", lambda _: None)
+    monkeypatch.setattr(auth, "_fails", {})
+    local = TestClient(main.app, client=("127.0.0.1", 5000))
+    assert local.get("/api/athlete").status_code == 401  # proxy traffic looks local: must not be trusted
+    assert local.get("/api/athlete", headers={"Authorization": "Bearer " + "t" * 40}).status_code == 200
+    assert local.get("/api/athlete", headers={"Authorization": "Bearer wrong"}).status_code == 401
+    # rate limit is per real client (X-Forwarded-For), so an attacker can't lock the owner out
+    for _ in range(10):
+        local.post("/api/auth", json={"pin": "nope"}, headers={"X-Forwarded-For": "6.6.6.6"})
+    assert local.post("/api/auth", json={"pin": "correct horse battery"}, headers={"X-Forwarded-For": "6.6.6.6"}).status_code == 429
+    r = local.post("/api/auth", json={"pin": "correct horse battery"}, headers={"X-Forwarded-For": "1.2.3.4", "X-Forwarded-Proto": "https"})
+    assert r.status_code == 200 and "secure" in r.headers["set-cookie"].lower()
+    tok = r.cookies.get(auth.COOKIE) or local.cookies.get(auth.COOKIE)
+    assert auth.valid_session(tok)
+    monkeypatch.setattr(auth, "_KEY", b"x" * 32)  # password changed -> old sessions invalid
+    assert not auth.valid_session(tok)
+    monkeypatch.setattr(auth, "PASSWORD", "short")
+    import pytest
+    with pytest.raises(RuntimeError):
+        auth.check_config()
+
+
+def test_tools_endpoint_and_remote_mcp(monkeypatch):
+    from app import auth, mcp_server
+    monkeypatch.setattr(auth, "API_TOKEN", "k" * 40)
+    c = TestClient(main.app)
+    h = {"Authorization": "Bearer " + "k" * 40}
+    assert c.post("/api/tools/calculate_vdot", json={"args": {"distance": "5k", "time": "20:00"}}).status_code == 401
+    r = c.post("/api/tools/calculate_vdot", json={"args": {"distance": "5k", "time": "20:00"}}, headers=h).json()
+    assert r["ok"] and 49 < r["result"]["vdot"] < 50.5
+    assert c.post("/api/tools/rm_rf", json={"args": {}}, headers=h).status_code == 404
+    # the MCP server forwards to the HTTP API when OPENRUN_URL is set
+    import httpx
+    monkeypatch.setattr(mcp_server, "REMOTE_URL", "https://run.example")
+    monkeypatch.setattr(mcp_server, "REMOTE_TOKEN", "k" * 40)
+    monkeypatch.setattr(httpx, "post", lambda url, json, timeout, headers: c.post(url.replace("https://run.example", ""), json=json, headers=headers))
+    res = mcp_server.call("calculate_vdot", {"distance": "5k", "time": "20:00"})
+    assert not res.is_error and '"vdot"' in res.content[0].text

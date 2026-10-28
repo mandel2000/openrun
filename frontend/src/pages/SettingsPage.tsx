@@ -4,7 +4,8 @@ import { Banner, Icon, Segmented, type IconName } from '../ui'
 
 type Athlete = { name: string; sex: string; age: number | null; max_hr: number | null; rest_hr: number | null; lthr: number | null; vdot: number | null; vdot_source: string | null; hr_zones?: { zone: number; low: number; high: number }[] }
 type GStatus = { connected: boolean; name?: string; needs_mfa?: boolean; error?: string; last_sync?: string | null }
-type CoachInfo = { provider: string; model: string; configured: boolean; mcp: { command: string; args: string[]; cwd: string } }
+type CoachInfo = { provider: string; model: string; configured: boolean
+  mcp: { remote: false; command: string; args: string[]; cwd: string } | { remote: true; url: string; token_set: boolean } }
 
 function ConnHead({ icon, title, status, tone = 'good' }: { icon: IconName; title: string; status: string | null; tone?: 'good' | 'warn' }) {
   return (
@@ -354,7 +355,10 @@ function CoachCard() {
   const { data } = useApi<CoachInfo>('/api/coach/info')
   const [tab, setTab] = useState<'mcp' | 'gemini' | 'ollama' | 'api'>('mcp')
   if (!data) return null
-  const server = { command: data.mcp.command, args: data.mcp.args, env: { PYTHONPATH: data.mcp.cwd } }
+  const server = data.mcp.remote
+    ? { command: '/Users/<tu-usuario>/OpenRun/backend/.venv/bin/python', args: ['-m', 'app.mcp_server'],
+        env: { PYTHONPATH: '/Users/<tu-usuario>/OpenRun/backend', OPENRUN_URL: data.mcp.url, OPENRUN_API_TOKEN: '<OPENRUN_API_TOKEN del servidor>' } }
+    : { command: data.mcp.command, args: data.mcp.args, env: { PYTHONPATH: data.mcp.cwd } }
   const claudeCfg = JSON.stringify({ mcpServers: { openrun: server } }, null, 2)
   return (
     <div className="card">
@@ -366,6 +370,7 @@ function CoachCard() {
         {tab === 'mcp' && (
           <>
             <p><b>Sin coste extra con Claude (Free/Pro/Max):</b> conecta OpenRun como servidor MCP en <b>Claude Desktop</b> y chatea allí; Claude usará tus datos y creará entrenos que aparecen aquí. Ajustes de Claude Desktop › Desarrollador › Editar config y añade:</p>
+            {data.mcp.remote && <p className="muted">OpenRun está en un servidor: el MCP se ejecuta en tu ordenador (desde un clon del repo) y habla con el servidor usando el token de API.{!data.mcp.token_set && ' El servidor aún no tiene OPENRUN_API_TOKEN configurado.'}</p>}
             <CopyBlock text={claudeCfg} />
             <p className="muted">Reinicia Claude Desktop. También funciona con <b>Gemini CLI</b> (gratis con cuenta Google) en <code>~/.gemini/settings.json</code> con el mismo bloque <code>mcpServers</code>. Las suscripciones de ChatGPT/Claude/Gemini no dan acceso a la API para apps propias: por eso se usa MCP.</p>
           </>
@@ -477,8 +482,19 @@ function AutomationCard() {
 }
 
 function MobileCard() {
-  const { data } = useApi<{ lan_enabled: boolean; pin_enabled: boolean; urls: string[]; local: boolean }>('/api/network')
+  const { data } = useApi<{ lan_enabled: boolean; pin_enabled: boolean; urls: string[]; local: boolean; public?: boolean }>('/api/network')
   if (!data) return null
+  if (data.public)
+    return (
+      <div className="card">
+        <ConnHead icon="watch" title="OpenRun en el móvil" status="En internet (HTTPS)" />
+        <p className="small text-2" style={{ marginTop: 10 }}>Abre esta dirección en el móvil, inicia sesión y añádela a la pantalla de inicio:</p>
+        {data.urls.map((u) => <CopyBlock key={u} text={u} />)}
+        {!data.local && (
+          <button className="btn btn-ghost btn-sm" onClick={() => api.post('/api/auth/logout').then(() => window.location.reload())}>Cerrar sesión en este dispositivo</button>
+        )}
+      </div>
+    )
   return (
     <div className="card">
       <ConnHead icon="watch" title="OpenRun en el móvil" status={data.lan_enabled ? 'Wifi activado' : 'Solo este ordenador'} tone={data.lan_enabled ? 'good' : 'warn'} />

@@ -4,13 +4,26 @@ import os
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Column
+from sqlalchemy import Column, event
 from sqlalchemy.types import JSON
 from sqlmodel import Field, Session, SQLModel, create_engine
 
+# SQLite file by default (single user, zero ops). OPENRUN_DATABASE_URL switches to e.g. Postgres:
+#   postgresql+psycopg://user:pass@host:5432/openrun
+DB_URL = os.getenv("OPENRUN_DATABASE_URL", "")
 DB_PATH = Path(os.getenv("OPENRUN_DB", Path.home() / ".openrun" / "openrun.db"))
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
+if DB_URL:
+    engine = create_engine(DB_URL, pool_pre_ping=True)
+else:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False, "timeout": 30})
+
+    @event.listens_for(engine, "connect")
+    def _sqlite_pragmas(conn, _):  # WAL: the daily routine thread and web requests don't block each other
+        cur = conn.cursor()
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA synchronous=NORMAL")
+        cur.close()
 
 
 class Athlete(SQLModel, table=True):

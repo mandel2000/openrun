@@ -65,7 +65,7 @@ OPENRUN_PIN=<pin> scripts/install-autostart.sh --lan      # además, accesible d
 
 En el móvil abre `http://<IP-del-Mac>:8000` (la ves en *Ajustes › OpenRun en el móvil*), introduce el PIN y añádela a la pantalla de inicio. Fuera de casa, Tailscale; no abras puertos en el router.
 
-Guía completa (comprobar estado, reiniciar, cambiar el PIN, desinstalar, seguridad y problemas frecuentes): [docs/AUTOSTART_Y_MOVIL.md](docs/AUTOSTART_Y_MOVIL.md).
+Guía completa (comprobar estado, reiniciar, cambiar el PIN, desinstalar, seguridad y problemas frecuentes): [docs/AUTOSTART_Y_MOVIL.md](docs/AUTOSTART_Y_MOVIL.md). Para tenerlo en un servidor 24 h con HTTPS: [docs/DESPLIEGUE_VPS.md](docs/DESPLIEGUE_VPS.md).
 
 ## Primeros pasos
 

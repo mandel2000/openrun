@@ -925,6 +925,31 @@ def daily_routine(s: Session, force: bool = False) -> dict:
         step("readiness", lambda: adapt_today(s)["changes"])
     if connected and st["auto_push"]:
         step("reloj", lambda: (lambda r: {"enviados": sum(1 for x in r if x["ok"]), "errores": [x.get("error") for x in r if not x["ok"]]})(push_changed(s)))
+    step("copia", backup_db)
     hist = meta_get(s, "daily_log").get("items", [])
     meta_set(s, "daily_log", {"items": (hist + [log])[-14:], "last_date": dt.date.today().isoformat()})
     return log
+
+
+def backup_db(keep: int = 14) -> dict | None:
+    """Consistent SQLite snapshot (online backup API) into <data>/backups, keeping the last `keep`."""
+    import sqlite3
+
+    from .db import DB_PATH, DB_URL
+
+    if DB_URL:
+        return None  # external databases have their own backups
+    folder = DB_PATH.parent / "backups"
+    folder.mkdir(parents=True, exist_ok=True)
+    dest = folder / f"openrun-{dt.date.today().isoformat()}.db"
+    src = sqlite3.connect(DB_PATH)
+    out = sqlite3.connect(dest)
+    try:
+        src.backup(out)
+    finally:
+        out.close()
+        src.close()
+    old = sorted(folder.glob("openrun-*.db"))[:-keep]
+    for f in old:
+        f.unlink()
+    return {"file": dest.name, "kept": min(keep, len(list(folder.glob('openrun-*.db'))))}

@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
-import hmac
 import os
 import re
-import secrets
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -19,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from . import scheduler
+from . import auth, scheduler
 from . import services as S
 from .ai import coach
 from .db import get_session, init_db
@@ -31,6 +28,7 @@ from .training.vdot import RACE_DISTANCES_M, parse_time, race_predictions, train
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    auth.check_config()
     init_db()
     stop = threading.Event()
     if os.getenv("OPENRUN_SCHEDULER", "1") == "1":
@@ -45,59 +43,56 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http
 DB = Depends(get_session)
 
 
-# ---------------------------------------------------------------- LAN access (phone on the same wifi) with PIN
-# Requests from this machine are trusted. Any other client needs the PIN (cookie), because the API
-# can read health data and change workouts on the athlete's Garmin account.
+# ---------------------------------------------------------------- access control (see app/auth.py)
 
-PIN = os.getenv("OPENRUN_PIN") or ""
-_secret = secrets.token_hex(16) if not PIN else hashlib.sha256(("openrun:" + PIN).encode()).hexdigest()
-COOKIE = "openrun_auth"
-_fails: dict[str, list[float]] = {}
-
-
-def _is_local(request: Request) -> bool:
-    host = request.client.host if request.client else ""
-    return host in ("127.0.0.1", "::1", "localhost") or host.startswith("::ffff:127.")
-
-
-def _authed(request: Request) -> bool:
-    if _is_local(request):
-        return True
-    tok = request.cookies.get(COOKIE, "")
-    return bool(PIN) and hmac.compare_digest(tok, _secret)
+SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "same-origin", "X-Frame-Options": "DENY"}
 
 
 @app.middleware("http")
-async def lan_auth(request: Request, call_next):
+async def access_control(request: Request, call_next):
     path = request.url.path
-    if path.startswith("/api/") and not path.startswith("/api/auth") and not _authed(request):
-        msg = "PIN necesario" if PIN else "Acceso remoto desactivado: arranca con OPENRUN_PIN para usar OpenRun desde el móvil"
-        return JSONResponse({"detail": msg}, status_code=401)
-    return await call_next(request)
+    public = path in ("/api/health",) or path.startswith("/api/auth")
+    if path.startswith("/api/") and not public and not auth.authed(request):
+        msg = "Inicia sesión" if auth.PASSWORD else "Acceso remoto desactivado: define OPENRUN_PASSWORD (u OPENRUN_PIN en casa)"
+        return JSONResponse({"detail": msg}, status_code=401, headers=SECURITY_HEADERS)
+    resp = await call_next(request)
+    for k, v in SECURITY_HEADERS.items():
+        resp.headers.setdefault(k, v)
+    if auth.is_https(request):
+        resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return resp
 
 
-class PinIn(BaseModel):
+@app.get("/api/health")
+def health():
+    return {"ok": True}
+
+
+class LoginIn(BaseModel):
     pin: str
 
 
 @app.get("/api/auth")
 def auth_status(request: Request):
-    return {"authed": _authed(request), "local": _is_local(request), "pin_enabled": bool(PIN)}
+    return {"authed": auth.authed(request), "local": auth.is_local(request), "pin_enabled": bool(auth.PASSWORD),
+            "kind": "password" if len(auth.PASSWORD) > 6 else "pin"}
 
 
 @app.post("/api/auth")
-def auth_login(body: PinIn, request: Request):
-    ip = request.client.host if request.client else "?"
-    now = time.time()
-    recent = [t for t in _fails.get(ip, []) if now - t < 600]
-    if len(recent) >= 10:
-        raise HTTPException(429, "Demasiados intentos. Espera 10 minutos.")
-    if not PIN or not hmac.compare_digest(body.pin.strip(), PIN):
-        _fails[ip] = recent + [now]
-        time.sleep(1)
-        raise HTTPException(401, "PIN incorrecto")
+def auth_login(body: LoginIn, request: Request):
+    ok, err = auth.check_password(request, body.pin)
+    if not ok:
+        raise HTTPException(429 if err and err.startswith("Demasiados") else 401, err)
     resp = JSONResponse({"authed": True})
-    resp.set_cookie(COOKIE, _secret, max_age=180 * 86400, httponly=True, samesite="lax")
+    resp.set_cookie(auth.COOKIE, auth.make_session(), max_age=auth.SESSION_DAYS * 86400, httponly=True,
+                    samesite="lax", secure=auth.is_https(request))
+    return resp
+
+
+@app.post("/api/auth/logout")
+def auth_logout():
+    resp = JSONResponse({"authed": False})
+    resp.delete_cookie(auth.COOKIE)
     return resp
 
 
@@ -115,8 +110,10 @@ def network_info(request: Request):
         pass
     host = os.getenv("OPENRUN_HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "8000"))
-    return {"lan_enabled": host not in ("127.0.0.1", "localhost"), "pin_enabled": bool(PIN),
-            "urls": [f"http://{ip}:{port}" for ip in sorted(ips)], "local": _is_local(request)}
+    public_url = os.getenv("OPENRUN_PUBLIC_URL", "")
+    return {"lan_enabled": host not in ("127.0.0.1", "localhost") and not public_url, "pin_enabled": bool(auth.PASSWORD),
+            "urls": [public_url] if public_url else [f"http://{ip}:{port}" for ip in sorted(ips)],
+            "public": bool(public_url), "local": auth.is_local(request)}
 
 
 # ---------------------------------------------------------------- settings, daily routine, analysis, heat
@@ -485,9 +482,27 @@ def chat_reset(s: Session = DB):
 def coach_info():
     import sys
     backend = Path(__file__).resolve().parents[1]
-    # Ready-to-paste MCP config for Claude Desktop / Gemini CLI (uses this venv's Python)
-    return {**coach.provider_info(),
-            "mcp": {"command": sys.executable, "args": ["-m", "app.mcp_server"], "cwd": str(backend)}}
+    public_url = os.getenv("OPENRUN_PUBLIC_URL", "")
+    # Ready-to-paste MCP config for Claude Desktop / Gemini CLI. On a server, the MCP process runs on
+    # the user's computer (from a local clone) and talks to this server with the API token.
+    mcp = ({"remote": True, "url": public_url, "token_set": bool(auth.API_TOKEN)} if public_url
+           else {"remote": False, "command": sys.executable, "args": ["-m", "app.mcp_server"], "cwd": str(backend)})
+    return {**coach.provider_info(), "mcp": mcp}
+
+
+class ToolIn(BaseModel):
+    args: dict[str, Any] = {}
+
+
+@app.post("/api/tools/{name}")
+def run_tool(name: str, body: ToolIn, s: Session = DB):
+    """Coach tools over HTTP (used by the local MCP server when OpenRun runs on a server)."""
+    if name not in {t["name"] for t in coach.TOOLS}:
+        raise HTTPException(404, "herramienta desconocida")
+    try:
+        return {"ok": True, "result": coach.run_tool(s, name, body.args)}
+    except Exception as e:  # noqa: BLE001 - report to the model like the in-app coach does
+        return {"ok": False, "error": str(e)}
 
 
 class RecalIn(BaseModel):

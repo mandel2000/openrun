@@ -52,6 +52,8 @@ function SyncChip({ st, onSynced }: { st: GStatus | null; onSynced: () => void }
 
 function PinScreen({ onOk }: { onOk: () => void }) {
   const [pin, setPin] = useState('')
+  const [kind, setKind] = useState<'pin' | 'password'>('password')
+  useEffect(() => { api.get<{ kind: 'pin' | 'password' }>('/api/auth').then((r) => setKind(r.kind)).catch(() => {}) }, [])
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   return (
@@ -64,10 +66,10 @@ function PinScreen({ onOk }: { onOk: () => void }) {
       }}>
         <img src="/icon.svg" width={56} height={56} alt="" style={{ borderRadius: 14 }} />
         <h2 style={{ marginTop: 12 }}>OpenRun</h2>
-        <p className="small muted">Introduce el PIN configurado en tu ordenador (OPENRUN_PIN).</p>
-        <label className="sr-only" htmlFor="pin">PIN</label>
-        <input id="pin" type="password" inputMode="numeric" autoComplete="current-password" value={pin} onChange={(e) => setPin(e.target.value)} autoFocus
-          style={{ textAlign: 'center', fontSize: 22, letterSpacing: 6 }} />
+        <p className="small muted">{kind === 'pin' ? 'Introduce el PIN de OpenRun.' : 'Introduce tu contraseña de OpenRun.'}</p>
+        <label className="sr-only" htmlFor="pin">{kind === 'pin' ? 'PIN' : 'Contraseña'}</label>
+        <input id="pin" type="password" inputMode={kind === 'pin' ? 'numeric' : 'text'} autoComplete="current-password" value={pin} onChange={(e) => setPin(e.target.value)} autoFocus
+          style={kind === 'pin' ? { textAlign: 'center', fontSize: 22, letterSpacing: 6 } : undefined} />
         <button className="btn btn-primary btn-block" style={{ marginTop: 12 }} disabled={busy || !pin}>Entrar</button>
         {err && <div style={{ marginTop: 10 }}><Banner tone="bad">{err}</Banner></div>}
       </form>
