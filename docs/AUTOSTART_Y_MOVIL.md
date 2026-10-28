@@ -65,7 +65,7 @@ rm ~/Library/LaunchAgents/com.openrun.server.plist
 
 1. Instala en modo `--lan` (o arranca con `OPENRUN_HOST=0.0.0.0 OPENRUN_PIN=<pin> ./run.sh`).
 2. Con el móvil en la **misma wifi**, abre `http://<IP-del-Mac>:8000`. La dirección aparece en *Ajustes › OpenRun en el móvil*; también con `ipconfig getifaddr en0`.
-3. Introduce el PIN. La sesión dura 180 días en ese navegador.
+3. Inicia sesión con usuario `admin` (o el que pusiste en `OPENRUN_ADMIN_USER`) y el PIN; cámbialo por una contraseña en *Ajustes › Tu cuenta*. La sesión dura 90 días en ese navegador.
 4. Instálala como app:
    - **iPhone:** Safari › Compartir › *Añadir a pantalla de inicio*.
    - **Android:** Chrome › menú › *Instalar app*.
@@ -87,7 +87,8 @@ No abras el puerto 8000 en el router. Usa [Tailscale](https://tailscale.com) (gr
 
 ## 4. Cómo funciona el PIN (seguridad)
 
-- Las peticiones desde el propio ordenador (`127.0.0.1` / `::1`) no piden PIN. Cualquier otro equipo necesita la cookie de sesión, que solo se obtiene enviando el PIN correcto a `POST /api/auth`.
+- El PIN (`OPENRUN_PIN`) es la contraseña inicial de la cuenta de administrador, que se crea en el primer arranque. Desde entonces la contraseña se cambia en *Ajustes › Tu cuenta* (cambiar `OPENRUN_PIN` ya no la cambia).
+- Las peticiones desde el propio ordenador (`127.0.0.1` / `::1`) entran como el administrador sin contraseña. Cualquier otro equipo necesita la cookie de sesión, que solo se obtiene con usuario y contraseña en `POST /api/auth`.
 - Sin PIN configurado, el acceso desde otros equipos está **bloqueado** (401), aunque el servidor escuche en la red.
 - La cookie es `HttpOnly` y `SameSite=Lax`, y su valor deriva del PIN. Si cambias el PIN, las sesiones de los móviles dejan de valer y hay que volver a introducirlo.
 - **Contra fuerza bruta:** 1 s de espera por intento fallido y bloqueo de 10 minutos tras 10 fallos desde la misma IP.

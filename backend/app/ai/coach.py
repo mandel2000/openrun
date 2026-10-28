@@ -108,8 +108,8 @@ TOOLS: list[dict[str, Any]] = [
          "required": ["date", "title", "type", "steps", "description", "intensity"]}},
     {"name": "delete_workout", "description": "Elimina un entreno planificado por id.",
      "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]}},
-    {"name": "move_workout", "description": "Mueve un entreno a otra fecha.",
-     "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}, "date": {"type": "string"}}, "required": ["id", "date"]}},
+    {"name": "move_workout", "description": "Mueve un entreno a otra fecha. Con swap=true, lo que hubiera ese día pasa a la fecha original (intercambio). Devuelve avisos si quedan dos días duros seguidos.",
+     "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}, "date": {"type": "string"}, "swap": {"type": "boolean"}}, "required": ["id", "date"]}},
     {"name": "add_extra_run", "description": "Añade un rodaje suave opcional a una semana (fuera del plan base). Devuelve avisos si sube el volumen > 10 % o precede a una sesión clave.",
      "input_schema": {"type": "object", "properties": {"date": {"type": "string"}, "km": {"type": "number"}}, "required": ["date"]}},
     {"name": "get_personal_records", "description": "Récords personales (1K, milla, 5K, 10K, media, maratón) históricos, último año, 6 meses y 30 días, desde los mejores tramos de Garmin.",
@@ -118,6 +118,8 @@ TOOLS: list[dict[str, Any]] = [
      "input_schema": {"type": "object", "properties": {}}},
     {"name": "list_races", "description": "Carreras apuntadas por el atleta (prioridad A objetivo / B preparatoria / C entreno).",
      "input_schema": {"type": "object", "properties": {}}},
+    {"name": "get_race_strategy", "description": "Estrategia de una carrera apuntada: ritmo objetivo km a km ajustado al desnivel del recorrido (perfil GPX o aproximado), predicción en llano vs recorrido, previsión de calor y plan de geles/hidratos.",
+     "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}, "mode": {"type": "string", "enum": ["conservative", "realistic", "ambitious"]}}, "required": ["id"]}},
     {"name": "search_race_calendar", "description": "Busca próximas carreras en el calendario de Orycron Sport (Salamanca y alrededores). Con external_id devuelve la ficha (lugar, hora, distancias).",
      "input_schema": {"type": "object", "properties": {"query": {"type": "string"}, "external_id": {"type": "string"}}}},
     {"name": "add_race", "description": "Apunta una carrera y la integra en el plan: B = mini-taper 3 días + recuperación; C = como entreno de calidad; A = objetivo (sugiere regenerar plan). Pide confirmación al atleta antes.",
@@ -195,6 +197,15 @@ def run_tool(s: Session, name: str, args: dict) -> Any:
         return S.race_time_predictions(s)
     if name == "list_races":
         return S.list_races(s)
+    if name == "get_race_strategy":
+        st = S.race_strategy(s, args["id"], args.get("mode"))
+        from ..training.vdot import fmt_pace, fmt_time
+        return {"carrera": st["race"]["name"], "fecha": st["race"]["date"], "salida": st["start_time"], "modo": st["mode"],
+                "objetivo": fmt_time(st["target_s"]), "media": fmt_pace(st["avg_pace_s"]), "mitad": fmt_time(st["half_s"]) if st["half_s"] else None,
+                "recorrido": {k: st["course"][k] for k in ("name", "approx", "flat", "gain_m", "loss_m", "factor")},
+                "prediccion": {k: fmt_time(v) for k, v in st["prediction"]["modes"].items()}, "tiempo": st["weather"],
+                "km": [f"{k['km']}: {fmt_pace(k['pace_s'])} {k['terrain']}{' — ' + k['note'] if k['note'] else ''}" for k in st["kms"]],
+                "comida": st["fuel"]}
     if name == "search_race_calendar":
         from ..integrations import orycron
         if args.get("external_id"):
@@ -209,7 +220,7 @@ def run_tool(s: Session, name: str, args: dict) -> Any:
         S.delete_race(s, args["id"])
         return {"ok": True}
     if name == "move_workout":
-        return S.move_workout(s, args["id"], args["date"])
+        return S.move_workout(s, args["id"], args["date"], bool(args.get("swap")))
     if name == "generate_plan":
         p = S.create_plan(s, args)
         return {k: v for k, v in p.items() if k != "weeks"} | {"n_weeks": len(p["weeks"])}

@@ -9,7 +9,13 @@ Alternativa open source y local a Runna: planes de running basados en evidencia,
 - **Análisis post-entreno**: cada serie real (vueltas de Garmin) frente a lo planificado; si 2 de las 3 últimas sesiones de calidad salen más fáciles o más duras, ajusta el VDOT ±0,5 automáticamente (como *Pace Insights*).
 - **Ajuste por calor**: previsión de Open-Meteo a tu hora de entreno → ritmos más lentos según temperatura + punto de rocío.
 - **Rutina diaria automática** (06:30 por defecto): sync Garmin → análisis → ritmos → calor → readiness → próximos 7 días al reloj (solo lo que cambió).
-- **App en el móvil** (PWA instalable) por la wifi de casa, protegida con PIN.
+- **Varios usuarios**: cada persona con su cuenta (por invitación), su plan, su Garmin, su coach y sus datos, aislados.
+- **App en el móvil** (PWA instalable) con **notificaciones push** propias: entreno del día, análisis de cada carrera al sincronizar y resumen semanal.
+- **Arrastrar y soltar** entrenos entre días en el plan (ratón o pulsación larga en el móvil): intercambia con lo que hubiera, reprograma el reloj y avisa si quedan dos días duros seguidos.
+- **Estrategia de carrera**: ritmo km a km a esfuerzo constante sobre el perfil real (GPX/TCX/KML o enlace; altitud del terreno si falta), salida prudente, calor previsto el día de la carrera, geles e hidratos, mapa, y entreno de carrera en el reloj con un paso por km. Perfil aproximado de la Behobia incluido.
+- **Actividades**: mapa, ritmo/FC/altitud sincronizados, parciales por km y dinámica de carrera (cadencia, zancada, contacto, oscilación, potencia).
+- **Fuerza y movilidad** estructuradas: ejercicios con series, repeticiones, descanso y técnica (lista para marcar en el gimnasio), calentamiento dinámico y movilidad post-carrera.
+- **Resumen semanal** cada lunes: cumplimiento, km, carga y foco de la semana, con comentario del coach IA.
 - **Récords** 1K / milla / 5K / 10K / media / maratón: histórico, 12 meses, 6 meses y 30 días (mejores tramos de Garmin).
 - **Importar histórico** antiguo: export completo de Strava o Garmin (.zip) o archivos .fit / .gpx / .tcx sueltos, con mejores tramos calculados y sin duplicar lo que ya está en Garmin.
 - **Predicciones** de carrera: VDOT (Daniels) de tus mejores esfuerzos, Riegel, predictor de Garmin y FC; consenso y tendencia. Sugiere recalibrar ritmos (como *Pace Insights*).
@@ -64,7 +70,7 @@ scripts/install-autostart.sh                              # arranca OpenRun al i
 OPENRUN_PIN=<pin> scripts/install-autostart.sh --lan      # además, accesible desde el móvil en la misma wifi
 ```
 
-En el móvil abre `http://<IP-del-Mac>:8000` (la ves en *Ajustes › OpenRun en el móvil*), introduce el PIN y añádela a la pantalla de inicio. Fuera de casa, Tailscale; no abras puertos en el router.
+En el móvil abre `http://<IP-del-Mac>:8000` (la ves en *Ajustes › OpenRun en el móvil*), entra con tu usuario (`admin` y el PIN la primera vez) y añádela a la pantalla de inicio. Fuera de casa, Tailscale; no abras puertos en el router.
 
 Guía completa (comprobar estado, reiniciar, cambiar el PIN, desinstalar, seguridad y problemas frecuentes): [docs/AUTOSTART_Y_MOVIL.md](docs/AUTOSTART_Y_MOVIL.md). Para tenerlo en un servidor 24 h con HTTPS: [docs/DESPLIEGUE_VPS.md](docs/DESPLIEGUE_VPS.md).
 

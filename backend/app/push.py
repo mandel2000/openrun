@@ -42,10 +42,24 @@ def public_key() -> str:
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
+# Browsers' push services. The server POSTs to the subscription endpoint, so only these hosts are
+# accepted (otherwise a user could make the server call arbitrary URLs).
+PUSH_HOSTS = ("fcm.googleapis.com", "updates.push.services.mozilla.com", ".push.apple.com", ".notify.windows.com",
+              "android.googleapis.com")
+
+
+def _allowed(endpoint: str) -> bool:
+    from urllib.parse import urlparse
+
+    u = urlparse(endpoint)
+    host = (u.hostname or "").lower()
+    return u.scheme == "https" and any(host == h.lstrip(".") or (h.startswith(".") and host.endswith(h)) for h in PUSH_HOSTS)
+
+
 def subscribe(uid: int, sub: dict) -> None:
     endpoint = sub.get("endpoint", "")
     keys = sub.get("keys") or {}
-    if not endpoint.startswith("https://") or not keys.get("p256dh") or not keys.get("auth"):
+    if not _allowed(endpoint) or not keys.get("p256dh") or not keys.get("auth"):
         raise ValueError("Suscripción no válida")
     with Session(engine) as s:
         row = s.exec(select(PushSubscription).where(PushSubscription.endpoint == endpoint)).first()

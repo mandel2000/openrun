@@ -356,7 +356,11 @@ def test_push_subscribe_send_and_cleanup(monkeypatch, tmp_path):
     from app import push
     monkeypatch.setattr(push, "KEY_FILE", tmp_path / "vapid.pem")
     assert len(push.public_key()) > 80 and (tmp_path / "vapid.pem").exists()
-    sub = {"endpoint": "https://push.example/abc", "keys": {"p256dh": "BNc" + "A" * 84, "auth": "x" * 22}}
+    import pytest
+    with pytest.raises(ValueError):
+        push.subscribe(1, {"endpoint": "https://169.254.169.254/latest", "keys": {"p256dh": "a", "auth": "b"}})
+    sub = {"endpoint": "https://fcm.googleapis.com/fcm/send/abc", "keys": {"p256dh": "BNc" + "A" * 84, "auth": "x" * 22}}
+    assert push._allowed("https://web.push.apple.com/QH") and not push._allowed("https://evil.com/.push.apple.com")
     push.subscribe(1, sub)
     push.subscribe(1, sub)  # idempotent
     assert push.count(1) == 1
