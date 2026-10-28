@@ -96,11 +96,9 @@ No abras el puerto 8000 en el router. Usa [Tailscale](https://tailscale.com) (gr
 - La conexión en la red local va **sin cifrar** (HTTP), así que alguien en tu misma wifi podría verla. Úsalo solo en redes de confianza (casa o Tailscale), nunca en wifis públicas.
 - **Elige un PIN que no sea obvio** (`1234`, `0000`, fechas…). Cualquiera conectado a tu wifi puede intentarlo; con 10 intentos cada 10 minutos, un PIN de 4 cifras aguanta poco frente a alguien persistente. Mejor 6 o más caracteres.
 
-### Cambiar el PIN
+### Cambiar la contraseña
 
-```bash
-OPENRUN_PIN=<nuevo-pin> scripts/install-autostart.sh --lan
-```
+En *Ajustes › Tu cuenta*. `OPENRUN_PIN` solo cuenta la primera vez que arranca la versión con usuarios.
 
 ### Volver a «solo este ordenador»
 
