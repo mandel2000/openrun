@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 from typing import Any
 
 import anthropic
@@ -47,7 +48,17 @@ Forma de trabajar:
   (adaptación fisiológica buscada y evidencia). Ofrece enviarlo a Garmin con push_to_garmin.
 - Para cambiar un entreno existente usa create_workout con replace_id.
 - Sé concreto: números, fechas, ritmos (lee los ritmos de las herramientas). Respuestas breves.
+- Solo los entrenos de carrera se pueden enviar a Garmin (no la fuerza). No prometas acciones que tus herramientas no hacen.
+- NUNCA uses herramientas que cambian datos (generate_plan, create_workout, move_workout, delete_workout, add_extra_run,
+  not_feeling_100, adapt_today_to_readiness, push_to_garmin, add_race, delete_race, update_athlete_profile, calculate_vdot con save)
+  si el atleta no lo ha pedido explícitamente en su último mensaje. Si crees que conviene, propónlo y pregunta primero.
+- Eficiencia: el RESUMEN ACTUAL ya trae plan, próximos entrenos, readiness, carga, actividades, récords, predicciones y
+  carreras. No llames herramientas para leer eso. Si necesitas varias herramientas, pídelas todas a la vez en una sola respuesta.
+- Responde siempre en español, sin palabras de otros idiomas.
 Fecha de hoy: {today}."""
+
+SNAPSHOT_INTRO = ("\n\nRESUMEN ACTUAL DEL ATLETA (datos reales de OpenRun, ya leídos para ti). Úsalo directamente; "
+                  "llama a herramientas solo si necesitas más detalle (pasos de un entreno, historial más largo) o para hacer cambios:\n")
 
 STEP_SCHEMA = {
     "type": "object",
@@ -266,6 +277,90 @@ def _openai_client():
     return openai.OpenAI(base_url=os.getenv("OPENRUN_BASE_URL", base), api_key=key, max_retries=4, timeout=120)
 
 
+def context_snapshot(s: Session) -> str:
+    """Compact JSON of what the coach usually needs, so small models answer in 1 round instead of 6."""
+    today = dt.date.today()
+    snap: dict[str, Any] = {"hoy": today.isoformat()}
+
+    def part(key: str, fn) -> None:
+        try:
+            v = fn()
+            if v not in (None, [], {}):
+                snap[key] = v
+        except Exception:  # noqa: BLE001 - a missing piece must not break the chat
+            pass
+
+    def athlete():
+        a = S.athlete_profile(s)
+        return {"vdot": a.get("vdot"), "fc_max": a.get("max_hr"), "fc_reposo": a.get("rest_hr"), "lthr": a.get("lthr"),
+                "ritmos_por_zona": {z: f"{p['slow_fmt']}-{p['fast_fmt']}" for z, p in (a.get("paces") or {}).items() if isinstance(p, dict)}}
+
+    def plan():
+        p = S.plan_overview(s)
+        if not p:
+            return None
+        cur = next((w for w in p["weeks"] if w["start"] <= today.isoformat() <= w["end"]), None)
+        return {"nombre": p["name"], "objetivo": p["goal"], "inicio": p["start_date"], "carrera": p.get("race_date"), "semanas": len(p["weeks"]),
+                "semana_actual": {"n": cur["index"], "fase": cur["phase"], "km_plan": cur["planned_km"], "km_hechos": cur["done_km"]} if cur else None}
+
+    def next_days():
+        ws = S.list_workouts(s, today.isoformat(), (today + dt.timedelta(days=7)).isoformat())
+        if not ws:  # before the plan starts: show its first sessions
+            p = S.plan_overview(s)
+            ws = p["weeks"][0]["workouts"] if p and p["weeks"] else []
+        return [{"id": w["id"], "fecha": w["date"], "titulo": w["title"], "km": w.get("distance_km"), "deporte": w.get("sport"),
+                 "estado": w["status"], "en_garmin": bool(w.get("garmin_workout_id"))} for w in ws[:10]]
+
+    def readiness():
+        r = S.readiness_today(s)
+        return {k: r.get(k) for k in ("status", "reasons", "hrv_7d", "swc_low", "swc_high")}
+
+    def load():
+        series = S.training_load(s, 28)["series"]
+        last = series[-1] if series else {}
+        return {k: last.get(k) for k in ("ctl", "atl", "tsb", "acwr")}
+
+    def activities():
+        out = []
+        for a in S.recent_activities(s, 14)[:8]:
+            out.append({"fecha": a["date"], "nombre": (a.get("name") or "")[:40], "deporte": a.get("sport"), "km": round((a.get("distance_m") or 0) / 1000, 1),
+                        "ritmo": f"{int(a['pace_s_km'] // 60)}:{int(a['pace_s_km'] % 60):02d}" if a.get("pace_s_km") else None,
+                        "fc": a.get("avg_hr"), "analisis": (a.get("analysis") or {}).get("verdict")})
+        return out
+
+    def records():
+        r = S.personal_records(s)["records"]
+        return {w: {k: f"{v['time']} ({v['date']})" for k, v in r[w].items() if k in ("1k", "5k", "10k", "half", "marathon")} for w in ("all", "1y")}
+
+    def predictions():
+        p = S.race_time_predictions(s)
+        return {"consenso": {k: v["time"] for k, v in p["consensus"].items()}, "vdot_consenso": p.get("consensus_vdot"),
+                "modelos": {m["label"]: {"fuente": m.get("source"), **{k: v["time"] for k, v in m["times"].items()}} for m in p["models"].values()},
+                "tendencia_vdot_mensual": p.get("trend"), "sugerir_recalibrar_a": p.get("suggest_vdot")}
+
+    def races():
+        return [{"id": r["id"], "nombre": r["name"], "fecha": r["date"], "km": round(r["distance_m"] / 1000, 1) if r.get("distance_m") else None,
+                 "prioridad": r["priority"]} for r in S.list_races(s) if r["days_to_go"] >= 0]
+
+    for key, fn in (("atleta", athlete), ("plan", plan), ("proximos_entrenos", next_days), ("readiness", readiness),
+                    ("carga", load), ("actividades_14d", activities), ("records", records), ("predicciones", predictions),
+                    ("carreras", races)):
+        part(key, fn)
+    return json.dumps(snap, ensure_ascii=False, default=str)
+
+
+def system_prompt(s: Session) -> str:
+    return SYSTEM.format(today=dt.date.today().strftime("%A %d/%m/%Y")) + SNAPSHOT_INTRO + context_snapshot(s)
+
+
+# Small free models sometimes leak tokens from other scripts (Hangul, CJK, Cyrillic...) into Spanish text.
+_FOREIGN = re.compile(r"[\u0400-\u04FF\u0590-\u05FF\u0600-\u06FF\u0E00-\u0E7F\u1100-\u11FF\u3040-\u30FF\u3130-\u318F\u4E00-\u9FFF\uAC00-\uD7AF]+")
+
+
+def sanitize(text: str) -> str:
+    return _FOREIGN.sub("", text)
+
+
 def _dump_call(c) -> dict:
     # Keep provider extras (e.g. Gemini's extra_content.google.thought_signature, required on replay)
     try:
@@ -276,52 +371,131 @@ def _dump_call(c) -> dict:
         return {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
 
 
-def _chat_openai_compat(s: Session, user_text: str) -> dict:
-    """Same tool loop over the OpenAI chat-completions format (Gemini free tier, Ollama, Groq...).
-    Messages are stored with role 'oa' so they never mix with Anthropic-format history."""
+FALLBACK_MODELS = {"nvidia": ["openai/gpt-oss-20b"]}
+STREAMING = {"nvidia", "ollama", "groq", "openrouter", "openai"}  # Gemini needs non-streamed thought signatures
+
+
+def _models() -> list[str]:
+    env = [m.strip() for m in os.getenv("OPENRUN_MODEL_FALLBACKS", "").split(",") if m.strip()]
+    first = provider_info()["model"]
+    return [first] + [m for m in (env or FALLBACK_MODELS.get(provider(), [])) if m != first]
+
+
+def _completion(client, model: str, messages: list[dict], tools: list[dict], stream: bool):
+    """Yields ("text", delta) events and finally ("message", {"content", "tool_calls"})."""
+    kw = {"model": model, "messages": messages, "tools": tools, "temperature": 0.3}
+    if not stream:
+        msg = client.chat.completions.create(**kw).choices[0].message
+        if msg.content:
+            yield "text", sanitize(msg.content)
+        yield "message", {"content": sanitize(msg.content or ""), "tool_calls": [_dump_call(c) for c in (msg.tool_calls or [])]}
+        return
+    content, calls = [], {}
+    for chunk in client.chat.completions.create(stream=True, **kw):
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta
+        if delta.content:
+            clean = sanitize(delta.content)
+            content.append(clean)
+            if clean:
+                yield "text", clean
+        for tc in delta.tool_calls or []:
+            slot = calls.setdefault(tc.index, {"id": None, "type": "function", "function": {"name": "", "arguments": ""}})
+            if tc.id:
+                slot["id"] = tc.id
+            if tc.function and tc.function.name:
+                slot["function"]["name"] += tc.function.name
+            if tc.function and tc.function.arguments:
+                slot["function"]["arguments"] += tc.function.arguments
+    tool_calls = [c | {"id": c["id"] or f"call_{i}"} for i, c in sorted(calls.items())]
+    yield "message", {"content": "".join(content), "tool_calls": tool_calls}
+
+
+def chat_events(s: Session, user_text: str):
+    """One user turn as a stream of events: {"type": "text"|"tool"|"status"|"done", ...}.
+    Same tool loop for any OpenAI-compatible provider; falls back to the next model on errors."""
     import openai
     _save(s, "oa", [{"role": "user", "content": user_text}])
     client = _openai_client()
-    model = provider_info()["model"]
-    system = SYSTEM.format(today=dt.date.today().strftime("%A %d/%m/%Y"))
+    models = _models()
+    system = system_prompt(s)
     tools = [{"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}}
              for t in TOOLS]
     tool_log: list[dict] = []
+    reply: list[str] = []
+    stream = provider() in STREAMING
     for _ in range(MAX_TOOL_ROUNDS):
         history = [m.content[0] for m in s.exec(select(ChatMessage).where(ChatMessage.role == "oa").order_by(ChatMessage.id)).all()]
-        try:
-            resp = client.chat.completions.create(model=model, messages=[{"role": "system", "content": system}, *history], tools=tools)
-        except openai.AuthenticationError:
-            return {"reply": f"Falta la API key para {provider()} o no es válida.", "tools": tool_log, "error": True}
-        except openai.RateLimitError:
-            return {"reply": "Límite del plan gratuito alcanzado; prueba en un rato.", "tools": tool_log, "error": True}
-        except openai.APIConnectionError:
-            return {"reply": f"No hay conexión con {provider()}" + (" (¿está Ollama arrancado?)" if provider() == "ollama" else "."), "tools": tool_log, "error": True}
-        except openai.APIStatusError as e:
-            return {"reply": f"Error del proveedor ({e.status_code}): {e.message}", "tools": tool_log, "error": True}
-        msg = resp.choices[0].message
-        calls = msg.tool_calls or []
-        _save(s, "oa", [{"role": "assistant", "content": msg.content or "",
-                         **({"tool_calls": [_dump_call(c) for c in calls]} if calls else {})}])
-        if not calls:
-            return {"reply": msg.content or "", "tools": tool_log}
-        for c in calls:
+        msg = None
+        while models:
             try:
-                out = run_tool(s, c.function.name, json.loads(c.function.arguments or "{}"))
+                round_text = []
+                for kind, val in _completion(client, models[0], [{"role": "system", "content": system}, *history], tools, stream):
+                    if kind == "text":
+                        round_text.append(val)
+                        yield {"type": "text", "delta": val}
+                    else:
+                        msg = val
+                break
+            except openai.AuthenticationError:
+                yield {"type": "done", "reply": f"Falta la API key para {provider()} o no es válida.", "tools": tool_log, "error": True}
+                return
+            except openai.APIConnectionError as e:
+                if isinstance(e, openai.APITimeoutError) and len(models) > 1:
+                    pass
+                elif provider() == "ollama":
+                    yield {"type": "done", "reply": "No hay conexión con Ollama (¿está arrancado?).", "tools": tool_log, "error": True}
+                    return
+                err = "no responde"
+            except (openai.RateLimitError, openai.NotFoundError, openai.InternalServerError) as e:
+                err = f"error {getattr(e, 'status_code', '')}".strip()
+            except openai.APIStatusError as e:
+                yield {"type": "done", "reply": f"Error del proveedor ({e.status_code}): {e.message}", "tools": tool_log, "error": True}
+                return
+            failed = models.pop(0)
+            if round_text:
+                yield {"type": "text", "delta": "\n\n"}
+            if not models:
+                yield {"type": "done", "reply": "El modelo de IA no responde ahora mismo (plan gratuito saturado). Prueba en un rato.", "tools": tool_log, "error": True}
+                return
+            yield {"type": "status", "text": f"{failed} {err}; probando con {models[0]}"}
+        calls = msg["tool_calls"]
+        if msg["content"]:
+            reply.append(msg["content"])
+        _save(s, "oa", [{"role": "assistant", "content": msg["content"], **({"tool_calls": calls} if calls else {})}])
+        if not calls:  # the last round is the answer; earlier text was preamble before tool calls
+            yield {"type": "done", "reply": msg["content"] or "\n\n".join(reply), "tools": tool_log}
+            return
+        for c in calls:
+            name = c["function"]["name"]
+            yield {"type": "tool", "name": name}
+            try:
+                out = run_tool(s, name, json.loads(c["function"]["arguments"] or "{}"))
                 content = json.dumps(out, default=str, ensure_ascii=False)[:60000]
-                tool_log.append({"tool": c.function.name, "ok": True})
+                tool_log.append({"tool": name, "ok": True})
             except Exception as e:  # noqa: BLE001
                 content = f"Error: {e}"
-                tool_log.append({"tool": c.function.name, "ok": False, "error": str(e)})
-            _save(s, "oa", [{"role": "tool", "tool_call_id": c.id, "content": content}])
-    return {"reply": "He alcanzado el límite de pasos para esta petición.", "tools": tool_log}
+                tool_log.append({"tool": name, "ok": False, "error": str(e)})
+            _save(s, "oa", [{"role": "tool", "tool_call_id": c["id"], "content": content}])
+        if calls:
+            system = system_prompt(s)  # tools may have changed the plan: refresh the summary
+    yield {"type": "done", "reply": "He alcanzado el límite de pasos para esta petición.", "tools": tool_log}
+
+
+def _chat_openai_compat(s: Session, user_text: str) -> dict:
+    out: dict = {}
+    for ev in chat_events(s, user_text):
+        if ev["type"] == "done":
+            out = {k: v for k, v in ev.items() if k != "type"}
+    return out
 
 
 def _chat_anthropic(s: Session, user_text: str) -> dict:
     """Run one user turn through the manual tool loop. History is append-only (thinking blocks preserved)."""
     _save(s, "user", [{"type": "text", "text": user_text}])
     client = _client()
-    system = SYSTEM.format(today=dt.date.today().strftime("%A %d/%m/%Y"))
+    system = system_prompt(s)
     tool_log: list[dict] = []
     for _ in range(MAX_TOOL_ROUNDS):
         try:

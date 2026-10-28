@@ -38,19 +38,55 @@ export default function CoachPage({ onChange }: { onChange: () => void }) {
     if (el) { el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 160)}px` }
   }, [text])
 
+  const [status, setStatus] = useState<string | null>(null)
+
   const send = async (t: string) => {
     if (!t.trim() || busy) return
     setText('')
-    setMsgs((m) => [...m, { role: 'user', text: t }])
+    setStatus(null)
+    const base: Msg[] = [...msgs, { role: 'user', text: t }]
+    setMsgs(base)
     setBusy(true)
+    const tools: string[] = []
+    let answer = ''
+    // live view: the whole turn (tool chips + answer so far) is re-rendered on every event
+    const render = () => setMsgs([...base, ...(tools.length ? [{ role: 'tool' as const, text: '', tools: [...tools] }] : []),
+      ...(answer ? [{ role: 'assistant' as const, text: answer }] : [])])
     try {
-      const r = await api.post<{ reply: string; tools: { tool: string; ok: boolean }[] }>('/api/chat', { message: t })
-      setMsgs((m) => [...m, ...(r.tools.length ? [{ role: 'tool' as const, text: '', tools: r.tools.map((x) => x.tool) }] : []), { role: 'assistant', text: r.reply }])
-      if (r.tools.some((x) => CHANGES.test(x.tool))) onChange()
+      const r = await fetch('/api/chat/stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: t }) })
+      if (r.status === 401) { window.dispatchEvent(new Event('openrun:auth')); throw new Error('Sesión caducada') }
+      if (!r.ok || !r.body) throw new Error(`Error ${r.status}`)
+      const reader = r.body.getReader()
+      const dec = new TextDecoder()
+      let buf = ''
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        let i
+        while ((i = buf.indexOf('\n\n')) >= 0) {
+          const line = buf.slice(0, i).replace(/^data: /, '')
+          buf = buf.slice(i + 2)
+          if (!line.trim()) continue
+          const ev = JSON.parse(line) as { type: string; delta?: string; name?: string; text?: string; reply?: string; tools?: { tool: string }[] }
+          if (ev.type === 'text' && ev.delta) { answer += ev.delta; setStatus(null) }
+          else if (ev.type === 'tool' && ev.name) {
+            tools.push(ev.name)
+            answer = '' // text written before a tool call was the model "thinking aloud"; the final reply comes after
+            setStatus(TOOL_LABEL[ev.name] ?? ev.name)
+          } else if (ev.type === 'status' && ev.text) setStatus(ev.text)
+          else if (ev.type === 'done') {
+            answer = ev.reply || answer
+            if ((ev.tools ?? []).some((x) => CHANGES.test(x.tool))) onChange()
+          }
+          render()
+        }
+      }
     } catch (e) {
       setMsgs((m) => [...m, { role: 'assistant', text: `Error: ${(e as Error).message}` }])
     } finally {
       setBusy(false)
+      setStatus(null)
     }
   }
 
@@ -83,7 +119,7 @@ export default function CoachPage({ onChange }: { onChange: () => void }) {
         ) : (
           <div key={i} className={`msg ${m.role}`}>{m.role === 'assistant' ? <Markdown text={m.text} /> : m.text}</div>
         ))}
-        {busy && <div className="toolcard"><span className="chip"><Icon name="refresh" size={13} className="spin" />Pensando…</span></div>}
+        {busy && <div className="toolcard"><span className="chip"><Icon name="refresh" size={13} className="spin" />{status ? `${status}…` : 'Pensando…'}</span></div>}
         <div ref={end} />
       </div>
       <form className="composer" onSubmit={(e) => { e.preventDefault(); send(text) }}>

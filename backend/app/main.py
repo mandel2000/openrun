@@ -462,6 +462,31 @@ def chat(body: ChatIn, s: Session = DB):
     return coach.chat(s, body.message)
 
 
+@app.post("/api/chat/stream")
+def chat_stream(body: ChatIn):
+    """Server-sent events: text deltas, tool calls and a final 'done' (the coach answers live)."""
+    import json as _json
+
+    from fastapi.responses import StreamingResponse
+
+    from .db import engine
+
+    def events():
+        with Session(engine) as s:
+            try:
+                if coach.provider() == "anthropic":
+                    gen = iter([{"type": "done", **coach.chat(s, body.message)}])
+                else:
+                    gen = coach.chat_events(s, body.message)
+                for ev in gen:
+                    yield f"data: {_json.dumps(ev, ensure_ascii=False, default=str)}\n\n"
+            except Exception as e:  # noqa: BLE001 - surface errors in the chat instead of a broken stream
+                yield f"data: {_json.dumps({'type': 'done', 'reply': f'Error: {e}', 'tools': [], 'error': True})}\n\n"
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.get("/api/chat")
 def chat_history(s: Session = DB):
     return coach.visible_history(s)

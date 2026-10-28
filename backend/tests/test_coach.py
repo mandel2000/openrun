@@ -115,3 +115,64 @@ def test_nvidia_provider_config(monkeypatch):
     assert info == {"provider": "nvidia", "model": "minimaxai/minimax-m3.1-flash", "configured": True}
     c = coach._openai_client()
     assert str(c.base_url).startswith("https://integrate.api.nvidia.com/v1") and c.max_retries == 4
+
+
+def _chunk(content=None, calls=None):
+    delta = SimpleNamespace(content=content, tool_calls=calls)
+    return SimpleNamespace(choices=[SimpleNamespace(delta=delta)])
+
+
+def _tc(index, id=None, name=None, args=None):
+    return SimpleNamespace(index=index, id=id, function=SimpleNamespace(name=name, arguments=args))
+
+
+class FakeStreaming:
+    """First model times out; fallback streams a tool call in pieces, then a text answer."""
+
+    def __init__(self):
+        self.calls = []
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+    def create(self, **kw):
+        import httpx
+        import openai
+        self.calls.append(kw)
+        if kw["model"] == "bad/model":
+            raise openai.APITimeoutError(request=httpx.Request("POST", "https://x"))
+        if sum(1 for c in self.calls if c["model"] == "good/model") == 1:
+            return iter([_chunk(calls=[_tc(0, "c1", "calculate_vdot", '{"distance": "5k",')]),
+                         _chunk(calls=[_tc(0, args=' "time": "20:00"}')])])
+        return iter([_chunk("Tu VDOT ronda "), _chunk("49,8 ристи."), _chunk(" 좋아")])
+
+
+def test_streaming_events_fallback_and_sanitize(monkeypatch):
+    init_db()
+    fake = FakeStreaming()
+    monkeypatch.setenv("OPENRUN_PROVIDER", "nvidia")
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test")
+    monkeypatch.setenv("OPENRUN_MODEL", "bad/model")
+    monkeypatch.setenv("OPENRUN_MODEL_FALLBACKS", "good/model")
+    monkeypatch.setattr(coach, "_openai_client", lambda: fake)
+    with Session(engine) as s:
+        coach.reset(s)
+        evs = list(coach.chat_events(s, "¿VDOT con 5K en 20:00?"))
+        kinds = [e["type"] for e in evs]
+        assert kinds[0] == "status" and "good/model" in evs[0]["text"]
+        assert {"type": "tool", "name": "calculate_vdot"} in evs
+        done = evs[-1]
+        assert done["type"] == "done" and done["tools"] == [{"tool": "calculate_vdot", "ok": True}]
+        assert done["reply"] == "Tu VDOT ronda 49,8 . " and "".join(e["delta"] for e in evs if e["type"] == "text") == done["reply"]
+        sys_msg = fake.calls[-1]["messages"][0]["content"]
+        assert "RESUMEN ACTUAL DEL ATLETA" in sys_msg and '"hoy"' in sys_msg
+        assert fake.calls[-1]["stream"] is True and fake.calls[-1]["temperature"] == 0.3
+        tool_msg = fake.calls[-1]["messages"][-1]
+        assert tool_msg["role"] == "tool" and '"vdot"' in tool_msg["content"]
+
+
+def test_context_snapshot_is_compact_json():
+    import json as _json
+    init_db()
+    with Session(engine) as s:
+        snap = _json.loads(coach.context_snapshot(s))
+        assert "hoy" in snap and "atleta" in snap
+        assert len(coach.context_snapshot(s)) < 12000
