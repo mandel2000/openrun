@@ -166,7 +166,7 @@ function Hero({ w, date, onOpen, onPushed }: { w: Workout | null; date: string; 
         )}
       </div>
       {err && <div style={{ marginTop: 10 }}><Banner tone="bad">{err}</Banner></div>}
-      {an && w.activity_id && <ActivityAnalysisSheet activityId={w.activity_id} title={`${w.title}: real vs plan`} onClose={() => setAn(false)} />}
+      {an && w.activity_id && <ActivityAnalysisSheet activityId={w.activity_id} title={w.title} initial="plan" onClose={() => setAn(false)} />}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, fmtPace, VERDICT, ZONE_LABEL, zoneLevel, zoneVar, type Analysis, type LapRow } from '../api'
-import { Banner, Icon, Sheet, Skeleton } from '../ui'
+import { Banner, Icon, Segmented, Sheet, Skeleton } from '../ui'
+import ActivityDetail from './ActivityDetail'
 
 const LAP_TYPE: Record<string, string> = { WARMUP: 'Calent.', ACTIVE: 'Trabajo', REST: 'Recup.', RECOVERY: 'Recup.', COOLDOWN: 'Vuelta calma', INTERVAL: 'Trabajo' }
 
@@ -51,7 +52,17 @@ export function LapsTable({ laps }: { laps: LapRow[] }) {
   )
 }
 
-export default function ActivityAnalysisSheet({ activityId, title, onClose }: { activityId: number; title: string; onClose: () => void }) {
+export default function ActivityAnalysisSheet({ activityId, title, onClose, initial = 'route' }: { activityId: number; title: string; onClose: () => void; initial?: 'route' | 'plan' }) {
+  const [view, setView] = useState<'route' | 'plan'>(initial)
+  return (
+    <Sheet title={title} onClose={onClose} labelledBy="an-title">
+      <div style={{ marginBottom: 12 }}><Segmented label="Vista" value={view} onChange={setView} options={[['route', 'Mapa y gráficas'], ['plan', 'Real vs plan']]} /></div>
+      {view === 'route' ? <ActivityDetail activityId={activityId} /> : <PlanCompare activityId={activityId} />}
+    </Sheet>
+  )
+}
+
+function PlanCompare({ activityId }: { activityId: number }) {
   const [a, setA] = useState<Analysis | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const load = (refresh = false) => {
@@ -60,7 +71,7 @@ export default function ActivityAnalysisSheet({ activityId, title, onClose }: { 
   }
   useEffect(() => { load() }, [activityId])  // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <Sheet title={title} onClose={onClose} labelledBy="an-title">
+    <>
       {err ? <Banner tone="bad">{err}</Banner> : !a ? <><Skeleton h={28} /><Skeleton h={180} style={{ marginTop: 12 }} /></> : (
         <div className="stack">
           {a.planned_title ? <div className="small muted">Comparado con: <b>{a.planned_title}</b></div>
@@ -70,6 +81,6 @@ export default function ActivityAnalysisSheet({ activityId, title, onClose }: { 
           <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => load(true)}><Icon name="refresh" size={16} />Recalcular</button>
         </div>
       )}
-    </Sheet>
+    </>
   )
 }

@@ -62,3 +62,17 @@ def test_race_strategy_service(monkeypatch):
         assert out["workout"]["type"] == "race" and len(out["workout"]["steps"]) == len(st["kms"])
         again = S.push_race_strategy(s, rid)  # replaces, doesn't duplicate
         assert again["workout"]["id"] == out["workout"]["id"]
+
+
+def test_km_splits_and_streams():
+    from app.integrations.garmin import streams_from_details
+    n = 400
+    det = {"metricDescriptors": [{"key": "sumDuration", "metricsIndex": 0}, {"key": "sumDistance", "metricsIndex": 1},
+                                 {"key": "directHeartRate", "metricsIndex": 2}, {"key": "directElevation", "metricsIndex": 3},
+                                 {"key": "directLatitude", "metricsIndex": 4}, {"key": "directLongitude", "metricsIndex": 5}],
+           "activityDetailMetrics": [{"metrics": [i * 6.0, i * 25.0, 140 + i % 10, 800 + (i % 40), 40.8 + i * 1e-5, -5.5]} for i in range(n)]}
+    st = streams_from_details(det, max_points=200)
+    assert len(st["t"]) == 200 and st["d"][-1] == 9975.0
+    sp = S.km_splits(st)
+    assert len(sp) == 10 and all(230 < x["pace_s"] < 250 for x in sp[:-1])  # 6 s per 25 m = 4:00/km
+    assert sp[0]["hr"] and sp[0]["gain_m"] > 0

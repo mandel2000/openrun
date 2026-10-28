@@ -1171,3 +1171,62 @@ def push_race_strategy(s: Session, race_id: int) -> dict:
     if garmin.status().get("connected"):
         pushed = push_to_garmin(s, [pw.id])[0]
     return {"workout": workout_dict(pw), "garmin": pushed}
+
+
+# ---------------------------------------------------------------- activity detail (map, charts, km splits)
+
+
+def km_splits(st: dict) -> list[dict]:
+    d, tt = st.get("d") or [], st.get("t") or []
+    if len(d) < 2 or len(tt) != len(d):
+        return []
+    out, start_i, next_km = [], 0, 1000.0
+
+    def avg(key: str, a: int, b: int):
+        vals = [v for v in (st.get(key) or [])[a:b + 1] if v]
+        return round(sum(vals) / len(vals)) if vals else None
+
+    for i in range(1, len(d)):
+        if d[i] is None or tt[i] is None:
+            continue
+        last = i == len(d) - 1
+        if d[i] >= next_km or last:
+            dist = d[i] - (d[start_i] or 0)
+            if dist < 200 and last and out:
+                break
+            secs = tt[i] - (tt[start_i] or 0)
+            ele = [e for e in (st.get("ele") or [])[start_i:i + 1] if e is not None]
+            gain = sum(max(0.0, b - a) for a, b in zip(ele, ele[1:]))
+            out.append({"km": len(out) + 1, "distance_m": round(dist), "time_s": round(secs),
+                        "pace_s": round(secs / dist * 1000, 1) if dist > 0 else None,
+                        "hr": avg("hr", start_i, i), "cad": avg("cad", start_i, i), "gain_m": round(gain)})
+            start_i, next_km = i, next_km + 1000.0
+    return out
+
+
+def activity_detail(s: Session, activity_id: int, refresh: bool = False) -> dict:
+    from .db import ActivityStream
+
+    act = s.get(Activity, activity_id)
+    if not act:
+        raise ValueError("actividad no existe")
+    row = s.get(ActivityStream, activity_id)
+    if (row is None or refresh) and act.external_id.startswith("garmin:"):
+        streams = garmin.fetch_streams(act.external_id)
+        row = row or ActivityStream(activity_id=activity_id)
+        row.data = streams
+        s.add(row)
+        s.commit()
+    st = row.data if row else {}
+    lat, lon = st.get("lat") or [], st.get("lon") or []
+    coords = [[a, b] for a, b in zip(lat, lon) if a is not None and b is not None]
+
+    def mean(key):
+        vals = [v for v in st.get(key) or [] if v]
+        return round(sum(vals) / len(vals), 1) if vals else None
+
+    return {"activity": {**{k: v for k, v in act.data.items() if k not in ("analysis",)}, "id": act.id, "date": act.date},
+            "has_streams": bool(st), "streams": {k: v for k, v in st.items() if k not in ("lat", "lon")},
+            "coords": coords, "splits": km_splits(st),
+            "dynamics": {"cadence": mean("cad"), "stride_cm": mean("stride"), "gct_ms": mean("gct"),
+                         "vertical_osc_cm": mean("vo"), "power_w": mean("power")}}

@@ -107,6 +107,14 @@ class Activity(SQLModel, table=True):
 
 
 @tenant
+class ActivityStream(SQLModel, table=True):
+    """Detailed series of an activity (map, charts), fetched on first view and kept."""
+    activity_id: int = Field(primary_key=True)
+    user_id: int | None = Field(default=None, index=True)
+    data: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+
+
+@tenant
 class Wellness(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int | None = Field(default=None, index=True)

@@ -334,6 +334,16 @@ def daily_log(s: Session = DB):
     return S.meta_get(s, "daily_log")
 
 
+@app.get("/api/activities/{aid}/detail")
+def activity_detail(aid: int, refresh: bool = False, s: Session = DB):
+    try:
+        return S.activity_detail(s, aid, refresh)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+    except Exception as e:  # noqa: BLE001 - Garmin down / not connected: say so
+        raise HTTPException(502, f"No se pudieron descargar los datos de Garmin: {e}") from e
+
+
 @app.get("/api/activities/{aid}/analysis")
 def activity_analysis(aid: int, refresh: bool = False, s: Session = DB):
     from .db import Activity

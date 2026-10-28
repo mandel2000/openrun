@@ -199,6 +199,11 @@ class GarminService:
         aid = external_id.split(":", 1)[1]
         return (self.client().get_activity_splits(aid) or {}).get("lapDTOs") or []
 
+    def fetch_streams(self, external_id: str) -> dict:
+        """Second-by-second-ish series of an activity (Garmin returns up to 2000 samples)."""
+        aid = external_id.split(":", 1)[1]
+        return streams_from_details(self.client().get_activity_details(aid, 2000, 0))
+
     def fetch_personal_records(self) -> dict:
         """Garmin's own all-time running PRs: {distance_key: {time_s, date, activity_id}}."""
         keys = {1: "1k", 2: "mile", 3: "5k", 4: "10k", 5: "half", 6: "marathon"}
@@ -293,6 +298,30 @@ def normalize_activity(a: dict) -> dict:
         "source": "garmin",
     }
 
+
+STREAM_KEYS = {"t": "sumDuration", "d": "sumDistance", "hr": "directHeartRate", "speed": "directSpeed",
+               "gap": "directGradeAdjustedSpeed", "ele": "directElevation", "cad": "directDoubleCadence",
+               "lat": "directLatitude", "lon": "directLongitude", "power": "directPower", "stride": "directStrideLength",
+               "gct": "directGroundContactTime", "vo": "directVerticalOscillation"}
+
+
+def streams_from_details(details: dict, max_points: int = 900) -> dict:
+    idx = {m["key"]: m["metricsIndex"] for m in details.get("metricDescriptors") or []}
+    rows = [r.get("metrics") or [] for r in details.get("activityDetailMetrics") or []]
+    out: dict[str, list] = {}
+    for k, key in STREAM_KEYS.items():
+        i = idx.get(key)
+        if i is None:
+            continue
+        col = [r[i] if i < len(r) else None for r in rows]
+        if any(v not in (None, 0, 0.0) for v in col):
+            out[k] = col
+    n = len(rows)
+    if n > max_points:  # keep evenly spaced samples
+        keep = [round(j * (n - 1) / (max_points - 1)) for j in range(max_points)]
+        out = {k: [v[j] for j in keep] for k, v in out.items()}
+    rnd = {"lat": 5, "lon": 5, "d": 1, "t": 1, "speed": 3, "gap": 3, "ele": 1, "stride": 1, "gct": 0, "vo": 1}
+    return {k: [None if x is None else round(x, rnd.get(k, 0)) for x in v] for k, v in out.items()}
 
 
 class _PerUser:
