@@ -12,6 +12,12 @@ if [ "${1:-}" = "--lan" ]; then
   : "${OPENRUN_PIN:?Define OPENRUN_PIN para el modo --lan}"
 fi
 mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.openrun"
+# launchd has a minimal PATH: include where python3 and node/npm live (e.g. nvm)
+EXTRA_PATH=""
+for bin in python3 npm; do
+  d="$(dirname "$(command -v "$bin" 2>/dev/null || echo /usr/bin/x)")"
+  EXTRA_PATH="$EXTRA_PATH$d:"
+done
 cat > "$PLIST" <<PL
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -19,7 +25,7 @@ cat > "$PLIST" <<PL
   <key>Label</key><string>com.openrun.server</string>
   <key>ProgramArguments</key><array><string>/bin/bash</string><string>$ROOT/run.sh</string></array>
   <key>EnvironmentVariables</key><dict>
-    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>PATH</key><string>${EXTRA_PATH}/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     <key>OPENRUN_HOST</key><string>$HOST</string>
     <key>OPENRUN_PIN</key><string>${OPENRUN_PIN:-}</string>
     <key>ANTHROPIC_API_KEY</key><string>${ANTHROPIC_API_KEY:-}</string>
