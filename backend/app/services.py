@@ -537,7 +537,9 @@ def _zone_for(distance_m: float) -> str:
 
 
 def race_dict(r: Race) -> dict:
-    d = r.model_dump()
+    d = r.model_dump(exclude={"course", "strategy"})
+    d["has_course"] = bool(r.course and r.course.get("profile"))
+    d["strategy_target_s"] = (r.strategy or {}).get("target_s")
     d["days_to_go"] = (dt.date.fromisoformat(r.date) - dt.date.today()).days
     return d
 
@@ -1013,3 +1015,159 @@ def delete_user(uid: int) -> None:
             s.delete(u)
         s.commit()
     garmin.forget(uid)
+
+
+# ---------------------------------------------------------------- race-day strategy
+
+from .training import race_plan as RP  # noqa: E402
+
+MODES = {"conservative": 1.02, "realistic": 1.0, "ambitious": 0.985}
+
+
+def _race_course(r: Race) -> dict:
+    if r.course and r.course.get("profile"):
+        return {**r.course, "builtin": False}
+    b = RP.builtin_for(r.name)
+    if b and (not r.distance_m or abs(r.distance_m - b["distance_m"]) < 1500):
+        return {**b, "builtin": True}
+    dist = r.distance_m or 10000
+    return {"name": "Recorrido llano (sube el GPX para el perfil real)", "profile": RP.flat_profile(dist), "flat": True, "builtin": False}
+
+
+def race_weather(lat: float, lon: float, date: str, hour: int) -> dict | None:
+    """Race-day forecast (Open-Meteo, up to 16 days ahead)."""
+    import httpx
+
+    days = (dt.date.fromisoformat(date) - dt.date.today()).days
+    if days < 0 or days > 15:
+        return None
+    r = httpx.get("https://api.open-meteo.com/v1/forecast", timeout=10, params={
+        "latitude": round(lat, 3), "longitude": round(lon, 3), "timezone": "auto", "forecast_days": 16,
+        "hourly": "temperature_2m,dew_point_2m,precipitation_probability,wind_speed_10m"})
+    r.raise_for_status()
+    h = r.json()["hourly"]
+    key = f"{date}T{hour:02d}:00"
+    if key not in h["time"]:
+        return None
+    i = h["time"].index(key)
+    w = {"temp": h["temperature_2m"][i], "dew": h["dew_point_2m"][i], "rain_pct": h["precipitation_probability"][i],
+         "wind_kmh": h["wind_speed_10m"][i], "hour": hour, "days_ahead": days}
+    if w["temp"] is not None and w["dew"] is not None:
+        w["slowdown_pct"], w["hadley_f"] = HEAT.slowdown_pct(w["temp"], w["dew"])
+    return w
+
+
+def race_strategy(s: Session, race_id: int, mode: str | None = None, target_s: float | None = None,
+                  start_time: str | None = None) -> dict:
+    r = s.get(Race, race_id)
+    if not r:
+        raise ValueError("carrera no existe")
+    saved = r.strategy or {}
+    mode = mode or saved.get("mode") or "realistic"
+    course = _race_course(r)
+    profile = course["profile"]
+    distance = profile[-1][0]
+    cf = RP.course_factor(profile)
+    a = get_athlete(s)
+    from .training.vdot import predict_race_time
+    flat = predict_race_time(a.vdot, distance) if a.vdot else None
+    predicted = flat * cf if flat else None
+    start_time = start_time or saved.get("start_time") or course.get("start_time") or "10:00"
+    loc = course.get("start") or (_location(s) and list(_location(s)))
+    weather = None
+    if loc:
+        try:
+            weather = race_weather(loc[0], loc[1], r.date, int(start_time[:2]))
+        except Exception:  # noqa: BLE001 - forecast is optional
+            weather = None
+    heat_pct = (weather or {}).get("slowdown_pct", 0.0) or 0.0
+    custom = target_s or (saved.get("target_s") if mode == "custom" else None)
+    if custom:
+        mode, base = "custom", float(custom)
+    elif predicted:
+        base = predicted * MODES.get(mode, 1.0)
+    elif r.goal_time_s:
+        mode, base = "goal", r.goal_time_s
+    else:
+        raise ValueError("Necesito tu VDOT (Ajustes › Perfil) o un tiempo objetivo para calcular la estrategia")
+    target = base * (1 + heat_pct / 100)
+    plan = RP.pace_plan(profile, target, course.get("notes"))
+    gain, loss = RP.gain_loss(profile)
+    step = max(1, len(profile) // 200)
+    return {
+        "race": race_dict(r), "mode": mode, "start_time": start_time,
+        "course": {"name": course.get("name"), "approx": course.get("approx", False), "flat": course.get("flat", False),
+                   "builtin": course.get("builtin", False), "distance_m": distance, "gain_m": gain, "loss_m": loss,
+                   "profile": profile[::step] + ([profile[-1]] if (len(profile) - 1) % step else []),
+                   "coords": course.get("coords"), "factor": round(cf, 4)},
+        "prediction": {"vdot": a.vdot, "flat_s": round(flat) if flat else None, "course_s": round(predicted) if predicted else None,
+                       "modes": {k: round(predicted * v * (1 + heat_pct / 100)) for k, v in MODES.items()} if predicted else {},
+                       "goal_s": r.goal_time_s},
+        "weather": weather, "heat_pct": heat_pct, "target_s": round(target), **plan,
+        "fuel": RP.fuelling(target, a.weight_kg, distance),
+        "tips": RP.strategy_tips(target, cf, heat_pct),
+    }
+
+
+def save_race_strategy(s: Session, race_id: int, mode: str | None, target_s: float | None, start_time: str | None) -> dict:
+    r = s.get(Race, race_id)
+    if not r:
+        raise ValueError("carrera no existe")
+    cur = dict(r.strategy or {})
+    if mode:
+        cur["mode"] = mode
+    if target_s:
+        cur["target_s"], cur["mode"] = float(target_s), "custom"
+    if start_time:
+        cur["start_time"] = start_time
+    r.strategy = cur
+    s.add(r)
+    s.commit()
+    return race_strategy(s, race_id)
+
+
+def set_race_course(s: Session, race_id: int, filename: str, content: bytes) -> dict:
+    r = s.get(Race, race_id)
+    if not r:
+        raise ValueError("carrera no existe")
+    pts = RP.fill_elevation(RP.parse_track(filename, content))
+    profile = RP.profile_from_track(pts)
+    builtin = RP.builtin_for(r.name)
+    r.course = {"name": filename, "profile": profile, "coords": RP.course_coords(pts), "start": [pts[0][0], pts[0][1]],
+                "notes": builtin["notes"] if builtin else None,
+                "start_time": builtin.get("start_time") if builtin else None}
+    if not r.distance_m:
+        r.distance_m = round(profile[-1][0])
+    s.add(r)
+    s.commit()
+    return race_strategy(s, race_id)
+
+
+def clear_race_course(s: Session, race_id: int) -> dict:
+    r = s.get(Race, race_id)
+    if r:
+        r.course = None
+        s.add(r)
+        s.commit()
+    return race_strategy(s, race_id)
+
+
+def push_race_strategy(s: Session, race_id: int) -> dict:
+    """Race-day workout with one step per km at the strategy's target pace; on the watch if connected."""
+    st = race_strategy(s, race_id)
+    r = s.get(Race, race_id)
+    existing = next((pw for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.date == r.date)).all()
+                     if pw.data.get("race_id") == r.id or pw.data.get("type") == "race"), None)
+    from .training.vdot import fmt_pace
+    desc = (f"Estrategia {r.name}: objetivo {fmt_time(st['target_s'])} ({fmt_pace(st['avg_pace_s'])}/km de media, "
+            f"{st['course']['gain_m']} m D+). Ritmo por km ajustado al desnivel: corre por esfuerzo en las subidas.")
+    w = save_custom_workout(s, r.date, f"🏁 {r.name}"[:50], "race", RP.watch_steps(st["kms"]), desc, "high",
+                            existing.id if existing else None)
+    pw = s.get(PlannedWorkout, w["id"])
+    pw.data = {**pw.data, "race_id": r.id}
+    s.add(pw)
+    s.commit()
+    pushed = None
+    if garmin.status().get("connected"):
+        pushed = push_to_garmin(s, [pw.id])[0]
+    return {"workout": workout_dict(pw), "garmin": pushed}

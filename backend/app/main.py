@@ -381,6 +381,7 @@ def heat_apply(s: Session = DB):
 
 
 class AthleteIn(BaseModel):
+    weight_kg: float | None = None
     name: str | None = None
     sex: str | None = None
     age: int | None = None
@@ -812,6 +813,102 @@ def race_update(rid: int, body: RaceEntryIn, s: Session = DB):
 def race_delete(rid: int, s: Session = DB):
     S.delete_race(s, rid)
     return {"ok": True}
+
+
+class StrategyIn(BaseModel):
+    mode: str | None = None
+    target: str | None = None  # "1:32:00"
+    start_time: str | None = None  # "10:30"
+
+
+def _val(fn):
+    try:
+        return fn()
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.get("/api/races/{rid}/strategy")
+def race_strategy(rid: int, mode: str | None = None, s: Session = DB):
+    return _val(lambda: S.race_strategy(s, rid, mode))
+
+
+@app.put("/api/races/{rid}/strategy")
+def race_strategy_save(rid: int, body: StrategyIn, s: Session = DB):
+    if body.start_time and not re.match(r"^\d{1,2}:\d{2}$", body.start_time):
+        raise HTTPException(400, "Hora de salida: formato HH:MM")
+    return _val(lambda: S.save_race_strategy(s, rid, body.mode, parse_time(body.target) if body.target else None,
+                                             body.start_time.zfill(5) if body.start_time else None))
+
+
+@app.post("/api/races/{rid}/course")
+async def race_course_upload(rid: int, file: UploadFile = File(...), s: Session = DB):
+    content = await file.read(8_000_001)
+    if len(content) > 8_000_000:
+        raise HTTPException(413, "Archivo demasiado grande (máx. 8 MB)")
+    return _val(lambda: S.set_race_course(s, rid, file.filename or "recorrido.gpx", _unzip_track(content)))
+
+
+class CourseUrlIn(BaseModel):
+    url: str
+
+
+def _unzip_track(content: bytes) -> bytes:
+    if content[:2] == b"PK":  # organisers often ship the GPX zipped
+        import io
+        import zipfile
+        with zipfile.ZipFile(io.BytesIO(content)) as z:
+            name = next((n for n in z.namelist() if n.lower().endswith((".gpx", ".tcx", ".kml"))), None)
+            if not name:
+                raise HTTPException(400, "El zip no contiene ningún GPX, TCX o KML")
+            return z.read(name)
+    return content
+
+
+def _public_https(url: str) -> None:
+    """Only fetch https URLs on public addresses (no SSRF into the server's network)."""
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+
+    u = urlparse(url)
+    if u.scheme != "https" or not u.hostname:
+        raise HTTPException(400, "La URL debe empezar por https://")
+    try:
+        addrs = {ai[4][0] for ai in socket.getaddrinfo(u.hostname, 443)}
+    except OSError as e:
+        raise HTTPException(400, f"No se encuentra {u.hostname}") from e
+    if any(not ipaddress.ip_address(a.split("%")[0]).is_global for a in addrs):
+        raise HTTPException(400, "Dirección no permitida")
+
+
+@app.post("/api/races/{rid}/course/url")
+def race_course_url(rid: int, body: CourseUrlIn, s: Session = DB):
+    import httpx
+
+    _public_https(body.url)
+    try:
+        with httpx.stream("GET", body.url, timeout=20, follow_redirects=False) as resp:
+            resp.raise_for_status()
+            content = b""
+            for chunk in resp.iter_bytes():
+                content += chunk
+                if len(content) > 8_000_000:
+                    raise HTTPException(413, "Archivo demasiado grande (máx. 8 MB)")
+    except httpx.HTTPError as e:
+        raise HTTPException(400, f"No se pudo descargar: {e}") from e
+    name = body.url.rsplit("/", 1)[-1].split("?")[0] or "recorrido.gpx"
+    return _val(lambda: S.set_race_course(s, rid, name, _unzip_track(content)))
+
+
+@app.delete("/api/races/{rid}/course")
+def race_course_delete(rid: int, s: Session = DB):
+    return _val(lambda: S.clear_race_course(s, rid))
+
+
+@app.post("/api/races/{rid}/strategy/push")
+def race_strategy_push(rid: int, s: Session = DB):
+    return _val(lambda: S.push_race_strategy(s, rid))
 
 
 @app.get("/api/race-calendar")

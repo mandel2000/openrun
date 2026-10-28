@@ -20,7 +20,7 @@ const TABS: [Tab, string, IconName][] = [
 const TITLES: Record<Tab, string> = { hoy: 'Hoy', plan: 'Plan', carreras: 'Carreras', progreso: 'Progreso', coach: 'Coach IA', ajustes: 'Ajustes' }
 
 const readHash = (): Tab => {
-  const h = window.location.hash.slice(1) as Tab
+  const h = window.location.hash.slice(1).split('/')[0] as Tab
   return TABS.some(([k]) => k === h) ? h : 'hoy'
 }
 

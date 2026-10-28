@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api, fmtDate, fmtKm, fmtTime, iso, useApi, type Plan, type Race } from '../api'
 import { Banner, Empty, Icon, Segmented, Sheet, Skeleton } from '../ui'
 import { PlanForm } from './PlanPage'
+import RaceStrategy from '../components/RaceStrategy'
 
 type CalItem = { external_id: string; name: string; date: string | null; status: string; url: string; running: boolean }
 type CalEvent = { external_id: string; url: string; date: string | null; time: string | null; location: string | null; price: string | null; route: string | null; distances_km: number[] }
@@ -123,7 +124,7 @@ function AddRaceSheet({ onClose, onAdded }: { onClose: () => void; onAdded: (r: 
   )
 }
 
-function RaceDetail({ r, onClose, onChange, onPlan }: { r: Race; onClose: () => void; onChange: () => void; onPlan: (r: Race) => void }) {
+function RaceDetail({ r, onClose, onChange, onPlan, onStrategy }: { r: Race; onClose: () => void; onChange: () => void; onPlan: (r: Race) => void; onStrategy: (r: Race) => void }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ tone: 'ok' | 'bad' | 'info'; text: string } | null>(null)
   const [result, setResult] = useState('')
@@ -149,6 +150,7 @@ function RaceDetail({ r, onClose, onChange, onPlan }: { r: Race; onClose: () => 
       </div>
       {!past && (
         <>
+          <button className="btn btn-primary btn-block" style={{ marginBottom: 14 }} onClick={() => onStrategy(r)}><Icon name="zap" />Estrategia de carrera: ritmo km a km</button>
           <div className="field" style={{ marginBottom: 6 }}>Prioridad</div>
           <Segmented label="Prioridad" value={r.priority} onChange={(v) => update({ priority: v })} options={[['A', 'A · Objetivo'], ['B', 'B · Preparatoria'], ['C', 'C · Entreno']]} />
           <p className="small muted" style={{ marginTop: 6 }}>{PRIO_HELP[r.priority]}</p>
@@ -181,11 +183,16 @@ export default function RacesPage({ plan, reload }: { plan: Plan | null; reload:
   const [open, setOpen] = useState<Race | null>(null)
   const [planFor, setPlanFor] = useState<Race | null>(null)
   const [last, setLast] = useState<AddResult | null>(null)
+  const [strategy, setStrategy] = useState<Race | null>(() => {
+    const m = window.location.hash.match(/^#carreras\/estrategia\/(\d+)/)
+    return m ? ({ id: +m[1] } as Race) : null
+  })
   const changed = () => { reloadRaces(); reload() }
   const upcoming = (data ?? []).filter((r) => r.days_to_go >= 0)
   const past = (data ?? []).filter((r) => r.days_to_go < 0).reverse()
   const planWeek = (d: string) => plan?.weeks.find((w) => w.start <= d && d <= w.end)?.index
 
+  if (strategy) return <RaceStrategy race={strategy} onBack={() => { setStrategy(null); if (window.location.hash.includes('/')) window.location.hash = 'carreras' }} />
   return (
     <div className="stack">
       <div className="row spread">
@@ -238,7 +245,7 @@ export default function RacesPage({ plan, reload }: { plan: Plan | null; reload:
         </div>
       )}
       {adding && <AddRaceSheet onClose={() => setAdding(false)} onAdded={(r) => { setAdding(false); setLast(r); changed() }} />}
-      {open && <RaceDetail r={open} onClose={() => setOpen(null)} onChange={changed} onPlan={(r) => { setOpen(null); setPlanFor(r) }} />}
+      {open && <RaceDetail r={open} onClose={() => setOpen(null)} onChange={changed} onPlan={(r) => { setOpen(null); setPlanFor(r) }} onStrategy={(r) => { setOpen(null); setStrategy(r); window.scrollTo(0, 0) }} />}
       {planFor && (
         <Sheet title={`Plan hacia ${planFor.name}`} onClose={() => setPlanFor(null)} labelledBy="pf-title">
           <Banner tone="info">Esto sustituye tu plan activo{plan ? ` («${plan.name}»)` : ''}.</Banner>

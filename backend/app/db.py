@@ -67,6 +67,7 @@ class Athlete(SQLModel, table=True):
     vdot: float | None = None
     vdot_source: str | None = None
     weekly_km: float | None = None
+    weight_kg: float | None = None
 
 
 @tenant
@@ -149,6 +150,8 @@ class Race(SQLModel, table=True):
     goal_time_s: float | None = None
     result_time_s: float | None = None
     notes: str | None = None
+    course: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))  # uploaded GPX profile
+    strategy: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))  # chosen target, start time
 
 
 TENANT_TABLES = ["athlete", "plan", "plannedworkout", "activity", "wellness", "chatmessage", "meta", "race"]
@@ -199,10 +202,26 @@ def _migrate_single_user() -> None:
         con.close()
 
 
+def _add_missing_columns() -> None:
+    """New nullable columns on existing tables (create_all only creates missing tables)."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    with engine.begin() as c:
+        for table in SQLModel.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            have = {col["name"] for col in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in have and col.nullable:
+                    c.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col.type.compile(engine.dialect)}'))
+
+
 def init_db() -> None:
     if not DB_URL:
         _migrate_single_user()
     SQLModel.metadata.create_all(engine)
+    _add_missing_columns()
 
 
 def get_session():

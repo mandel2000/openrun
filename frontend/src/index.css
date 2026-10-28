@@ -382,3 +382,19 @@ body.dragging, body.dragging * { cursor: grabbing !important; -webkit-user-selec
 .drag-ghost span { color: var(--muted); font-size: 12px; }
 .toast { position: fixed; z-index: 90; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom)); width: min(560px, calc(100% - 32px)); box-shadow: 0 8px 24px rgba(0,0,0,.16); border-radius: var(--r-md); }
 @media (min-width: 768px) { .toast { bottom: 24px; } }
+
+/* ---- race strategy */
+.splits { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.split { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: var(--r-md);
+  background: var(--surface-2); border-left: 4px solid var(--tc, var(--z2)); }
+.split-km { font-weight: 800; font-size: 18px; text-align: center; }
+.split-main { min-width: 0; }
+.split-cum { white-space: nowrap; }
+.tips { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: 14px; line-height: 1.45; }
+.dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.routemap { width: 100%; z-index: 0; }
+:root[data-theme="dark"] .routemap .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .routemap .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); } }
+.map-km span, .map-pin span { display: inline-block; transform: translate(-50%, -50%); background: var(--surface); color: var(--text); border: 2px solid var(--accent);
+  border-radius: 999px; font: 700 11px/1 system-ui, sans-serif; padding: 3px 6px; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.map-pin span { background: var(--accent); color: var(--accent-ink); }

@@ -167,7 +167,7 @@ export function useApi<T>(url: string | null) {
 export type Race = {
   id: number; name: string; date: string; distance_m: number | null; priority: 'A' | 'B' | 'C'; location: string | null
   url: string | null; source: string; external_id: string | null; goal_time_s: number | null; result_time_s: number | null
-  notes: string | null; days_to_go: number
+  notes: string | null; days_to_go: number; has_course?: boolean; strategy_target_s?: number | null
 }
 export const fmtTime = (s?: number | null) => {
   if (!s) return '–'
