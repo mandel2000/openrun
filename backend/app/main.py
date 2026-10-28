@@ -307,6 +307,9 @@ class SettingsIn(BaseModel):
     run_hour: int | None = None
     lat: float | None = None
     lon: float | None = None
+    notify_morning: bool | None = None
+    notify_analysis: bool | None = None
+    notify_weekly: bool | None = None
 
 
 @app.get("/api/settings")
@@ -332,6 +335,71 @@ def daily_run(s: Session = DB):
 @app.get("/api/daily/log")
 def daily_log(s: Session = DB):
     return S.meta_get(s, "daily_log")
+
+
+# ---------------------------------------------------------------- push notifications
+
+
+@app.get("/api/push")
+def push_info():
+    from . import push
+    try:
+        key = push.public_key()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"Notificaciones no disponibles: {e}") from e
+    return {"public_key": key, "devices": push.count(tenancy.current_user_id())}
+
+
+class PushSubIn(BaseModel):
+    endpoint: str
+    keys: dict[str, str] = {}
+
+
+@app.post("/api/push/subscribe")
+def push_subscribe(body: PushSubIn):
+    from . import push
+    try:
+        push.subscribe(tenancy.current_user_id(), body.model_dump())
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"ok": True, "devices": push.count(tenancy.current_user_id())}
+
+
+@app.post("/api/push/unsubscribe")
+def push_unsubscribe(body: PushSubIn):
+    from . import push
+    push.unsubscribe(tenancy.current_user_id(), body.endpoint)
+    return {"ok": True, "devices": push.count(tenancy.current_user_id())}
+
+
+@app.post("/api/push/test")
+def push_test(s: Session = DB):
+    msg = S.today_message(s) or ("OpenRun", "Las notificaciones funcionan. Te avisaré de tu entreno, tus análisis y el resumen semanal.")
+    n = S.notify(s, None, msg[0], msg[1], "/#hoy", "test")
+    if not n:
+        raise HTTPException(400, "No hay ningún dispositivo suscrito o el servicio de notificaciones lo rechazó")
+    return {"sent": n}
+
+
+@app.get("/api/weekly-review")
+def weekly_review_get(week: str | None = None, s: Session = DB):
+    return S.weekly_review(s, week)
+
+
+@app.post("/api/weekly-review")
+def weekly_review_regen(week: str | None = None, s: Session = DB):
+    return S.weekly_review(s, week, regenerate=True)
+
+
+@app.get("/api/weekly-reviews")
+def weekly_reviews(s: Session = DB):
+    return S.list_reviews(s)
+
+
+@app.get("/api/routines")
+def routines():
+    from .training import strength
+    return {"warmup": strength.WARMUP, "mobility": strength.MOBILITY}
 
 
 @app.get("/api/activities/{aid}/detail")
@@ -506,6 +574,19 @@ def move(wid: int, body: MoveIn, s: Session = DB):
         return S.move_workout(s, wid, body.date, body.swap)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+
+
+@app.post("/api/workouts/{wid}/done")
+def mark_done(wid: int, s: Session = DB):
+    """Manual completion (strength / mobility sessions have no GPS activity to match)."""
+    from .db import PlannedWorkout
+    pw = s.get(PlannedWorkout, wid)
+    if not pw:
+        raise HTTPException(404)
+    pw.status = "planned" if pw.status == "done" else "done"
+    s.add(pw)
+    s.commit()
+    return S.workout_dict(pw)
 
 
 @app.post("/api/workouts/{wid}/skip")

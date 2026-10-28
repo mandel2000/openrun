@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, fmtDate, fmtDur, fmtPace, PHASE_LABEL, STATUS_LABEL, workoutLevel, ZONE_LABEL, zoneLevel, zoneVar, type Step, type Workout } from '../api'
+import { ExerciseList, RoutineBlock } from './Exercises'
 import { Banner, Icon, Sheet } from '../ui'
 import StepProfile, { KIND } from './StepProfile'
 
@@ -82,6 +83,9 @@ export default function WorkoutDetail({ w, onClose, onChange }: { w: Workout; on
       <p style={{ marginTop: 12 }} className="text-2">{w.description}</p>
       {w.note && <Banner>{w.note}</Banner>}
       {w.sport === 'running' && <Steps steps={w.steps} hl={hl} />}
+      {w.sport === 'strength' && w.exercises && <ExerciseList items={w.exercises} storeKey={`ex-${w.id}`} />}
+      {w.sport === 'running' && (w.intensity === 'high' || w.intensity === 'moderate' || w.type === 'race') && <RoutineBlock kind="warmup" />}
+      {w.sport === 'running' && <RoutineBlock kind="mobility" />}
 
       <hr />
       <div className="row">
@@ -91,6 +95,11 @@ export default function WorkoutDetail({ w, onClose, onChange }: { w: Workout; on
             if (!res.ok) throw new Error(res.error)
           }), 'Enviado a Garmin Connect. Sincroniza el reloj.')}>
             <Icon name="watch" />{w.garmin_workout_id ? 'Reenviar al reloj' : 'Enviar al reloj'}
+          </button>
+        )}
+        {w.sport === 'strength' && (
+          <button className={`btn ${w.status === 'done' ? '' : 'btn-primary'}`} disabled={busy} onClick={() => act(() => api.post(`/api/workouts/${w.id}/done`), w.status === 'done' ? 'Desmarcada' : '¡Sesión hecha!')}>
+            <Icon name="check" />{w.status === 'done' ? 'Desmarcar' : 'Marcar como hecha'}
           </button>
         )}
         <button className="btn" disabled={busy || w.status === 'skipped'} onClick={() => act(() => api.post(`/api/workouts/${w.id}/skip`), 'Marcado como no realizado')}>

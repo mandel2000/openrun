@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { addDays, api, DAY_NAMES, type Weather, daysBetween, fmtDate, iso, PHASE_LABEL, useApi, workoutLevel, zoneVar, type Plan, type Race, type Readiness, type Workout } from '../api'
+import { addDays, api, DAY_NAMES, type Weather, daysBetween, fmtDate, fmtTime, iso, PHASE_LABEL, useApi, workoutLevel, zoneVar, type Plan, type Race, type Readiness, type Workout } from '../api'
 import ActivityAnalysisSheet from '../components/ActivityAnalysis'
 import StepProfile from '../components/StepProfile'
 import WorkoutDetail, { Steps, WorkoutMeta } from '../components/WorkoutDetail'
@@ -196,6 +196,53 @@ function WeekStrip({ monday, byDate, sel, onSel }: { monday: string; byDate: Map
   )
 }
 
+type Review = { week_start: string; comment: string; ai: boolean
+  facts: { km: number; km_plan: number; carreras: number; sesiones_plan: number; hechas: number; cumplimiento_pct: number | null
+    carga: { ctl: number | null; ctl_cambio: number | null; tsb: number | null; acwr: number | null } } }
+
+function WeeklyReviewCard() {
+  const { data, loading, setData } = useApi<Review>('/api/weekly-review')
+  const [busy, setBusy] = useState(false)
+  if (loading && !data) return <div className="card"><div className="micro">Semana pasada</div><Skeleton h={60} style={{ marginTop: 10 }} /></div>
+  if (!data) return null
+  const f = data.facts
+  const end = addDays(data.week_start, 6)
+  return (
+    <div className="card">
+      <div className="row spread">
+        <div className="micro">Semana pasada · {fmtDate(data.week_start, { day: 'numeric', month: 'short' })}–{fmtDate(end, { day: 'numeric', month: 'short' })}</div>
+        <button className="btn btn-ghost btn-icon btn-sm" aria-label="Regenerar resumen" disabled={busy} onClick={async () => {
+          setBusy(true)
+          try { setData(await api.post<Review>('/api/weekly-review')) } finally { setBusy(false) }
+        }}><Icon name="refresh" size={16} className={busy ? 'spin' : ''} /></button>
+      </div>
+      <div className="mini-stats" style={{ marginTop: 10 }}>
+        <div><span className="micro">Km</span><b>{f.km}{f.km_plan ? <small> / {f.km_plan}</small> : null}</b></div>
+        <div><span className="micro">Sesiones</span><b>{f.sesiones_plan ? `${f.hechas}/${f.sesiones_plan}` : f.carreras}</b></div>
+        <div><span className="micro">Forma (CTL)</span><b>{f.carga.ctl ?? '–'}{f.carga.ctl_cambio ? <small> {f.carga.ctl_cambio > 0 ? '+' : ''}{f.carga.ctl_cambio}</small> : null}</b></div>
+        <div><span className="micro">ACWR</span><b>{f.carga.acwr ?? '–'}</b></div>
+      </div>
+      <p className="text-2" style={{ marginTop: 12, marginBottom: 0, whiteSpace: 'pre-wrap' }}>{data.comment}</p>
+      {data.ai && <div className="small muted" style={{ marginTop: 6 }}><Icon name="sparkles" size={13} /> Comentario del coach IA</div>}
+    </div>
+  )
+}
+
+function RaceSoonCard({ r }: { r: Race }) {
+  return (
+    <a className="card race-soon" href={`#carreras/estrategia/${r.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+      <div className="row spread" style={{ flexWrap: 'nowrap' }}>
+        <div style={{ minWidth: 0 }}>
+          <div className="micro">{r.days_to_go === 0 ? '¡Hoy es el día!' : r.days_to_go === 1 ? 'Mañana' : `En ${r.days_to_go} días`}</div>
+          <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4 }}>🏁 {r.name}</div>
+          <div className="small muted">{r.strategy_target_s ? `Objetivo ${fmtTime(r.strategy_target_s)} · ` : ''}Ritmo km a km, desnivel, tiempo y avituallamiento</div>
+        </div>
+        <span className="btn btn-primary btn-sm" style={{ flex: 'none' }}>Estrategia<Icon name="chevronRight" size={16} /></span>
+      </div>
+    </a>
+  )
+}
+
 export default function TodayPage({ plan, reload, go }: { plan: Plan | null | undefined; reload: () => void; go: (t: string) => void }) {
   const today = iso(new Date())
   const races = useApi<Race[]>('/api/races')
@@ -232,6 +279,8 @@ export default function TodayPage({ plan, reload, go }: { plan: Plan | null | un
           </a>
         )}
       </div>
+
+      {nextRace && nextRace.days_to_go <= 21 && (nextRace.distance_m ?? 0) >= 3000 && <RaceSoonCard r={nextRace} />}
 
       {!plan ? (
         <div className="card">
@@ -277,6 +326,7 @@ export default function TodayPage({ plan, reload, go }: { plan: Plan | null | un
           </div>
         </>
       )}
+      <WeeklyReviewCard />
       {pick && <WorkoutDetail w={pick} onClose={() => setPick(null)} onChange={reload} />}
     </div>
   )

@@ -62,7 +62,30 @@ def _backup_due() -> bool:
     return True
 
 
-_HOOKS: list = []  # extra per-tick jobs (notifications, weekly review); each gets the routines that ran
+_last_intraday: dict[int, float] = {}
+INTRADAY_EVERY_S = 2 * 3600
+
+
+def intraday(_ran: dict) -> None:
+    """Every ~2 h between 9:00 and 22:00: pick up new runs, analyse and notify them."""
+    import time
+
+    now = dt.datetime.now()
+    if not 9 <= now.hour < 22:
+        return
+    for uid in user_ids():
+        if time.time() - _last_intraday.get(uid, 0) < INTRADAY_EVERY_S:
+            continue
+        _last_intraday[uid] = time.time()
+        try:
+            with as_user(uid), Session(engine) as s:
+                if S.get_settings(s).get("auto_sync"):
+                    S.intraday_sync(s)
+        except Exception:  # noqa: BLE001
+            log.exception("intraday sync failed for user %s", uid)
+
+
+_HOOKS: list = [intraday]  # extra per-tick jobs; each gets the routines that ran
 
 
 def _hourly(ran: dict) -> None:

@@ -33,6 +33,7 @@ export type Workout = {
   distance_km: number
   duration_min: number
   sport: 'running' | 'strength'
+  exercises?: { name: string; sets: number; reps: string; rest_s: number; cue: string; load?: string }[]
 }
 
 export type PlanWeek = {

@@ -433,6 +433,36 @@ def _completion(client, model: str, messages: list[dict], tools: list[dict], str
     yield "message", {"content": "".join(content), "tool_calls": tool_calls}
 
 
+def complete(system: str, prompt: str, max_tokens: int = 900) -> str | None:
+    """One-shot text generation without tools (weekly review, notifications). None if no provider works."""
+    p = provider()
+    if p == "anthropic":
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            return None
+        try:
+            resp = _client().messages.create(model=MODEL, max_tokens=max_tokens, system=system,
+                                             messages=[{"role": "user", "content": prompt}])
+            return "".join(b.text for b in resp.content if b.type == "text").strip() or None
+        except Exception:  # noqa: BLE001
+            return None
+    if not provider_info()["configured"]:
+        return None
+    client = _openai_client()
+    msgs = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+    for model in _models():
+        try:
+            kw = {"model": model, "messages": msgs, "temperature": 0.3, "max_tokens": max_tokens}
+            effort = os.getenv("OPENRUN_REASONING_EFFORT", REASONING_DEFAULT.get(p, ""))
+            if effort:
+                kw["reasoning_effort"] = effort
+            text = client.chat.completions.create(**kw).choices[0].message.content
+            if text and text.strip():
+                return sanitize(text).strip()
+        except Exception:  # noqa: BLE001 - try the next model
+            continue
+    return None
+
+
 def chat_events(s: Session, user_text: str):
     """One user turn as a stream of events: {"type": "text"|"tool"|"status"|"done", ...}.
     Same tool loop for any OpenAI-compatible provider; falls back to the next model on errors."""

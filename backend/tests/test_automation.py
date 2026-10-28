@@ -326,3 +326,61 @@ def test_move_workout_swaps_and_warns(monkeypatch):
         import pytest
         with pytest.raises(ValueError):
             S.move_workout(s, a.id, "2020-01-01")
+
+
+def test_weekly_review_facts_and_cache(monkeypatch):
+    from app.ai import coach
+    calls = []
+    monkeypatch.setattr(coach, "complete", lambda system, prompt, **kw: calls.append(prompt) or "Buena semana.")
+    monday = dt.date(2027, 3, 1)
+    with Session(engine) as s:
+        s.add(Activity(external_id="garmin:wr1", date="2027-03-02", sport="running", trimp=60,
+                       data={"distance_m": 10000, "duration_s": 3000, "avg_hr": 150, "name": "Rodaje"}))
+        s.add(PlannedWorkout(date="2027-03-02", status="done", data={"title": "Rodaje", "sport": "running", "distance_km": 10, "duration_min": 50, "low_intensity_min": 50}))
+        s.add(PlannedWorkout(date="2027-03-04", status="skipped", data={"title": "Series", "sport": "running", "distance_km": 9, "intensity": "high"}))
+        s.commit()
+        r = S.weekly_review(s, monday.isoformat())
+        f = r["facts"]
+        assert f["km"] == 10.0 and f["km_plan"] == 10 and f["hechas"] == 1 and f["saltadas"] == 1 and f["cumplimiento_pct"] == 50
+        assert f["salidas"][0]["ritmo"] == "5:00" and r["comment"] == "Buena semana." and r["ai"]
+        S.weekly_review(s, "2027-03-03")  # any day of the week -> same cached review
+        assert len(calls) == 1
+        monkeypatch.setattr(coach, "complete", lambda *a, **k: None)
+        r = S.weekly_review(s, monday.isoformat(), regenerate=True)
+        assert not r["ai"] and "1 de 2" in r["comment"]
+
+
+def test_push_subscribe_send_and_cleanup(monkeypatch, tmp_path):
+    import pywebpush
+
+    from app import push
+    monkeypatch.setattr(push, "KEY_FILE", tmp_path / "vapid.pem")
+    assert len(push.public_key()) > 80 and (tmp_path / "vapid.pem").exists()
+    sub = {"endpoint": "https://push.example/abc", "keys": {"p256dh": "BNc" + "A" * 84, "auth": "x" * 22}}
+    push.subscribe(1, sub)
+    push.subscribe(1, sub)  # idempotent
+    assert push.count(1) == 1
+    sent = []
+    monkeypatch.setattr(pywebpush, "webpush", lambda info, data, **kw: sent.append((info["endpoint"], data)))
+    assert push.send(1, "Hoy: Series", "6×800 m") == 1 and "Series" in sent[0][1]
+
+    class Gone(pywebpush.WebPushException):
+        def __init__(self):
+            super().__init__("gone", response=type("R", (), {"status_code": 410})())
+
+    def boom(*a, **k):
+        raise Gone()
+    monkeypatch.setattr(pywebpush, "webpush", boom)
+    assert push.send(1, "x", "y") == 0 and push.count(1) == 0  # expired subscription removed
+
+
+def test_today_message(monkeypatch):
+    today = dt.date.today().isoformat()
+    with Session(engine) as s:
+        for pw in s.exec(__import__("sqlmodel").select(PlannedWorkout).where(PlannedWorkout.date == today)).all():
+            s.delete(pw)
+        s.add(PlannedWorkout(date=today, data={"title": "Series 6×800", "sport": "running", "distance_km": 9, "_heat": {"pct": 2.5}}))
+        s.add(PlannedWorkout(date=today, data={"title": "Fuerza general", "sport": "strength"}))
+        s.commit()
+        title, body = S.today_message(s)
+        assert title == "Hoy: Series 6×800" and "9 km" in body and "calor" in body and "Fuerza general" in body

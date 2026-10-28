@@ -69,9 +69,11 @@ class Workout:
     duration_min: float = 0.0
     low_intensity_min: float = 0.0
     sport: Literal["running", "strength"] = "running"
+    exercises: list[dict] | None = None  # strength sessions: [{name, sets, reps, rest_s, cue, load}]
 
     def to_dict(self) -> dict:
-        return {
+        extra = {"exercises": self.exercises} if self.exercises else {}
+        return {**extra,
             "type": self.type,
             "title": self.title,
             "description": self.description,
@@ -96,6 +98,7 @@ class Workout:
             phase=d.get("phase", ""),
             date=d.get("date"),
             sport=d.get("sport", "running"),
+            exercises=d.get("exercises"),
         )
         recompute(w)
         return w
@@ -279,20 +282,15 @@ def race(paces: TrainingPaces, goal: str, distance_m: float, zone: str) -> Worko
 
 
 def strength_session(focus: Literal["base", "build", "maintenance"]) -> Workout:
-    """Strength for runners. Heavy/explosive resistance training improves running economy
-    2-8% without hurting VO2max (Blagrove et al. 2018 systematic review; Støren 2008)."""
-    plans = {
-        "base": ("Fuerza general", "3×10-12: sentadilla goblet, peso muerto rumano, zancada atrás, puente glúteo a 1 pierna, "
-                 "elevación de gemelos (rodilla recta y flexionada), plancha lateral."),
-        "build": ("Fuerza máxima + pliometría", "4×4-6 pesado (RPE 8): sentadilla/peso muerto trap-bar, step-up con carga; "
-                  "pliometría 3×8 saltos al cajón, 3×20 skipping/pogo; gemelo sóleo 3×12 con carga."),
-        "maintenance": ("Mantenimiento de fuerza", "2×5 pesado de sentadilla + peso muerto, 2×10 pogos, core 10'. "
-                        "Volumen bajo para no interferir con calidad de carrera."),
-    }
-    title, desc = plans[focus]
-    w = Workout("strength", title, desc + " Hazla el mismo día que la sesión de calidad (días duros duros, suaves suaves).",
-                [Step("run", "time", 35 * 60, None, note="Sesión de fuerza")], "moderate", sport="strength")
-    w.duration_min, w.distance_km, w.low_intensity_min = 35, 0, 0
+    """Strength for runners (structured exercises: see training/strength.py for the evidence)."""
+    from .strength import describe, session
+
+    sess = session(focus)
+    w = Workout("strength", sess["title"], f"{sess['goal']} Hazla el mismo día que la sesión de calidad, después de correr "
+                f"(días duros duros, suaves suaves). {describe(sess)}.",
+                [Step("run", "time", sess["minutes"] * 60, None, note="Sesión de fuerza")], "moderate", sport="strength",
+                exercises=sess["exercises"])
+    w.duration_min, w.distance_km, w.low_intensity_min = sess["minutes"], 0, 0
     return w
 
 

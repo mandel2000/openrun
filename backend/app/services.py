@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import math
 from collections import defaultdict
 
@@ -126,8 +127,12 @@ def plan_overview(s: Session) -> dict | None:
 
 
 def workout_dict(pw: PlannedWorkout) -> dict:
-    return {"id": pw.id, "week": pw.week, "status": pw.status, "garmin_workout_id": pw.garmin_workout_id,
-            "activity_id": pw.activity_id, "note": pw.note, **pw.data, "date": pw.date}
+    d = {"id": pw.id, "week": pw.week, "status": pw.status, "garmin_workout_id": pw.garmin_workout_id,
+         "activity_id": pw.activity_id, "note": pw.note, **pw.data, "date": pw.date}
+    if d.get("sport") == "strength" and not d.get("exercises"):  # plans made before structured sessions
+        from .training.strength import focus_for_title, session
+        d["exercises"] = session(focus_for_title(d.get("title", "")))["exercises"]
+    return d
 
 
 def list_workouts(s: Session, start: str, end: str) -> list[dict]:
@@ -788,6 +793,9 @@ DEFAULT_SETTINGS = {
     "heat_adjust": True,     # slow pace targets in heat
     "run_hour": 8,           # usual training hour (for the weather forecast)
     "lat": None, "lon": None,
+    "notify_morning": True,  # push: today's session after the morning routine
+    "notify_analysis": True,  # push: post-run analysis when a run syncs
+    "notify_weekly": True,   # push: Monday weekly review
 }
 
 
@@ -964,6 +972,8 @@ def daily_routine(s: Session, force: bool = False) -> dict:
         step("sync", lambda: {k: v for k, v in sync_garmin(s, 3).items() if k != "metrics"})
     step("análisis", lambda: {"analizadas": analyze_recent(s)})
     step("ritmos", lambda: (lambda r: {"aplicado": r["applied"], "pendiente": r["pending"]})(pace_insights(s)))
+    if dt.date.today().weekday() == 0:
+        step("resumen semanal", lambda: (lambda r: {"ia": r["ai"]})(weekly_review(s)))
     if st["heat_adjust"]:
         step("calor", lambda: apply_heat(s))
     if st["auto_adapt"]:
@@ -972,7 +982,89 @@ def daily_routine(s: Session, force: bool = False) -> dict:
         step("reloj", lambda: (lambda r: {"enviados": sum(1 for x in r if x["ok"]), "errores": [x.get("error") for x in r if not x["ok"]]})(push_changed(s)))
     hist = meta_get(s, "daily_log").get("items", [])
     meta_set(s, "daily_log", {"items": (hist + [log])[-14:], "last_date": dt.date.today().isoformat()})
+    try:
+        morning_notifications(s, log, connected)
+    except Exception:  # noqa: BLE001 - notifications are best effort
+        pass
     return log
+
+
+# ---------------------------------------------------------------- notifications
+
+
+def notify(s: Session, kind: str | None, title: str, body: str, url: str = "/", tag: str | None = None) -> int:
+    """Push to the current user's devices if they enabled this kind of notification."""
+    from . import push
+    from .tenancy import current_user_id
+
+    if kind and not get_settings(s).get(f"notify_{kind}", True):
+        return 0
+    return push.send(current_user_id(), title, body, url, tag)
+
+
+def today_message(s: Session) -> tuple[str, str] | None:
+    today = dt.date.today().isoformat()
+    ws = [w for w in list_workouts(s, today, today) if w["status"] in ("planned", "modified")]
+    if not ws:
+        return None
+    run = next((w for w in ws if w.get("sport") == "running"), None)
+    other = [w["title"] for w in ws if w is not run]
+    if run:
+        title = f"Hoy: {run['title']}"
+        bits = [f"{run.get('distance_km')} km" if run.get("distance_km") else None]
+        if run.get("_heat"):
+            bits.append(f"ritmos +{run['_heat'].get('pct')} % por calor")
+        if run["status"] == "modified":
+            bits.append("ajustado a tu estado de hoy")
+        if other:
+            bits.append(" + ".join(other))
+        body = " · ".join(b for b in bits if b) or run.get("description", "")[:120]
+    else:
+        title, body = f"Hoy: {other[0]}", "Sesión de fuerza. Ábrela para ver los ejercicios."
+    return title, body
+
+
+def morning_notifications(s: Session, log: dict, connected: bool) -> None:
+    sync = next((x for x in log["steps"] if x["step"] == "sync"), None)
+    if sync and not sync["ok"] and any(k in (sync.get("error") or "").lower() for k in ("auth", "401", "login", "token", "no conectado")):
+        notify(s, None, "Garmin desconectado", "Vuelve a conectar Garmin en Ajustes para sincronizar y enviar entrenos al reloj.", "/#ajustes", "garmin")
+    msg = today_message(s)
+    if msg:
+        notify(s, "morning", msg[0], msg[1], "/#hoy", "today")
+    if dt.date.today().weekday() == 0:
+        rev = meta_get(s, "weekly_reviews").get((_monday(dt.date.today()) - dt.timedelta(days=7)).isoformat())
+        if rev:
+            notify(s, "weekly", "Tu resumen semanal", rev["comment"][:200], "/#hoy", "weekly")
+
+
+VERDICT_TEXT = {"on_target": "en objetivo ✅", "too_easy": "más fácil de lo previsto", "too_hard": "más dura de lo previsto"}
+
+
+def intraday_sync(s: Session) -> dict:
+    """Light sync during the day: new runs get analysed and notified right away."""
+    if not garmin.status().get("connected"):
+        return {"skipped": "garmin"}
+    before = {a.id for a in s.exec(select(Activity)).all()}
+    end = dt.date.today()
+    for a in garmin.fetch_activities(end - dt.timedelta(days=1), end):
+        upsert_activity(s, a)
+    new = [a for a in s.exec(select(Activity).where(Activity.date >= (end - dt.timedelta(days=1)).isoformat())).all()
+           if a.id not in before and a.sport == "running"]
+    for act in new:
+        try:
+            res = analyze_activity(s, act)
+        except Exception:  # noqa: BLE001
+            res = None
+        km = round((act.data.get("distance_m") or 0) / 1000, 1)
+        title = f"{act.data.get('name') or 'Carrera'} · {km} km"
+        if res and res.get("planned_title"):
+            body = f"{res['planned_title']}: {VERDICT_TEXT.get(res.get('verdict'), 'analizada')}."
+            if res.get("notes"):
+                body += " " + res["notes"][0]
+        else:
+            body = "Sincronizada. Mira el mapa y tus parciales."
+        notify(s, "analysis", title, body, "/#progreso", f"act-{act.id}")
+    return {"new": len(new)}
 
 
 def backup_db(keep: int = 14) -> dict | None:
@@ -1230,3 +1322,108 @@ def activity_detail(s: Session, activity_id: int, refresh: bool = False) -> dict
             "coords": coords, "splits": km_splits(st),
             "dynamics": {"cadence": mean("cad"), "stride_cm": mean("stride"), "gct_ms": mean("gct"),
                          "vertical_osc_cm": mean("vo"), "power_w": mean("power")}}
+
+
+# ---------------------------------------------------------------- weekly review
+
+REVIEW_SYSTEM = """Eres el entrenador de running del atleta (OpenRun). Escribe en español, tono cercano y directo, sin saludos
+ni despedidas. Con los datos JSON de su semana escribe 3 párrafos cortos (máximo 90 palabras en total):
+1) cómo fue la semana (cumplimiento, sensaciones de las sesiones clave, carga); 2) qué significa (forma, fatiga, riesgo);
+3) foco concreto para la semana que viene. No inventes datos que no estén en el JSON. Sin listas ni títulos."""
+
+
+def _monday(d: dt.date) -> dt.date:
+    return d - dt.timedelta(days=d.weekday())
+
+
+def weekly_facts(s: Session, week_start: dt.date) -> dict:
+    end = week_start + dt.timedelta(days=6)
+    a0, a1 = week_start.isoformat(), end.isoformat()
+    planned = [workout_dict(pw) for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.date >= a0, PlannedWorkout.date <= a1)).all()]
+    runs_p = [w for w in planned if w.get("sport") == "running"]
+    acts = s.exec(select(Activity).where(Activity.date >= a0, Activity.date <= a1)).all()
+    runs = [x for x in acts if x.sport == "running"]
+    km = sum((x.data.get("distance_m") or 0) for x in runs) / 1000
+    km_plan = sum(w.get("distance_km") or 0 for w in runs_p if w["status"] != "skipped")
+    done = [w for w in planned if w["status"] == "done"]
+    skipped = [w for w in planned if w["status"] == "skipped"]
+    key = []
+    for x in runs:
+        an = x.data.get("analysis") or {}
+        if an.get("planned_title") or an.get("verdict"):
+            key.append({"fecha": x.date, "sesion": an.get("planned_title") or x.data.get("name"), "veredicto": an.get("verdict"),
+                        "en_rango_pct": an.get("on_target_pct"), "notas": (an.get("notes") or [])[:2]})
+    tl = training_load(s, 60)["series"]
+    by_date = {r["date"]: r for r in tl}
+    l_end = by_date.get(a1) or (tl[-1] if tl else None)
+    l_start = by_date.get((week_start - dt.timedelta(days=1)).isoformat())
+    nxt0, nxt1 = (end + dt.timedelta(days=1)).isoformat(), (end + dt.timedelta(days=7)).isoformat()
+    upcoming = [workout_dict(pw) for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.date >= nxt0, PlannedWorkout.date <= nxt1)).all()]
+    up_runs = [w for w in upcoming if w.get("sport") == "running"]
+    hard = [f"{w['date'][8:]}/{w['date'][5:7]} {w['title']}" for w in up_runs if w.get("intensity") in ("high", "moderate") or w.get("type") in ("long", "race")]
+    races = [race_dict(r) for r in s.exec(select(Race).where(Race.date >= nxt0).order_by(Race.date)).all()][:2]
+    outings = []
+    from .training.vdot import fmt_pace
+    for x in sorted(runs, key=lambda r: r.date):
+        dist, dur = x.data.get("distance_m") or 0, x.data.get("duration_s") or 0
+        outings.append({"fecha": x.date, "km": round(dist / 1000, 1), "ritmo": fmt_pace(dur / dist * 1000) if dist > 500 else None,
+                        "fc": x.data.get("avg_hr"), "te": x.data.get("training_effect"), "nombre": (x.data.get("name") or "")[:40]})
+    low = sum(w.get("low_intensity_min") or 0 for w in runs_p)
+    tot = sum(w.get("duration_min") or 0 for w in runs_p)
+    return {
+        "semana": {"desde": a0, "hasta": a1},
+        "km": round(km, 1), "km_plan": round(km_plan, 1), "carreras": len(runs),
+        "sesiones_plan": len(planned), "hechas": len(done), "saltadas": len(skipped),
+        "cumplimiento_pct": round(100 * len(done) / len(planned)) if planned else None,
+        "baja_intensidad_plan_pct": round(100 * low / tot) if tot else None,
+        "salidas": outings[:10],
+        "sesiones_clave": key[:4],
+        "carga": {"ctl": l_end and l_end["ctl"], "ctl_cambio": l_end and l_start and round(l_end["ctl"] - l_start["ctl"], 1),
+                  "tsb": l_end and l_end["tsb"], "acwr": l_end and l_end["acwr"]},
+        "vdot": get_athlete(s).vdot,
+        "readiness": readiness_today(s).get("status"),
+        "proxima_semana": {"km": round(sum(w.get("distance_km") or 0 for w in up_runs), 1), "clave": hard[:4]},
+        "proximas_carreras": [{"nombre": r["name"], "fecha": r["date"], "dias": r["days_to_go"]} for r in races],
+    }
+
+
+def _fallback_comment(f: dict) -> str:
+    parts = []
+    if f["cumplimiento_pct"] is not None:
+        parts.append(f"Completaste {f['hechas']} de {f['sesiones_plan']} sesiones ({f['cumplimiento_pct']} %) y corriste {f['km']} km de {f['km_plan']} previstos.")
+    else:
+        parts.append(f"Corriste {f['km']} km en {f['carreras']} salidas.")
+    c = f["carga"]
+    if c.get("acwr"):
+        parts.append("La carga sube rápido (ACWR > 1,3): prioriza dormir y no añadas extras." if c["acwr"] > 1.3
+                     else "Carga estable." if c["acwr"] >= 0.8 else "Semana suave: buen momento para asimilar.")
+    if f["proxima_semana"]["clave"]:
+        parts.append("Próxima semana, lo importante: " + ", ".join(f["proxima_semana"]["clave"]) + ".")
+    return " ".join(parts)
+
+
+def weekly_review(s: Session, week_start: str | None = None, regenerate: bool = False, ai: bool = True) -> dict:
+    """Review of a Monday-Sunday week (default: the last finished one). Cached in Meta."""
+    ws = dt.date.fromisoformat(week_start) if week_start else _monday(dt.date.today()) - dt.timedelta(days=7)
+    ws = _monday(ws)
+    store = meta_get(s, "weekly_reviews")
+    key = ws.isoformat()
+    if key in store and not regenerate:
+        return store[key]
+    facts = weekly_facts(s, ws)
+    text = None
+    if ai:
+        from .ai import coach
+        text = coach.complete(REVIEW_SYSTEM, json.dumps(facts, ensure_ascii=False, default=str))
+    review = {"week_start": key, "facts": facts, "comment": text or _fallback_comment(facts), "ai": bool(text),
+              "created_at": dt.datetime.now().isoformat(timespec="seconds")}
+    store[key] = review
+    for old in sorted(store)[:-12]:  # keep ~3 months
+        store.pop(old)
+    meta_set(s, "weekly_reviews", store)
+    return review
+
+
+def list_reviews(s: Session) -> list[dict]:
+    store = meta_get(s, "weekly_reviews")
+    return [store[k] for k in sorted(store, reverse=True)]

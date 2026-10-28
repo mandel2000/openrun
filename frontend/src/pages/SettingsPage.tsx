@@ -410,7 +410,7 @@ function CoachCard() {
   )
 }
 
-type Settings = { auto_sync: boolean; sync_time: string; auto_adapt: boolean; auto_push: boolean; auto_pace: boolean; heat_adjust: boolean; run_hour: number; lat: number | null; lon: number | null }
+type Settings = { auto_sync: boolean; sync_time: string; auto_adapt: boolean; auto_push: boolean; auto_pace: boolean; heat_adjust: boolean; run_hour: number; lat: number | null; lon: number | null; notify_morning: boolean; notify_analysis: boolean; notify_weekly: boolean }
 type DailyLog = { items?: { at: string; steps: { step: string; ok: boolean; result?: unknown; error?: string }[] }[]; last_date?: string }
 
 function Toggle({ label, help, checked, onChange }: { label: string; help: string; checked: boolean; onChange: (v: boolean) => void }) {
@@ -517,6 +517,77 @@ function MobileCard() {
           <p className="small muted">Fuera de casa: instala Tailscale (gratis) en el Mac y el móvil y usa la IP de Tailscale. No abras el puerto en el router.</p>
         </>
       )}
+    </div>
+  )
+}
+
+const b64ToBytes = (b64: string) => {
+  const s = atob((b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'))
+  return Uint8Array.from(s, (ch) => ch.charCodeAt(0))
+}
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent)
+
+function NotificationsCard() {
+  const { data: st, setData } = useApi<Settings>('/api/settings')
+  const info = useApi<{ public_key: string; devices: number }>('/api/push')
+  const [here, setHere] = useState<boolean | null>(null)
+  const [msg, setMsg] = useState<{ tone: 'ok' | 'bad' | 'info'; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+  useEffect(() => {
+    if (!supported) return
+    navigator.serviceWorker.getRegistration('/').then((r) => r?.pushManager.getSubscription()).then((s) => setHere(!!s)).catch(() => setHere(false))
+  }, [supported])
+  if (!st) return null
+  const save = async (patch: Partial<Settings>) => {
+    try { setData(await api.put<Settings>('/api/settings', patch)) } catch (e) { setMsg({ tone: 'bad', text: (e as Error).message }) }
+  }
+  const enable = async () => {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const perm = await Notification.requestPermission()
+      if (perm !== 'granted') throw new Error('Permiso denegado. Actívalo en los ajustes del navegador para esta web.')
+      const reg = await navigator.serviceWorker.register('/sw.js')
+      await navigator.serviceWorker.ready
+      const key = info.data?.public_key ?? (await api.get<{ public_key: string }>('/api/push')).public_key
+      const sub = (await reg.pushManager.getSubscription()) ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) })
+      await api.post('/api/push/subscribe', sub.toJSON())
+      setHere(true)
+      info.reload()
+      setMsg({ tone: 'ok', text: 'Notificaciones activadas en este dispositivo.' })
+    } catch (e) { setMsg({ tone: 'bad', text: (e as Error).message }) } finally { setBusy(false) }
+  }
+  const disable = async () => {
+    setBusy(true)
+    try {
+      const sub = await (await navigator.serviceWorker.getRegistration('/'))?.pushManager.getSubscription()
+      if (sub) { await api.post('/api/push/unsubscribe', { endpoint: sub.endpoint }); await sub.unsubscribe() }
+      setHere(false)
+      info.reload()
+    } catch (e) { setMsg({ tone: 'bad', text: (e as Error).message }) } finally { setBusy(false) }
+  }
+  const needsInstall = isIOS() && !isStandalone()
+  return (
+    <div className="card stack">
+      <ConnHead icon="alert" title="Notificaciones" status={info.data ? `${info.data.devices} dispositivo${info.data.devices === 1 ? '' : 's'}` : null} tone={info.data?.devices ? 'good' : 'warn'} />
+      <p className="small text-2" style={{ margin: 0 }}>Avisos de la propia app, sin Telegram ni nada más: tu entreno por la mañana, el análisis al sincronizar cada carrera y el resumen del lunes.</p>
+      {!supported ? <Banner tone="info">{needsInstall ? 'En iPhone: Compartir › «Añadir a pantalla de inicio», abre OpenRun desde el icono y vuelve aquí (iOS 16.4 o superior).' : 'Este navegador no admite notificaciones push.'}</Banner>
+        : needsInstall ? <Banner tone="info">En iPhone las notificaciones solo funcionan con la app añadida a la pantalla de inicio: Compartir › «Añadir a pantalla de inicio» y ábrela desde el icono.</Banner>
+          : (
+            <div className="row">
+              {here ? <button className="btn btn-sm" disabled={busy} onClick={disable}>Desactivar en este dispositivo</button>
+                : <button className="btn btn-primary btn-sm" disabled={busy || here === null} onClick={enable}><Icon name="alert" size={16} />Activar en este dispositivo</button>}
+              {!!info.data?.devices && <button className="btn btn-ghost btn-sm" disabled={busy} onClick={async () => {
+                try { await api.post('/api/push/test'); setMsg({ tone: 'ok', text: 'Enviada. Debería llegarte en unos segundos.' }) } catch (e) { setMsg({ tone: 'bad', text: (e as Error).message }) }
+              }}>Enviar prueba</button>}
+            </div>
+          )}
+      <Toggle label="Entreno del día" help={`Por la mañana, tras la rutina de las ${st.sync_time}.`} checked={st.notify_morning} onChange={(v) => save({ notify_morning: v })} />
+      <Toggle label="Análisis de cada carrera" help="Cuando se sincroniza una carrera nueva (revisa Garmin cada ~2 h de 9 a 22 h)." checked={st.notify_analysis} onChange={(v) => save({ notify_analysis: v })} />
+      <Toggle label="Resumen semanal" help="Los lunes: cómo fue la semana y en qué centrarte." checked={st.notify_weekly} onChange={(v) => save({ notify_weekly: v })} />
+      {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
     </div>
   )
 }
@@ -634,6 +705,7 @@ export default function SettingsPage({ onChange, me, onMe }: { onChange: () => v
       <GarminCard onChange={onChange} />
       <HelioCard />
       <AutomationCard />
+      <NotificationsCard />
       <MobileCard />
       <CoachCard />
       <HistoryImportCard />
