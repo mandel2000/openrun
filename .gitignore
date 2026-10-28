@@ -1,0 +1,13 @@
+backend/.venv/
+__pycache__/
+*.db
+frontend/node_modules/
+frontend/dist/
+.env
+.pytest_cache/
+.DS_Store
+*.log
+*.fit
+garmin_tokens.json
+frontend/tsconfig*.tsbuildinfo
+*.tsbuildinfo
