@@ -339,3 +339,31 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--s4) 0; }
 @media (max-width: 767px) { .mobile-only { display: inline-flex !important; } }
 code { font-size: 0.92em; background: var(--surface-2); padding: 1px 5px; border-radius: 5px; }
 .msg.user code { background: rgba(255, 255, 255, .2); }
+
+/* ---------- mobile fixes (phones ≤ 600px) ---------- */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.only-mobile { display: none; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.btn-wrap { white-space: normal; height: auto; min-height: 44px; padding: 8px 14px; text-align: left; line-height: 20px; }
+.topbar { padding-top: env(safe-area-inset-top); height: calc(64px + env(safe-area-inset-top)); }
+@media (max-width: 767px) {
+  /* iOS zooms into inputs under 16px and stays zoomed: content then looks cut off */
+  input, select, textarea { font-size: 16px; }
+  .topbar { height: calc(56px + env(safe-area-inset-top)); padding-left: max(var(--s4), env(safe-area-inset-left)); padding-right: max(var(--s4), env(safe-area-inset-right)); }
+  .main { padding-left: max(var(--s4), env(safe-area-inset-left)); padding-right: max(var(--s4), env(safe-area-inset-right)); }
+}
+@media (max-width: 600px) {
+  .only-mobile { display: block; }
+  .only-desktop { display: none !important; }
+  /* segmented controls wrap instead of scrolling sideways */
+  .seg { display: flex; flex-wrap: wrap; width: 100%; overflow: visible; }
+  .seg button { flex: 1 1 auto; min-width: 0; padding: 0 10px; }
+  .card-head { flex-wrap: wrap; }
+  .hide-sm { display: none; }
+  th, td { padding: 0 6px; }
+  .chat .row .btn { white-space: normal; height: auto; min-height: 44px; padding: 8px 12px; text-align: left; }
+}
+@media (max-width: 600px) {
+  .sheet > .card-head { flex-wrap: nowrap; align-items: flex-start; }
+  .sheet > .card-head h2 { font-size: 20px; line-height: 26px; overflow-wrap: anywhere; }
+}

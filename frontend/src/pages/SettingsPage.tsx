@@ -361,7 +361,7 @@ function CoachCard() {
       <ConnHead icon="sparkles" title="Coach IA" status={`${data.provider} · ${data.configured ? 'listo' : 'sin configurar'}`} tone={data.configured ? 'good' : 'warn'} />
       <p className="small text-2" style={{ marginTop: 10 }}>Elige cómo pagar (o no) la IA. Las herramientas y reglas del coach son las mismas en todos los casos.</p>
       <Segmented label="Opción de coach" value={tab} onChange={setTab}
-        options={[['mcp', 'Tu suscripción Claude'], ['gemini', 'Gemini gratis'], ['ollama', 'Local (Ollama)'], ['api', 'API de pago']]} />
+        options={[['mcp', 'Claude (suscripción)'], ['gemini', 'Gemini gratis'], ['ollama', 'Ollama local'], ['api', 'API de pago']]} />
       <div style={{ marginTop: 12 }} className="small">
         {tab === 'mcp' && (
           <>

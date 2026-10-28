@@ -73,7 +73,7 @@ export default function CoachPage({ onChange }: { onChange: () => void }) {
         {msgs.length === 0 && (
           <div className="card">
             <p className="text-2">Pregunta lo que quieras. El coach lee tu plan, actividades, HRV, carga, récords y carreras, y crea entrenos con ritmos calculados por tu VDOT (nunca inventados).</p>
-            <div className="row">{SUGGESTIONS.map((s) => <button key={s} className="btn btn-sm" onClick={() => send(s)}>{s}</button>)}</div>
+            <div className="row">{SUGGESTIONS.map((s) => <button key={s} className="btn btn-sm btn-wrap" onClick={() => send(s)}>{s}</button>)}</div>
           </div>
         )}
         {msgs.map((m, i) => m.role === 'tool' ? (

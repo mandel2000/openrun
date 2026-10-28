@@ -16,7 +16,8 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-// Offline shell + installable app. Service workers need a secure context (localhost or HTTPS).
-if ('serviceWorker' in navigator && window.isSecureContext && import.meta.env.PROD) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {})
+// No service worker: remove any left from older versions (they could serve stale files).
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {})
 }
+if ('caches' in window) caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {})

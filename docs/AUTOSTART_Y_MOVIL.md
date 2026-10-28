@@ -73,6 +73,14 @@ rm ~/Library/LaunchAgents/com.openrun.server.plist
 
 La IP del Mac la asigna el router y puede cambiar. Para fijarla, reserva una IP para el Mac en el router (DHCP estático).
 
+### ¿Es una PWA?
+
+Sí, en lo que importa para usarla como app: tiene manifest, iconos y metaetiquetas de iOS, se instala en la pantalla de inicio y se abre a pantalla completa, sin barra del navegador.
+
+- **No usa service worker**, así que no funciona sin conexión. No pierdes nada: sin el Mac encendido no hay datos que mostrar. Un service worker también se podía quedar con versiones viejas de la app; `sw.js` solo existe para borrar el de versiones anteriores.
+- **Por wifi (HTTP):** iPhone permite *Añadir a pantalla de inicio* sin problema. En Android, Chrome puede ofrecer solo *Añadir a pantalla de inicio* (acceso directo) en vez de *Instalar app*, porque la instalación completa exige HTTPS.
+- **Para HTTPS** en casa y fuera: `tailscale serve` publica OpenRun en tu red de Tailscale con un certificado válido (`https://<mac>.<tailnet>.ts.net`).
+
 ### Fuera de casa
 
 No abras el puerto 8000 en el router. Usa [Tailscale](https://tailscale.com) (gratis): instálalo en el Mac y en el móvil y abre `http://<IP-Tailscale-del-Mac>:8000`. El PIN se sigue pidiendo.

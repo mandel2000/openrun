@@ -109,10 +109,20 @@ function PredictionsView() {
         </Banner>
       )}
       {msg && <Banner tone="ok">{msg}</Banner>}
-      <PaceInsightsCard onApplied={reload} />
       <div className="card">
         <div className="card-head"><span className="micro">Predicción de carrera</span>{data.consensus_vdot && <span className="chip num">VDOT consenso {data.consensus_vdot}</span>}</div>
-        <div className="table-wrap">
+        <div className="only-mobile list">
+          {PRED_KEYS.map((k) => (
+            <div key={k} className="list-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
+              <div className="row spread">
+                <b>{DIST_LABEL[k]}</b>
+                <span><b className="big-time">{data.consensus[k]?.time ?? '–'}</b> <span className="small muted">{data.consensus[k]?.pace}/km</span></span>
+              </div>
+              <div className="small muted num">{models.map((m) => `${data.models[m].label} ${data.models[m].times[k]?.time ?? '–'}`).join(' · ')}</div>
+            </div>
+          ))}
+        </div>
+        <div className="table-wrap only-desktop">
           <table>
             <thead><tr><th>Distancia</th><th className="n">Consenso</th>{models.map((m) => <th key={m} className="n">{data.models[m].label}</th>)}</tr></thead>
             <tbody>
@@ -131,6 +141,7 @@ function PredictionsView() {
           <li>Consenso = mediana de los modelos. VDOT y Riegel usan tus mejores esfuerzos de los últimos {data.window_days} días; en distancias largas asumen volumen suficiente.</li>
         </ul>
       </div>
+      <PaceInsightsCard onApplied={reload} />
       {data.trend.length > 1 && (
         <div className="card">
           <div className="card-head"><span className="micro">Tendencia de forma (VDOT por mes)</span></div>
