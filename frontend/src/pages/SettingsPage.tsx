@@ -469,8 +469,8 @@ function AutomationCard() {
       <details style={{ marginTop: 10 }}>
         <summary className="small">Arranque automático al iniciar sesión (macOS)</summary>
         <p className="small text-2" style={{ marginTop: 6 }}>Para que la rutina se ejecute cada día, OpenRun tiene que estar arrancado. Este script lo registra en launchd para que arranque solo al iniciar sesión:</p>
-        <CopyBlock text={'scripts/install-autostart.sh\n# con acceso desde el móvil:\nOPENRUN_PIN=1234 scripts/install-autostart.sh --lan'} />
-        <p className="small muted">Si el proyecto está en Escritorio/Documentos, macOS puede pedir permiso de acceso a carpetas para /bin/bash.</p>
+        <CopyBlock text={'scripts/install-autostart.sh\n# con acceso desde el móvil:\nOPENRUN_PIN=tu-pin scripts/install-autostart.sh --lan'} />
+        <p className="small muted">Estado, reinicio, cambio de PIN y desinstalación: docs/AUTOSTART_Y_MOVIL.md en el repositorio.</p>
       </details>
     </div>
   )
@@ -491,7 +491,7 @@ function MobileCard() {
       ) : (
         <>
           <p className="small text-2" style={{ marginTop: 10 }}>Ahora solo se puede abrir desde este ordenador. Para usarla en el móvil (misma wifi), arranca con un PIN:</p>
-          <CopyBlock text={'OPENRUN_HOST=0.0.0.0 OPENRUN_PIN=1234 ./run.sh'} />
+          <CopyBlock text={'OPENRUN_HOST=0.0.0.0 OPENRUN_PIN=tu-pin ./run.sh'} />
           <p className="small muted">Fuera de casa: instala Tailscale (gratis) en el Mac y el móvil y usa la IP de Tailscale. No abras el puerto en el router.</p>
         </>
       )}

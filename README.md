@@ -59,11 +59,13 @@ cd backend && .venv/bin/python -m pytest                     # tests
 ### Automático y en el móvil
 
 ```bash
-OPENRUN_HOST=0.0.0.0 OPENRUN_PIN=1234 ./run.sh      # accesible desde el móvil en la misma wifi (pide PIN)
-scripts/install-autostart.sh                        # arranca OpenRun al iniciar sesión (launchd) para la rutina diaria
+scripts/install-autostart.sh                              # arranca OpenRun al iniciar sesión (rutina diaria)
+OPENRUN_PIN=<pin> scripts/install-autostart.sh --lan      # además, accesible desde el móvil en la misma wifi
 ```
 
-En el móvil abre `http://<IP-del-Mac>:8000` (la ves en *Ajustes › OpenRun en el móvil*) y añádela a la pantalla de inicio. Fuera de casa, usa Tailscale; no abras puertos en el router.
+En el móvil abre `http://<IP-del-Mac>:8000` (la ves en *Ajustes › OpenRun en el móvil*), introduce el PIN y añádela a la pantalla de inicio. Fuera de casa, Tailscale; no abras puertos en el router.
+
+Guía completa (comprobar estado, reiniciar, cambiar el PIN, desinstalar, seguridad y problemas frecuentes): [docs/AUTOSTART_Y_MOVIL.md](docs/AUTOSTART_Y_MOVIL.md).
 
 ## Primeros pasos
 

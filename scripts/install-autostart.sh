@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Start OpenRun automatically at login (macOS launchd), so the 06:30 routine runs every day.
 # Usage: scripts/install-autostart.sh            (local only)
-#        OPENRUN_PIN=1234 scripts/install-autostart.sh --lan   (also on your wifi)
+#        OPENRUN_PIN=<pin> scripts/install-autostart.sh --lan   (also on your wifi)
 # Remove: launchctl unload ~/Library/LaunchAgents/com.openrun.server.plist && rm that file
+# Full guide: docs/AUTOSTART_Y_MOVIL.md
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLIST="$HOME/Library/LaunchAgents/com.openrun.server.plist"

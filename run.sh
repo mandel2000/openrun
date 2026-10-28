@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # OpenRun: build the UI (first time) and start the app on http://localhost:8000
-#   OPENRUN_HOST=0.0.0.0 OPENRUN_PIN=1234 ./run.sh   -> also reachable from your phone on the same wifi
+#   OPENRUN_HOST=0.0.0.0 OPENRUN_PIN=<pin> ./run.sh   -> also reachable from your phone on the same wifi
 set -euo pipefail
 cd "$(dirname "$0")"
 PY=${PYTHON:-python3}
 HOST=${OPENRUN_HOST:-127.0.0.1}
 if [ "$HOST" != "127.0.0.1" ] && [ "$HOST" != "localhost" ] && [ -z "${OPENRUN_PIN:-}" ]; then
-  echo "Para abrir OpenRun en la red local define un PIN: OPENRUN_HOST=$HOST OPENRUN_PIN=1234 ./run.sh" >&2
+  echo "Para abrir OpenRun en la red local define un PIN: OPENRUN_HOST=$HOST OPENRUN_PIN=<pin> ./run.sh" >&2
   exit 1
 fi
 if [ ! -d backend/.venv ]; then
