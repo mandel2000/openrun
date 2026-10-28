@@ -353,8 +353,9 @@ function CopyBlock({ text }: { text: string }) {
 
 function CoachCard() {
   const { data } = useApi<CoachInfo>('/api/coach/info')
-  const [tab, setTab] = useState<'mcp' | 'nvidia' | 'gemini' | 'ollama' | 'api'>('mcp')
+  const [tab, setTab] = useState<'mcp' | 'nvidia' | 'gemini' | 'ollama' | 'api' | null>(null)
   if (!data) return null
+  const shown = tab ?? (['nvidia', 'gemini', 'ollama'].includes(data.provider) ? data.provider as 'nvidia' | 'gemini' | 'ollama' : data.provider === 'anthropic' ? 'api' : 'nvidia')
   const server = data.mcp.remote
     ? { command: '/Users/<tu-usuario>/OpenRun/backend/.venv/bin/python', args: ['-m', 'app.mcp_server'],
         env: { PYTHONPATH: '/Users/<tu-usuario>/OpenRun/backend', OPENRUN_URL: data.mcp.url, OPENRUN_API_TOKEN: '<OPENRUN_API_TOKEN del servidor>' } }
@@ -363,11 +364,11 @@ function CoachCard() {
   return (
     <div className="card">
       <ConnHead icon="sparkles" title="Coach IA" status={`${data.provider} · ${data.configured ? 'listo' : 'sin configurar'}`} tone={data.configured ? 'good' : 'warn'} />
-      <p className="small text-2" style={{ marginTop: 10 }}>Elige cómo pagar (o no) la IA. Las herramientas y reglas del coach son las mismas en todos los casos.</p>
-      <Segmented label="Opción de coach" value={tab} onChange={setTab}
-        options={[['mcp', 'Claude (suscripción)'], ['nvidia', 'NVIDIA gratis'], ['gemini', 'Gemini gratis'], ['ollama', 'Ollama local'], ['api', 'API de pago']]} />
+      <p className="small text-2" style={{ marginTop: 10 }}>El coach funciona dentro de OpenRun con el proveedor que configures en el servidor. Las herramientas y reglas son las mismas en todos los casos.</p>
+      <Segmented label="Opción de coach" value={shown} onChange={setTab}
+        options={[['nvidia', 'NVIDIA gratis'], ['gemini', 'Gemini gratis'], ['api', 'API de pago'], ['ollama', 'Ollama local'], ['mcp', 'Fuera de la app (MCP)']]} />
       <div style={{ marginTop: 12 }} className="small">
-        {tab === 'mcp' && (
+        {shown === 'mcp' && (
           <>
             <p><b>Sin coste extra con Claude (Free/Pro/Max):</b> conecta OpenRun como servidor MCP en <b>Claude Desktop</b> y chatea allí; Claude usará tus datos y creará entrenos que aparecen aquí. Ajustes de Claude Desktop › Desarrollador › Editar config y añade:</p>
             {data.mcp.remote && <p className="muted">OpenRun está en un servidor: el MCP se ejecuta en tu ordenador (desde un clon del repo) y habla con el servidor usando el token de API.{!data.mcp.token_set && ' El servidor aún no tiene OPENRUN_API_TOKEN configurado.'}</p>}
@@ -375,28 +376,28 @@ function CoachCard() {
             <p className="muted">Reinicia Claude Desktop. También funciona con <b>Gemini CLI</b> (gratis con cuenta Google) en <code>~/.gemini/settings.json</code> con el mismo bloque <code>mcpServers</code>. Las suscripciones de ChatGPT/Claude/Gemini no dan acceso a la API para apps propias: por eso se usa MCP.</p>
           </>
         )}
-        {tab === 'nvidia' && (
+        {shown === 'nvidia' && (
           <>
             <p><b>Chat dentro de OpenRun gratis con NVIDIA:</b> crea una cuenta en build.nvidia.com (NVIDIA Developer, verificación por teléfono, sin tarjeta), genera una API key (<code>nvapi-…</code>) y configura:</p>
             <CopyBlock text={'OPENRUN_PROVIDER=nvidia\nNVIDIA_API_KEY=nvapi-...\n# opcional: OPENRUN_MODEL=minimaxai/minimax-m3.1-flash (por defecto)'} />
             <p className="muted">~40 peticiones por minuto (cada respuesta del coach puede usar varias). Condiciones de prueba/evaluación: NVIDIA puede limitar o cortar el acceso. En el servidor, ponlas como variables de entorno en Coolify.</p>
           </>
         )}
-        {tab === 'gemini' && (
+        {shown === 'gemini' && (
           <>
             <p><b>Chat dentro de OpenRun gratis:</b> crea una API key en Google AI Studio (plan gratuito con límites diarios) y arranca con:</p>
             <CopyBlock text={'export OPENRUN_PROVIDER=gemini\nexport GEMINI_API_KEY=...\n./run.sh'} />
             <p className="muted">Ojo: en el plan gratuito Google puede usar las conversaciones para mejorar sus productos (son datos de salud).</p>
           </>
         )}
-        {tab === 'ollama' && (
+        {shown === 'ollama' && (
           <>
             <p><b>100 % local y gratis:</b> instala Ollama y un modelo con soporte de herramientas (p. ej. <code>qwen3:8b</code>, ~5 GB):</p>
             <CopyBlock text={'ollama pull qwen3:8b\nexport OPENRUN_PROVIDER=ollama\n./run.sh'} />
             <p className="muted">Privacidad total, pero los modelos pequeños razonan peor y a veces fallan con las herramientas.</p>
           </>
         )}
-        {tab === 'api' && (
+        {shown === 'api' && (
           <>
             <p><b>Mejor calidad dentro de la app, pago por uso:</b></p>
             <CopyBlock text={'export ANTHROPIC_API_KEY=sk-ant-...\nexport OPENRUN_MODEL=claude-haiku-5-5   # más barato\n./run.sh'} />
