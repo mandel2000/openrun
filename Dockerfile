@@ -13,6 +13,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     OPENRUN_DATA=/data OPENRUN_DB=/data/openrun.db OPENRUN_GARMIN_TOKENS=/data/garmin \
     OPENRUN_TRUST_LOCAL=0 OPENRUN_TRUST_PROXY=1 OPENRUN_HOST=0.0.0.0 PORT=8000
 WORKDIR /app
+# curl: Coolify's health check runs curl/wget inside the container
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ backend/
@@ -22,7 +24,7 @@ USER openrun
 VOLUME /data
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"
+  CMD curl -fsS http://127.0.0.1:8000/api/health || exit 1
 WORKDIR /app/backend
 # --proxy-headers: Traefik passes the real client IP and https scheme
 CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*'"]
