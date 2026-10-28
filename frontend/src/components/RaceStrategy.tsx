@@ -133,7 +133,7 @@ export default function RaceStrategy({ race, onBack }: { race: Race; onBack: () 
         <div className="row small" style={{ marginTop: 12 }}>
           {st.prediction.flat_s && <span className="chip">En llano harías {fmtTime(st.prediction.flat_s)} (VDOT {st.prediction.vdot})</span>}
           {st.course.factor > 1.005 && <span className="chip">Recorrido +{((st.course.factor - 1) * 100).toFixed(1)} % vs llano</span>}
-          {w ? <span className={`chip ${st.heat_pct > 0 ? 'chip-warn' : ''}`}>{Math.round(w.temp)} °C · rocío {Math.round(w.dew)} °C{w.rain_pct != null ? ` · lluvia ${w.rain_pct} %` : ''}{w.wind_kmh != null ? ` · viento ${Math.round(w.wind_kmh)} km/h` : ''}{st.heat_pct > 0 ? ` · +${st.heat_pct} % por calor` : ''}</span>
+          {w ? <span className={`chip chip-wrap ${st.heat_pct > 0 ? 'chip-warn' : ''}`}>{Math.round(w.temp)} °C · rocío {Math.round(w.dew)} °C{w.rain_pct != null ? ` · lluvia ${w.rain_pct} %` : ''}{w.wind_kmh != null ? ` · viento ${Math.round(w.wind_kmh)} km/h` : ''}{st.heat_pct > 0 ? ` · +${st.heat_pct} % por calor` : ''}</span>
             : <span className="chip">Previsión del tiempo disponible 16 días antes</span>}
         </div>
       </div>

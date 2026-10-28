@@ -408,3 +408,4 @@ body.dragging, body.dragging * { cursor: grabbing !important; -webkit-user-selec
 .routine { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; }
 .routine summary { cursor: pointer; }
 .race-soon { display: block; border-left: 4px solid var(--accent); } .race-soon:hover { border-color: var(--accent); }
+.chip-wrap { white-space: normal; height: auto; min-height: 28px; line-height: 1.35; padding-top: 4px; padding-bottom: 4px; }
