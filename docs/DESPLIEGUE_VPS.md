@@ -23,6 +23,7 @@ El contenedor corre sin root (uid 1000), con `TZ=Europe/Madrid` y healthcheck en
 | `OPENRUN_API_TOKEN` | Para el MCP | Token para que el coach de Claude Desktop hable con el servidor (≥ 32 caracteres) |
 | `OPENRUN_PUBLIC_URL` | Recomendada | `https://run.tudominio.com` (se muestra en *Ajustes* y en la config del MCP) |
 | `ANTHROPIC_API_KEY` / `OPENRUN_PROVIDER` / `GEMINI_API_KEY` / `NVIDIA_API_KEY` / `OPENRUN_MODEL` | No | Coach IA dentro de la app (`OPENRUN_PROVIDER=nvidia` para el plan gratuito de NVIDIA) |
+| `OPENRUN_MODEL_FALLBACKS` / `OPENRUN_REASONING_EFFORT` | No | Modelos de respaldo (separados por comas) y nivel de razonamiento; con NVIDIA por defecto `openai/gpt-oss-20b` y `low` (primera palabra en ~5 s en vez de 15–70 s) |
 | `OPENRUN_DATABASE_URL` | No | Base de datos externa (p. ej. `postgresql+psycopg://…`); por defecto SQLite en `/data` |
 
 En la imagen ya vienen `OPENRUN_TRUST_LOCAL=0` (detrás de un proxy nada es «local») y `OPENRUN_TRUST_PROXY=1` (IP real y HTTPS desde las cabeceras de Traefik).

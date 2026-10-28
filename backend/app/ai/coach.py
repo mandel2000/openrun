@@ -10,6 +10,7 @@ import datetime as dt
 import json
 import os
 import re
+import time
 from typing import Any
 
 import anthropic
@@ -372,6 +373,9 @@ def _dump_call(c) -> dict:
 
 
 FALLBACK_MODELS = {"nvidia": ["openai/gpt-oss-20b"]}
+# Reasoning models (MiniMax, gpt-oss) think silently before answering; "low" cuts time-to-first-word
+# on the free NVIDIA tier from ~15-70 s to ~5 s. OPENRUN_REASONING_EFFORT="" disables the parameter.
+REASONING_DEFAULT = {"nvidia": "low"}
 STREAMING = {"nvidia", "ollama", "groq", "openrouter", "openai"}  # Gemini needs non-streamed thought signatures
 
 
@@ -382,8 +386,13 @@ def _models() -> list[str]:
 
 
 def _completion(client, model: str, messages: list[dict], tools: list[dict], stream: bool):
-    """Yields ("text", delta) events and finally ("message", {"content", "tool_calls"})."""
+    """Yields ("text", delta) / ("thinking", None) events and finally ("message", {"content", "tool_calls"})."""
+    import openai
+
     kw = {"model": model, "messages": messages, "tools": tools, "temperature": 0.3}
+    effort = os.getenv("OPENRUN_REASONING_EFFORT", REASONING_DEFAULT.get(provider(), ""))
+    if effort:
+        kw["reasoning_effort"] = effort
     if not stream:
         msg = client.chat.completions.create(**kw).choices[0].message
         if msg.content:
@@ -391,10 +400,22 @@ def _completion(client, model: str, messages: list[dict], tools: list[dict], str
         yield "message", {"content": sanitize(msg.content or ""), "tool_calls": [_dump_call(c) for c in (msg.tool_calls or [])]}
         return
     content, calls = [], {}
-    for chunk in client.chat.completions.create(stream=True, **kw):
+    try:
+        chunks = client.chat.completions.create(stream=True, **kw)
+    except openai.BadRequestError:
+        if "reasoning_effort" not in kw:
+            raise
+        kw.pop("reasoning_effort")  # model doesn't accept the parameter
+        chunks = client.chat.completions.create(stream=True, **kw)
+    last_think = 0.0
+    for chunk in chunks:
         if not chunk.choices:
             continue
         delta = chunk.choices[0].delta
+        extra = getattr(delta, "model_extra", None) or {}
+        if (extra.get("reasoning_content") or extra.get("reasoning")) and time.time() - last_think > 2:
+            last_think = time.time()
+            yield "thinking", None
         if delta.content:
             clean = sanitize(delta.content)
             content.append(clean)
@@ -435,6 +456,8 @@ def chat_events(s: Session, user_text: str):
                     if kind == "text":
                         round_text.append(val)
                         yield {"type": "text", "delta": val}
+                    elif kind == "thinking":
+                        yield {"type": "status", "text": "Pensando"}
                     else:
                         msg = val
                 break

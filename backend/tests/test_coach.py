@@ -164,7 +164,7 @@ def test_streaming_events_fallback_and_sanitize(monkeypatch):
         assert done["reply"] == "Tu VDOT ronda 49,8 . " and "".join(e["delta"] for e in evs if e["type"] == "text") == done["reply"]
         sys_msg = fake.calls[-1]["messages"][0]["content"]
         assert "RESUMEN ACTUAL DEL ATLETA" in sys_msg and '"hoy"' in sys_msg
-        assert fake.calls[-1]["stream"] is True and fake.calls[-1]["temperature"] == 0.3
+        assert fake.calls[-1]["stream"] is True and fake.calls[-1]["temperature"] == 0.3 and fake.calls[-1]["reasoning_effort"] == "low"
         tool_msg = fake.calls[-1]["messages"][-1]
         assert tool_msg["role"] == "tool" and '"vdot"' in tool_msg["content"]
 
