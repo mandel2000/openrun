@@ -228,7 +228,7 @@ def _client() -> anthropic.Anthropic:
 OPENAI_COMPAT = {
     "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY", "gemini-flash-latest"),
     # build.nvidia.com: free for NVIDIA Developer Program members (~40 req/min, trial/evaluation terms)
-    "nvidia": ("https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY", "moonshotai/kimi-k2.6"),
+    "nvidia": ("https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY", "minimaxai/minimax-m3.1-flash"),
     "ollama": ("http://localhost:11434/v1", None, "qwen3:8b"),
     "groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY", "openai/gpt-oss-120b"),
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "openai/gpt-oss-120b:free"),

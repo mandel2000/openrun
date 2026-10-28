@@ -42,7 +42,7 @@ Modelo por defecto `claude-opus-5-5` con esfuerzo `medium`. Para gastar menos: `
 |---|---|---|
 | **Tu suscripción de Claude** (Free/Pro/Max) | OpenRun como servidor MCP en Claude Desktop (config lista para copiar en *Ajustes › Coach IA*): `python -m app.mcp_server` | 0 € extra |
 | **Gemini CLI** | Mismo bloque `mcpServers` en `~/.gemini/settings.json` | Gratis con cuenta Google |
-| **NVIDIA** (chat dentro de la app) | `OPENRUN_PROVIDER=nvidia NVIDIA_API_KEY=nvapi-…` (modelo por defecto `moonshotai/kimi-k2.6`) | Gratis con cuenta NVIDIA Developer, ~40 peticiones/min, condiciones de prueba |
+| **NVIDIA** (chat dentro de la app) | `OPENRUN_PROVIDER=nvidia NVIDIA_API_KEY=nvapi-…` (modelo por defecto `minimaxai/minimax-m3.1-flash`) | Gratis con cuenta NVIDIA Developer, ~40 peticiones/min, condiciones de prueba |
 | **Gemini API** (chat dentro de la app) | `OPENRUN_PROVIDER=gemini GEMINI_API_KEY=…` | Plan gratuito con límites; Google puede usar los datos |
 | **Ollama** (local) | `ollama pull qwen3:8b` + `OPENRUN_PROVIDER=ollama` | Gratis, privado; peor calidad |
 | Otras | `OPENRUN_PROVIDER=groq|openrouter|openai` + su key; `OPENRUN_MODEL` para cambiar modelo | Según proveedor |

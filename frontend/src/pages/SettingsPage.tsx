@@ -378,7 +378,7 @@ function CoachCard() {
         {tab === 'nvidia' && (
           <>
             <p><b>Chat dentro de OpenRun gratis con NVIDIA:</b> crea una cuenta en build.nvidia.com (NVIDIA Developer, verificación por teléfono, sin tarjeta), genera una API key (<code>nvapi-…</code>) y configura:</p>
-            <CopyBlock text={'OPENRUN_PROVIDER=nvidia\nNVIDIA_API_KEY=nvapi-...\n# opcional: OPENRUN_MODEL=moonshotai/kimi-k2.6 (por defecto)'} />
+            <CopyBlock text={'OPENRUN_PROVIDER=nvidia\nNVIDIA_API_KEY=nvapi-...\n# opcional: OPENRUN_MODEL=minimaxai/minimax-m3.1-flash (por defecto)'} />
             <p className="muted">~40 peticiones por minuto (cada respuesta del coach puede usar varias). Condiciones de prueba/evaluación: NVIDIA puede limitar o cortar el acceso. En el servidor, ponlas como variables de entorno en Coolify.</p>
           </>
         )}

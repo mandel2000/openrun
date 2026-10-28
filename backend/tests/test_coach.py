@@ -112,6 +112,6 @@ def test_nvidia_provider_config(monkeypatch):
     monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test")
     monkeypatch.delenv("OPENRUN_MODEL", raising=False)
     info = coach.provider_info()
-    assert info == {"provider": "nvidia", "model": "moonshotai/kimi-k2.6", "configured": True}
+    assert info == {"provider": "nvidia", "model": "minimaxai/minimax-m3.1-flash", "configured": True}
     c = coach._openai_client()
     assert str(c.base_url).startswith("https://integrate.api.nvidia.com/v1") and c.max_retries == 4
