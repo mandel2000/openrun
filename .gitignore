@@ -11,3 +11,4 @@ frontend/dist/
 garmin_tokens.json
 frontend/tsconfig*.tsbuildinfo
 *.tsbuildinfo
+.claude/

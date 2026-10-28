@@ -17,9 +17,9 @@ from .training.vdot import RACE_DISTANCES_M, fmt_time, parse_time, race_predicti
 
 
 def get_athlete(s: Session) -> Athlete:
-    a = s.get(Athlete, 1)
+    a = s.exec(select(Athlete)).first()
     if not a:
-        a = Athlete(id=1)
+        a = Athlete()
         s.add(a)
         s.commit()
         s.refresh(a)
@@ -229,17 +229,57 @@ def delete_workout(s: Session, workout_id: int) -> None:
         s.commit()
 
 
-def move_workout(s: Session, workout_id: int, new_date: str) -> dict:
+def move_workout(s: Session, workout_id: int, new_date: str, swap: bool = False) -> dict:
+    """Move a session to another day. With `swap`, sessions already planned that day take the
+    moved one's place (drag & drop in the plan). Warns when two hard days end up back to back."""
     pw = s.get(PlannedWorkout, workout_id)
     if not pw:
         raise ValueError("workout no existe")
-    pw.date = new_date
-    pw.data = {**pw.data, "date": new_date}
-    s.add(pw)
+    if pw.status == "done":
+        raise ValueError("Ese entreno ya está hecho")
+    dt.date.fromisoformat(new_date)
+    if new_date < dt.date.today().isoformat():
+        raise ValueError("No se puede mover a un día pasado")
+    old_date = pw.date
+    if old_date == new_date:
+        return {**workout_dict(pw), "moved": [], "warnings": []}
+    others = [x for x in s.exec(select(PlannedWorkout).where(PlannedWorkout.date == new_date,
+                                                             PlannedWorkout.status.in_(["planned", "modified"]))).all()
+              if x.id != pw.id] if swap else []
+    changed = [pw]
+    for x in [pw] + others:
+        d = new_date if x is pw else old_date
+        x.date = d
+        x.data = {**x.data, "date": d}
+        s.add(x)
+        if x is not pw:
+            changed.append(x)
     s.commit()
-    if pw.garmin_workout_id:  # re-schedule on the watch (push deletes the old copy)
-        push_to_garmin(s, [pw.id])
-    return workout_dict(pw)
+    on_watch = [x.id for x in changed if x.garmin_workout_id]
+    pushed = push_to_garmin(s, on_watch) if on_watch else []  # re-schedule on the watch (push deletes the old copy)
+    return {**workout_dict(pw), "moved": [{"id": x.id, "date": x.date, "title": x.data.get("title")} for x in changed],
+            "warnings": _hard_day_warnings(s, {old_date, new_date}),
+            "watch": {"ok": sum(1 for r in pushed if r.get("ok")), "failed": sum(1 for r in pushed if not r.get("ok"))}}
+
+
+def _is_hard(data: dict) -> bool:
+    return data.get("sport") == "running" and (data.get("intensity") in ("high", "moderate") or data.get("type") in ("long", "race"))
+
+
+def _hard_day_warnings(s: Session, dates: set[str]) -> list[str]:
+    out = []
+    for d in sorted(dates):
+        day = dt.date.fromisoformat(d)
+        rows = s.exec(select(PlannedWorkout).where(PlannedWorkout.date >= (day - dt.timedelta(days=1)).isoformat(),
+                                                   PlannedWorkout.date <= (day + dt.timedelta(days=1)).isoformat(),
+                                                   PlannedWorkout.status != "skipped")).all()
+        hard = {r.date for r in rows if _is_hard(r.data)}
+        for a in sorted(hard):
+            b = (dt.date.fromisoformat(a) + dt.timedelta(days=1)).isoformat()
+            msg = f"Dos días duros seguidos ({a[8:]}/{a[5:7]} y {b[8:]}/{b[5:7]}): deja al menos un día suave entre sesiones de calidad."
+            if b in hard and msg not in out:
+                out.append(msg)
+    return out
 
 
 def push_to_garmin(s: Session, workout_ids: list[int]) -> list[dict]:
@@ -310,12 +350,12 @@ def upsert_wellness(s: Session, row: dict) -> None:
 
 
 def meta_get(s: Session, key: str) -> dict:
-    m = s.get(Meta, key)
+    m = s.exec(select(Meta).where(Meta.key == key)).first()
     return m.value if m else {}
 
 
 def meta_set(s: Session, key: str, value: dict) -> None:
-    m = s.get(Meta, key) or Meta(key=key)
+    m = s.exec(select(Meta).where(Meta.key == key)).first() or Meta(key=key)
     m.value = value
     s.add(m)
     s.commit()
@@ -707,8 +747,11 @@ def start_import_job(files: list[tuple[str, str]], cleanup: list[str]) -> str:
 
     from .db import engine
 
+    from .tenancy import as_user, current_user_id
+
+    uid = current_user_id()
     job_id = uuid.uuid4().hex[:12]
-    job = IMPORT_JOBS[job_id] = {"id": job_id, "state": "running", "file": 0, "files": len(files), "done": 0, "total": 0,
+    job = IMPORT_JOBS[job_id] = {"id": job_id, "user_id": uid, "state": "running", "file": 0, "files": len(files), "done": 0, "total": 0,
                                  "stats": {}, "error": None}
 
     def progress(fi, nf, done, total, stats):
@@ -716,7 +759,7 @@ def start_import_job(files: list[tuple[str, str]], cleanup: list[str]) -> str:
 
     def run():
         try:
-            with Session(engine) as s:
+            with as_user(uid), Session(engine) as s:
                 job["stats"] = import_history(s, files, progress)
             job["state"] = "done"
         except Exception as e:  # noqa: BLE001 - surfaced to the UI
@@ -925,7 +968,6 @@ def daily_routine(s: Session, force: bool = False) -> dict:
         step("readiness", lambda: adapt_today(s)["changes"])
     if connected and st["auto_push"]:
         step("reloj", lambda: (lambda r: {"enviados": sum(1 for x in r if x["ok"]), "errores": [x.get("error") for x in r if not x["ok"]]})(push_changed(s)))
-    step("copia", backup_db)
     hist = meta_get(s, "daily_log").get("items", [])
     meta_set(s, "daily_log", {"items": (hist + [log])[-14:], "last_date": dt.date.today().isoformat()})
     return log
@@ -953,3 +995,21 @@ def backup_db(keep: int = 14) -> dict | None:
     for f in old:
         f.unlink()
     return {"file": dest.name, "kept": min(keep, len(list(folder.glob('openrun-*.db'))))}
+
+
+def delete_user(uid: int) -> None:
+    """Remove an account and every row it owns (admin action)."""
+    from sqlalchemy import delete
+
+    from .db import ChatMessage, PushSubscription, User, engine
+    from .tenancy import TENANT_MODELS
+
+    with Session(engine) as s:
+        for m in TENANT_MODELS:
+            s.exec(delete(m).where(m.user_id == uid))
+        s.exec(delete(PushSubscription).where(PushSubscription.user_id == uid))
+        u = s.get(User, uid)
+        if u:
+            s.delete(u)
+        s.commit()
+    garmin.forget(uid)

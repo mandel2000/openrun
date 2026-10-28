@@ -50,28 +50,63 @@ function SyncChip({ st, onSynced }: { st: GStatus | null; onSynced: () => void }
   )
 }
 
-function PinScreen({ onOk }: { onOk: () => void }) {
-  const [pin, setPin] = useState('')
-  const [kind, setKind] = useState<'pin' | 'password'>('password')
-  useEffect(() => { api.get<{ kind: 'pin' | 'password' }>('/api/auth').then((r) => setKind(r.kind)).catch(() => {}) }, [])
+export type Me = { id: number; username: string; name: string; is_admin: boolean }
+
+const inviteFromHash = () => {
+  const m = window.location.hash.match(/^#invitacion=([\w-]+)/)
+  return m ? m[1] : null
+}
+
+function AuthScreen({ onOk }: { onOk: () => void }) {
+  const [code, setCode] = useState<string | null>(inviteFromHash)
+  const [username, setUsername] = useState('')
+  const [name, setName] = useState('')
+  const [password, setPassword] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [invite, setInvite] = useState<{ ok: boolean; note?: string } | null>(null)
+  useEffect(() => {
+    if (!code) return
+    api.get<{ ok: boolean; note?: string }>(`/api/auth/invite/${code}`).then(setInvite).catch((e) => setErr((e as Error).message))
+  }, [code])
+  const register = !!code
   return (
     <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 16 }}>
-      <form className="card" style={{ width: 'min(360px, 100%)', textAlign: 'center' }} onSubmit={async (e) => {
+      <form className="card stack" style={{ width: 'min(380px, 100%)', textAlign: 'center' }} onSubmit={async (e) => {
         e.preventDefault()
         setBusy(true)
         setErr(null)
-        try { await api.post('/api/auth', { pin }); onOk() } catch (x) { setErr((x as Error).message) } finally { setBusy(false) }
+        try {
+          if (register) await api.post('/api/auth/register', { code, username, name, password })
+          else await api.post('/api/auth', { username, password })
+          if (register) window.location.hash = 'ajustes'
+          onOk()
+        } catch (x) { setErr((x as Error).message) } finally { setBusy(false) }
       }}>
-        <img src="/icon.svg" width={56} height={56} alt="" style={{ borderRadius: 14 }} />
-        <h2 style={{ marginTop: 12 }}>OpenRun</h2>
-        <p className="small muted">{kind === 'pin' ? 'Introduce el PIN de OpenRun.' : 'Introduce tu contraseña de OpenRun.'}</p>
-        <label className="sr-only" htmlFor="pin">{kind === 'pin' ? 'PIN' : 'Contraseña'}</label>
-        <input id="pin" type="password" inputMode={kind === 'pin' ? 'numeric' : 'text'} autoComplete="current-password" value={pin} onChange={(e) => setPin(e.target.value)} autoFocus
-          style={kind === 'pin' ? { textAlign: 'center', fontSize: 22, letterSpacing: 6 } : undefined} />
-        <button className="btn btn-primary btn-block" style={{ marginTop: 12 }} disabled={busy || !pin}>Entrar</button>
-        {err && <div style={{ marginTop: 10 }}><Banner tone="bad">{err}</Banner></div>}
+        <div>
+          <img src="/icon.svg" width={56} height={56} alt="" style={{ borderRadius: 14 }} />
+          <h2 style={{ marginTop: 12 }}>OpenRun</h2>
+          <p className="small muted">{register ? 'Crea tu cuenta. Tus datos, tu plan y tu Garmin son solo tuyos.' : 'Inicia sesión para ver tu plan.'}</p>
+          {register && invite === null && !err && <p className="small muted">Comprobando invitación…</p>}
+        </div>
+        <label className="field" style={{ textAlign: 'left' }}>Usuario
+          <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" autoFocus required />
+        </label>
+        {register && (
+          <label className="field" style={{ textAlign: 'left' }}>Nombre
+            <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+          </label>
+        )}
+        <label className="field" style={{ textAlign: 'left' }}>Contraseña
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+            autoComplete={register ? 'new-password' : 'current-password'} minLength={register ? 10 : undefined} required />
+        </label>
+        {register && <p className="small muted" style={{ textAlign: 'left', margin: 0 }}>Mínimo 10 caracteres. Una frase de varias palabras es fácil de recordar y segura.</p>}
+        <button className="btn btn-primary btn-block" disabled={busy || !username || !password}>{register ? 'Crear cuenta' : 'Entrar'}</button>
+        {err && <Banner tone="bad">{err}</Banner>}
+        {register
+          ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setCode(null); window.location.hash = '' }}>Ya tengo cuenta</button>
+          : <p className="small muted" style={{ margin: 0 }}>¿No tienes cuenta? Pide una invitación a quien gestiona esta app.</p>}
       </form>
     </div>
   )
@@ -83,7 +118,12 @@ export default function App() {
   const [err, setErr] = useState<string | null>(null)
   const [gst, setGst] = useState<GStatus | null>(null)
   const [tick, setTick] = useState(0) // bumps after sync so pages refetch
-  const [needPin, setNeedPin] = useState(false)
+  const [needPin, setNeedPin] = useState(() => !!inviteFromHash())
+  const [me, setMe] = useState<Me | null>(null)
+  const loadMe = useCallback(() => {
+    api.get<{ authed: boolean; user: Me | null }>('/api/auth').then((r) => { setMe(r.user); if (!r.authed) setNeedPin(true) }).catch(() => {})
+  }, [])
+  useEffect(() => { loadMe() }, [loadMe])
   useEffect(() => {
     const on = () => setNeedPin(true)
     window.addEventListener('openrun:auth', on)
@@ -110,7 +150,7 @@ export default function App() {
   const go = (t: string) => { window.location.hash = t }
   const synced = () => { reload(); loadStatus(); setTick((x) => x + 1) }
 
-  if (needPin) return <PinScreen onOk={() => { setNeedPin(false); synced() }} />
+  if (needPin) return <AuthScreen onOk={() => { setNeedPin(false); loadMe(); synced() }} />
   return (
     <div className="shell">
       <nav className="sidebar" aria-label="Principal">
@@ -120,7 +160,7 @@ export default function App() {
             <Icon name={ic} />{l}
           </a>
         ))}
-        <div className="sidebar-foot small muted">Open source · datos en tu equipo</div>
+        <div className="sidebar-foot small muted">{me ? <a href="#ajustes" style={{ color: 'inherit' }}>{me.name || me.username}</a> : 'OpenRun'} · open source</div>
       </nav>
       <div className="content">
         <header className="topbar">
@@ -137,7 +177,7 @@ export default function App() {
           {tab === 'carreras' && <RacesPage plan={plan ?? null} reload={reload} />}
           {tab === 'progreso' && <ProgressPage />}
           {tab === 'coach' && <CoachPage onChange={reload} />}
-          {tab === 'ajustes' && <SettingsPage onChange={synced} />}
+          {tab === 'ajustes' && <SettingsPage onChange={synced} me={me} onMe={loadMe} />}
         </main>
       </div>
       <nav className="bottombar" aria-label="Principal">

@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from . import auth, scheduler
+from . import auth, scheduler, tenancy
 from . import services as S
 from .ai import coach
 from .db import get_session, init_db
@@ -30,6 +30,7 @@ from .training.vdot import RACE_DISTANCES_M, parse_time, race_predictions, train
 async def lifespan(_: FastAPI):
     auth.check_config()
     init_db()
+    auth.ensure_admin()
     stop = threading.Event()
     if os.getenv("OPENRUN_SCHEDULER", "1") == "1":
         scheduler.start(stop)
@@ -52,10 +53,14 @@ SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "sam
 async def access_control(request: Request, call_next):
     path = request.url.path
     public = path in ("/api/health",) or path.startswith("/api/auth")
-    if path.startswith("/api/") and not public and not auth.authed(request):
-        msg = "Inicia sesión" if auth.PASSWORD else "Acceso remoto desactivado: define OPENRUN_PASSWORD (u OPENRUN_PIN en casa)"
-        return JSONResponse({"detail": msg}, status_code=401, headers=SECURITY_HEADERS)
-    resp = await call_next(request)
+    uid = auth.request_user(request) if path.startswith("/api/") else None
+    if path.startswith("/api/") and not public and uid is None:
+        return JSONResponse({"detail": "Inicia sesión"}, status_code=401, headers=SECURITY_HEADERS)
+    tok = tenancy.set_user(uid)
+    try:
+        resp = await call_next(request)
+    finally:
+        tenancy.reset_user(tok)
     for k, v in SECURITY_HEADERS.items():
         resp.headers.setdefault(k, v)
     if auth.is_https(request):
@@ -68,25 +73,36 @@ def health():
     return {"ok": True}
 
 
+def _me(uid: int | None) -> dict | None:
+    u = auth.get_user(uid) if uid else None
+    return {"id": u.id, "username": u.username, "name": u.name, "is_admin": u.is_admin} if u else None
+
+
 class LoginIn(BaseModel):
-    pin: str
+    username: str = ""
+    password: str = ""
+    pin: str = ""  # old clients
+
+
+def _with_session(user, request: Request, body: dict) -> JSONResponse:
+    resp = JSONResponse(body)
+    resp.set_cookie(auth.COOKIE, auth.make_session(user), max_age=auth.SESSION_DAYS * 86400, httponly=True,
+                    samesite="lax", secure=auth.is_https(request))
+    return resp
 
 
 @app.get("/api/auth")
 def auth_status(request: Request):
-    return {"authed": auth.authed(request), "local": auth.is_local(request), "pin_enabled": bool(auth.PASSWORD),
-            "kind": "password" if len(auth.PASSWORD) > 6 else "pin"}
+    uid = auth.request_user(request)
+    return {"authed": uid is not None, "local": auth.is_local(request), "user": _me(uid), "open_signup": auth.OPEN_SIGNUP}
 
 
 @app.post("/api/auth")
 def auth_login(body: LoginIn, request: Request):
-    ok, err = auth.check_password(request, body.pin)
-    if not ok:
+    user, err = auth.login(request, body.username, body.password or body.pin)
+    if not user:
         raise HTTPException(429 if err and err.startswith("Demasiados") else 401, err)
-    resp = JSONResponse({"authed": True})
-    resp.set_cookie(auth.COOKIE, auth.make_session(), max_age=auth.SESSION_DAYS * 86400, httponly=True,
-                    samesite="lax", secure=auth.is_https(request))
-    return resp
+    return _with_session(user, request, {"authed": True, "user": _me(user.id)})
 
 
 @app.post("/api/auth/logout")
@@ -94,6 +110,168 @@ def auth_logout():
     resp = JSONResponse({"authed": False})
     resp.delete_cookie(auth.COOKIE)
     return resp
+
+
+class RegisterIn(BaseModel):
+    code: str = ""
+    username: str
+    name: str = ""
+    password: str
+
+
+USERNAME_RE = re.compile(r"^[a-z0-9._-]{3,30}$")
+
+
+@app.get("/api/auth/invite/{code}")
+def invite_check(code: str, request: Request):
+    inv, err = auth.check_invite(request, code)
+    if not inv:
+        raise HTTPException(404, err)
+    return {"ok": True, "note": inv.note}
+
+
+@app.post("/api/auth/register")
+def auth_register(body: RegisterIn, request: Request):
+    from sqlmodel import Session as _S
+
+    from .db import Invite, User, engine
+
+    inv = None
+    if not auth.OPEN_SIGNUP or body.code:
+        inv, err = auth.check_invite(request, body.code)
+        if not inv:
+            raise HTTPException(403, err)
+    username = body.username.strip().lower()
+    if not USERNAME_RE.match(username):
+        raise HTTPException(400, "Usuario: 3-30 caracteres (letras minúsculas, números, punto, guion)")
+    if problem := auth.password_problem(body.password):
+        raise HTTPException(400, problem)
+    if auth.find_user(username):
+        raise HTTPException(409, "Ese usuario ya existe")
+    with _S(engine) as s:
+        user = User(username=username, name=body.name.strip() or username, password_hash=auth.hash_password(body.password),
+                    created_at=dt.datetime.now().isoformat(timespec="seconds"))
+        s.add(user)
+        s.commit()
+        s.refresh(user)
+        if inv:
+            inv = s.get(Invite, inv.code)
+            inv.used_by = user.id
+            s.add(inv)
+            s.commit()
+        return _with_session(user, request, {"authed": True, "user": _me(user.id)})
+
+
+# ---------------------------------------------------------------- account & users (admin)
+
+
+def _require_admin() -> None:
+    u = auth.get_user(tenancy.current_user_id())
+    if not u or not u.is_admin:
+        raise HTTPException(403, "Solo para administradores")
+
+
+class AccountIn(BaseModel):
+    name: str | None = None
+    current_password: str | None = None
+    new_password: str | None = None
+
+
+@app.get("/api/account")
+def account_get():
+    return _me(tenancy.current_user_id())
+
+
+@app.put("/api/account")
+def account_put(body: AccountIn, request: Request):
+    from sqlmodel import Session as _S
+
+    from .db import User, engine
+
+    uid = tenancy.current_user_id()
+    with _S(engine) as s:
+        u = s.get(User, uid)
+        if body.name is not None:
+            u.name = body.name.strip()[:60] or u.username
+        if body.new_password:
+            if u.password_hash and not auth.verify_password(body.current_password or "", u.password_hash):
+                raise HTTPException(400, "La contraseña actual no es correcta")
+            if problem := auth.password_problem(body.new_password):
+                raise HTTPException(400, problem)
+            u.password_hash = auth.hash_password(body.new_password)
+        s.add(u)
+        s.commit()
+        s.refresh(u)
+        # a new password invalidates old sessions: hand this device a fresh one
+        return _with_session(u, request, _me(uid)) if body.new_password else _me(uid)
+
+
+@app.get("/api/users")
+def users_list():
+    from sqlmodel import Session as _S, select
+
+    from .db import Activity, Invite, User, engine
+
+    _require_admin()
+    with _S(engine) as s:
+        users = s.exec(select(User).order_by(User.id)).all()
+        counts: dict[int, int] = {}
+        for a in s.exec(select(Activity).execution_options(all_users=True)).all():
+            counts[a.user_id] = counts.get(a.user_id, 0) + 1
+        now = dt.datetime.now().isoformat(timespec="seconds")
+        invites = [i.model_dump() for i in s.exec(select(Invite).order_by(Invite.created_at.desc())).all()
+                   if not i.used_by and i.expires_at > now]
+        return {"users": [{**_me(u.id), "created_at": u.created_at, "activities": counts.get(u.id, 0)} for u in users],
+                "invites": invites}
+
+
+class InviteIn(BaseModel):
+    note: str | None = None
+    days: int = 14
+
+
+@app.post("/api/users/invites")
+def invite_create(body: InviteIn):
+    import secrets
+
+    from sqlmodel import Session as _S
+
+    from .db import Invite, engine
+
+    _require_admin()
+    now = dt.datetime.now()
+    inv = Invite(code=secrets.token_urlsafe(12), created_by=tenancy.current_user_id(), note=(body.note or "")[:80] or None,
+                 created_at=now.isoformat(timespec="seconds"),
+                 expires_at=(now + dt.timedelta(days=max(1, min(body.days, 60)))).isoformat(timespec="seconds"))
+    with _S(engine) as s:
+        s.add(inv)
+        s.commit()
+        s.refresh(inv)
+        return inv.model_dump()
+
+
+@app.delete("/api/users/invites/{code}")
+def invite_delete(code: str):
+    from sqlmodel import Session as _S
+
+    from .db import Invite, engine
+
+    _require_admin()
+    with _S(engine) as s:
+        inv = s.get(Invite, code)
+        if inv:
+            s.delete(inv)
+            s.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/users/{uid}")
+def user_delete(uid: int):
+    _require_admin()
+    if uid == tenancy.current_user_id():
+        raise HTTPException(400, "No puedes borrar tu propia cuenta")
+    S.delete_user(uid)
+    return {"ok": True}
 
 
 @app.get("/api/network")
@@ -308,11 +486,15 @@ def add_extra(body: ExtraIn, s: Session = DB):
 
 class MoveIn(BaseModel):
     date: str
+    swap: bool = False
 
 
 @app.post("/api/workouts/{wid}/move")
 def move(wid: int, body: MoveIn, s: Session = DB):
-    return S.move_workout(s, wid, body.date)
+    try:
+        return S.move_workout(s, wid, body.date, body.swap)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
 
 
 @app.post("/api/workouts/{wid}/skip")
@@ -564,7 +746,7 @@ async def import_history(files: list[UploadFile] = File(...)):
 @app.get("/api/import/history/{job_id}")
 def import_status(job_id: str):
     job = S.IMPORT_JOBS.get(job_id)
-    if not job:
+    if not job or job.get("user_id") != tenancy.current_user_id():
         raise HTTPException(404, "importación no encontrada")
     return job
 

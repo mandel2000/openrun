@@ -152,46 +152,138 @@ def test_scheduler_due():
     assert not scheduler.due({**st, "auto_sync": False}, None, dt.datetime(2027, 1, 1, 7, 0))
 
 
-def test_lan_pin_auth(monkeypatch):
+def _fresh_users(monkeypatch, password):
+    from sqlalchemy import delete
+
     from app import auth
+    from app.db import Invite, User
+    with Session(engine) as s:
+        s.exec(delete(User))
+        s.exec(delete(Invite))
+        s.commit()
+    monkeypatch.setattr(auth, "PASSWORD", password)
+    monkeypatch.setattr(auth.time, "sleep", lambda _: None)
+    monkeypatch.setattr(auth, "_fails", {})
+    auth.ensure_admin()
+    return auth
+
+
+def test_lan_pin_auth(monkeypatch):
+    auth = _fresh_users(monkeypatch, "4321")
     c = TestClient(main.app)  # client host "testclient" = not this machine
     assert c.get("/api/athlete").status_code == 401
-    monkeypatch.setattr(auth, "PASSWORD", "4321")
-    monkeypatch.setattr(auth.time, "sleep", lambda _: None)
     assert c.post("/api/auth", json={"pin": "0000"}).status_code == 401
-    r = c.post("/api/auth", json={"pin": "4321"})
+    r = c.post("/api/auth", json={"pin": "4321"})  # old PIN-only screen logs in as the admin
     assert r.status_code == 200 and c.get("/api/athlete").status_code == 200
-    assert c.get("/api/auth").json()["authed"] is True
+    me = c.get("/api/auth").json()
+    assert me["authed"] is True and me["user"]["is_admin"] and me["user"]["username"] == auth.ADMIN_USERNAME
     assert c.get("/api/health").status_code == 200 and r.headers["x-frame-options"] == "DENY"
 
 
 def test_public_server_mode(monkeypatch):
     """Behind a reverse proxy nothing is trusted as local; password session or API token required."""
-    from app import auth
-    monkeypatch.setattr(auth, "PASSWORD", "correct horse battery")
+    auth = _fresh_users(monkeypatch, "correct horse battery")
     monkeypatch.setattr(auth, "TRUST_LOCAL", False)
     monkeypatch.setattr(auth, "TRUST_PROXY", True)
     monkeypatch.setattr(auth, "API_TOKEN", "t" * 40)
-    monkeypatch.setattr(auth.time, "sleep", lambda _: None)
-    monkeypatch.setattr(auth, "_fails", {})
     local = TestClient(main.app, client=("127.0.0.1", 5000))
     assert local.get("/api/athlete").status_code == 401  # proxy traffic looks local: must not be trusted
     assert local.get("/api/athlete", headers={"Authorization": "Bearer " + "t" * 40}).status_code == 200
     assert local.get("/api/athlete", headers={"Authorization": "Bearer wrong"}).status_code == 401
     # rate limit is per real client (X-Forwarded-For), so an attacker can't lock the owner out
     for _ in range(10):
-        local.post("/api/auth", json={"pin": "nope"}, headers={"X-Forwarded-For": "6.6.6.6"})
-    assert local.post("/api/auth", json={"pin": "correct horse battery"}, headers={"X-Forwarded-For": "6.6.6.6"}).status_code == 429
-    r = local.post("/api/auth", json={"pin": "correct horse battery"}, headers={"X-Forwarded-For": "1.2.3.4", "X-Forwarded-Proto": "https"})
+        local.post("/api/auth", json={"username": "admin", "password": "nope"}, headers={"X-Forwarded-For": "6.6.6.6"})
+    assert local.post("/api/auth", json={"username": "admin", "password": "correct horse battery"},
+                      headers={"X-Forwarded-For": "6.6.6.6"}).status_code == 429
+    r = local.post("/api/auth", json={"username": "admin", "password": "correct horse battery"},
+                   headers={"X-Forwarded-For": "1.2.3.4", "X-Forwarded-Proto": "https"})
     assert r.status_code == 200 and "secure" in r.headers["set-cookie"].lower()
     tok = r.cookies.get(auth.COOKIE) or local.cookies.get(auth.COOKIE)
-    assert auth.valid_session(tok)
-    monkeypatch.setattr(auth, "_KEY", b"x" * 32)  # password changed -> old sessions invalid
-    assert not auth.valid_session(tok)
+    assert auth.session_user(tok) == 1
+    # changing the password invalidates old sessions
+    r = local.put("/api/account", json={"current_password": "correct horse battery", "new_password": "otra contraseña larga"},
+                  headers={"X-Forwarded-For": "1.2.3.4", "Cookie": f"{auth.COOKIE}={tok}"})
+    assert r.status_code == 200 and auth.session_user(tok) is None
     monkeypatch.setattr(auth, "PASSWORD", "short")
     import pytest
     with pytest.raises(RuntimeError):
         auth.check_config()
+
+
+def test_multi_user_isolation(monkeypatch):
+    auth = _fresh_users(monkeypatch, "admin password 1")
+    admin = TestClient(main.app)
+    assert admin.post("/api/auth", json={"username": "admin", "password": "admin password 1"}).status_code == 200
+    admin.put("/api/athlete", json={"name": "Alex", "vdot": 47})
+    with Session(engine) as s:
+        S.add_race(s, "Behobia", "2027-11-08", 20000, "A")
+    # invitations: only admins, single use, brute force throttled
+    inv = admin.post("/api/users/invites", json={"note": "amigo"}).json()
+    friend = TestClient(main.app)
+    assert friend.post("/api/auth/register", json={"code": "nope", "username": "x1x", "password": "y" * 12}).status_code == 403
+    assert friend.post("/api/auth/register", json={"code": inv["code"], "username": "ana", "password": "corta"}).status_code == 400
+    r = friend.post("/api/auth/register", json={"code": inv["code"], "username": "Ana", "name": "Ana", "password": "ana password 1"})
+    assert r.status_code == 200 and r.json()["user"]["username"] == "ana"
+    assert TestClient(main.app).post("/api/auth/register", json={"code": inv["code"], "username": "eve", "password": "e" * 12}).status_code == 403
+    # each user sees only their own data
+    assert friend.get("/api/athlete").json()["name"] == "Atleta"
+    assert friend.get("/api/races").json() == []
+    friend.put("/api/athlete", json={"name": "Ana", "vdot": 40})
+    assert admin.get("/api/athlete").json()["name"] == "Alex"
+    assert [r["name"] for r in admin.get("/api/races").json()] == ["Behobia"]
+    assert friend.get("/api/users").status_code == 403
+    users = admin.get("/api/users").json()
+    assert [u["username"] for u in users["users"]] == ["admin", "ana"] and users["invites"] == []
+    # without a user in context, tenant tables are off limits
+    from app import tenancy
+    tok = tenancy.set_user(None)
+    try:
+        import pytest
+        with pytest.raises(tenancy.NoUserContext), Session(engine) as s:
+            S.list_races(s)
+    finally:
+        tenancy.reset_user(tok)
+    uid = users["users"][1]["id"]
+    assert admin.delete(f"/api/users/{uid}").status_code == 200
+    assert friend.get("/api/athlete").status_code == 401
+
+
+def test_single_user_db_migrates_to_admin(tmp_path):
+    import sqlite3
+
+    from sqlalchemy import create_engine
+    from sqlmodel import select
+
+    from app import db
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.executescript("""
+        CREATE TABLE athlete (id INTEGER PRIMARY KEY, name VARCHAR, sex VARCHAR, age INTEGER, max_hr INTEGER, rest_hr INTEGER,
+                              lthr INTEGER, vdot FLOAT, vdot_source VARCHAR, weekly_km FLOAT);
+        INSERT INTO athlete (id, name, sex, vdot) VALUES (1, 'Alex', 'male', 47.5);
+        CREATE TABLE meta (key VARCHAR PRIMARY KEY, value JSON);
+        INSERT INTO meta VALUES ('settings', '{"sync_time": "07:00"}');
+        CREATE TABLE activity (id INTEGER PRIMARY KEY, external_id VARCHAR, date VARCHAR, sport VARCHAR, data JSON, trimp FLOAT);
+        CREATE UNIQUE INDEX ix_activity_external_id ON activity (external_id);
+        INSERT INTO activity VALUES (1, 'garmin:1', '2026-10-01', 'running', '{}', 50);
+    """)
+    con.close()
+    old_engine, old_path = db.engine, db.DB_PATH
+    db.engine, db.DB_PATH = create_engine(f"sqlite:///{path}"), path
+    try:
+        db.init_db()
+        assert (tmp_path / "old-pre-multiuser.db").exists()
+        from app.tenancy import as_user
+        with as_user(1), Session(db.engine) as s:
+            assert S.get_athlete(s).vdot == 47.5
+            assert S.get_settings(s)["sync_time"] == "07:00"
+            assert len(s.exec(select(Activity)).all()) == 1
+        with as_user(2), Session(db.engine) as s:
+            assert S.get_athlete(s).name == "Atleta" and S.get_settings(s)["sync_time"] == "06:30"
+            s.add(Activity(external_id="garmin:1", date="2026-10-01"))  # same id, other user: allowed now
+            s.commit()
+    finally:
+        db.engine, db.DB_PATH = old_engine, old_path
 
 
 def test_tools_endpoint_and_remote_mcp(monkeypatch):
@@ -210,3 +302,27 @@ def test_tools_endpoint_and_remote_mcp(monkeypatch):
     monkeypatch.setattr(httpx, "post", lambda url, json, timeout, headers: c.post(url.replace("https://run.example", ""), json=json, headers=headers))
     res = mcp_server.call("calculate_vdot", {"distance": "5k", "time": "20:00"})
     assert not res.is_error and '"vdot"' in res.content[0].text
+
+
+def test_move_workout_swaps_and_warns(monkeypatch):
+    from app.db import Plan
+    monkeypatch.setattr(S, "push_to_garmin", lambda s, ids: [{"id": i, "ok": True} for i in ids])
+    d = [(dt.date.today() + dt.timedelta(days=i)).isoformat() for i in range(1, 5)]
+    with Session(engine) as s:
+        p = Plan(name="t", goal="10k")
+        s.add(p)
+        s.commit()
+        mk = lambda date, title, typ, inten, gid=None: PlannedWorkout(plan_id=p.id, date=date, data={  # noqa: E731
+            "title": title, "type": typ, "intensity": inten, "sport": "running", "steps": []}, garmin_workout_id=gid)
+        a, b = mk(d[0], "Series", "intervals", "high", "g1"), mk(d[2], "Largo", "long", "low")
+        s.add(a)
+        s.add(b)
+        s.commit()
+        r = S.move_workout(s, a.id, d[2], swap=True)
+        assert {x["title"]: x["date"] for x in r["moved"]} == {"Series": d[2], "Largo": d[0]}
+        assert r["watch"] == {"ok": 1, "failed": 0} and r["warnings"] == []
+        r = S.move_workout(s, a.id, d[1], swap=True)  # series the day after the long run
+        assert r["warnings"] and "seguidos" in r["warnings"][0]
+        import pytest
+        with pytest.raises(ValueError):
+            S.move_workout(s, a.id, "2020-01-01")

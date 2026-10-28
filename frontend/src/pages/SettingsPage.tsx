@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, fmtDate, useApi } from '../api'
+import type { Me } from '../App'
 import { Banner, Icon, Segmented, type IconName } from '../ui'
 
 type Athlete = { name: string; sex: string; age: number | null; max_hr: number | null; rest_hr: number | null; lthr: number | null; vdot: number | null; vdot_source: string | null; hr_zones?: { zone: number; low: number; high: number }[] }
@@ -498,9 +499,6 @@ function MobileCard() {
         <ConnHead icon="watch" title="OpenRun en el móvil" status="En internet (HTTPS)" />
         <p className="small text-2" style={{ marginTop: 10 }}>Abre esta dirección en el móvil, inicia sesión y añádela a la pantalla de inicio:</p>
         {data.urls.map((u) => <CopyBlock key={u} text={u} />)}
-        {!data.local && (
-          <button className="btn btn-ghost btn-sm" onClick={() => api.post('/api/auth/logout').then(() => window.location.reload())}>Cerrar sesión en este dispositivo</button>
-        )}
       </div>
     )
   return (
@@ -519,6 +517,93 @@ function MobileCard() {
           <p className="small muted">Fuera de casa: instala Tailscale (gratis) en el Mac y el móvil y usa la IP de Tailscale. No abras el puerto en el router.</p>
         </>
       )}
+    </div>
+  )
+}
+
+function AccountCard({ me, onMe }: { me: Me; onMe: () => void }) {
+  const [name, setName] = useState(me.name)
+  const [cur, setCur] = useState('')
+  const [pw, setPw] = useState('')
+  const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
+  const save = async (body: object, ok: string) => {
+    setMsg(null)
+    try { await api.put('/api/account', body); setMsg({ tone: 'ok', text: ok }); setCur(''); setPw(''); onMe() } catch (e) { setMsg({ tone: 'bad', text: (e as Error).message }) }
+  }
+  return (
+    <div className="card stack">
+      <ConnHead icon="user" title="Tu cuenta" status={me.is_admin ? 'Administrador' : null} />
+      <p className="small text-2" style={{ margin: 0 }}>Usuario <b>{me.username}</b>. Tus datos, tu plan, tu Garmin y tu chat con el coach son solo tuyos.</p>
+      <div className="row" style={{ alignItems: 'flex-end' }}>
+        <label className="field grow">Nombre<input value={name} onChange={(e) => setName(e.target.value)} /></label>
+        <button className="btn btn-sm" disabled={!name.trim() || name === me.name} onClick={() => save({ name }, 'Nombre guardado')}>Guardar</button>
+      </div>
+      <form className="stack" onSubmit={(e) => { e.preventDefault(); save({ current_password: cur, new_password: pw }, 'Contraseña cambiada. Los demás dispositivos tendrán que volver a entrar.') }}>
+        <input type="text" autoComplete="username" value={me.username} readOnly hidden />
+        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+          <label className="field">Contraseña actual<input type="password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} /></label>
+          <label className="field">Nueva contraseña<input type="password" autoComplete="new-password" minLength={10} value={pw} onChange={(e) => setPw(e.target.value)} /></label>
+        </div>
+        <div className="row">
+          <button className="btn btn-sm" disabled={!pw}>Cambiar contraseña</button>
+          <span className="grow" />
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => api.post('/api/auth/logout').then(() => { window.location.hash = ''; window.location.reload() })}>Cerrar sesión</button>
+        </div>
+      </form>
+      {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
+    </div>
+  )
+}
+
+type Invite = { code: string; note: string | null; expires_at: string }
+type UserRow = Me & { created_at: string; activities: number }
+
+function UsersCard({ me }: { me: Me }) {
+  const { data, reload } = useApi<{ users: UserRow[]; invites: Invite[] }>('/api/users')
+  const [note, setNote] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+  const link = (c: string) => `${window.location.origin}/#invitacion=${c}`
+  if (!data) return null
+  return (
+    <div className="card stack">
+      <ConnHead icon="user" title="Usuarios" status={`${data.users.length}`} />
+      <p className="small text-2" style={{ margin: 0 }}>Invita a otras personas: cada una tendrá su propio plan, su Garmin y su coach. El enlace sirve una sola vez y caduca en 14 días.</p>
+      <div className="row" style={{ alignItems: 'flex-end' }}>
+        <label className="field grow">Para quién (opcional)<input value={note} onChange={(e) => setNote(e.target.value)} placeholder="p. ej. Ana" /></label>
+        <button className="btn btn-primary btn-sm" onClick={async () => {
+          setErr(null)
+          try { await api.post('/api/users/invites', { note }); setNote(''); reload() } catch (e) { setErr((e as Error).message) }
+        }}><Icon name="plus" size={16} />Crear invitación</button>
+      </div>
+      {data.invites.map((i) => (
+        <div key={i.code} className="stack" style={{ gap: 4 }}>
+          <div className="row small"><b className="grow">{i.note || 'Invitación'}</b><span className="muted">caduca {fmtDate(i.expires_at.slice(0, 10))}</span>
+            <button className="btn btn-ghost btn-icon btn-sm" aria-label="Anular invitación" onClick={() => api.del(`/api/users/invites/${i.code}`).then(reload)}><Icon name="trash" size={16} /></button>
+          </div>
+          <CopyBlock text={link(i.code)} />
+        </div>
+      ))}
+      <div className="table-wrap">
+        <table className="table">
+          <thead><tr><th>Usuario</th><th className="hide-sm">Alta</th><th>Actividades</th><th /></tr></thead>
+          <tbody>
+            {data.users.map((u) => (
+              <tr key={u.id}>
+                <td><b>{u.name || u.username}</b><div className="small muted">{u.username}{u.is_admin ? ' · admin' : ''}</div></td>
+                <td className="hide-sm">{u.created_at ? fmtDate(u.created_at.slice(0, 10)) : '—'}</td>
+                <td>{u.activities}</td>
+                <td>{u.id !== me.id && (
+                  <button className="btn btn-ghost btn-icon btn-sm" aria-label={`Borrar ${u.username}`} onClick={async () => {
+                    if (!confirm(`¿Borrar la cuenta de ${u.username} y TODOS sus datos? No se puede deshacer.`)) return
+                    try { await api.del(`/api/users/${u.id}`); reload() } catch (e) { setErr((e as Error).message) }
+                  }}><Icon name="trash" size={16} /></button>
+                )}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {err && <Banner tone="bad">{err}</Banner>}
     </div>
   )
 }
@@ -542,9 +627,10 @@ function ThemeCard() {
   )
 }
 
-export default function SettingsPage({ onChange }: { onChange: () => void }) {
+export default function SettingsPage({ onChange, me, onMe }: { onChange: () => void; me: Me | null; onMe: () => void }) {
   return (
     <div className="stack" style={{ maxWidth: 820 }}>
+      {me && <AccountCard me={me} onMe={onMe} />}
       <GarminCard onChange={onChange} />
       <HelioCard />
       <AutomationCard />
@@ -554,7 +640,8 @@ export default function SettingsPage({ onChange }: { onChange: () => void }) {
       <ProfileCard />
       <ImportCard />
       <ThemeCard />
-      <p className="small muted">OpenRun · datos guardados en tu equipo (~/.openrun) · {fmtDate(new Date().toISOString().slice(0, 10), { year: 'numeric' })}</p>
+      {me?.is_admin && <UsersCard me={me} />}
+      <p className="small muted">OpenRun · tus datos solo los ves tú · {fmtDate(new Date().toISOString().slice(0, 10), { year: 'numeric' })}</p>
     </div>
   )
 }

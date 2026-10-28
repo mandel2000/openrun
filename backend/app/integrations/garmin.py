@@ -90,7 +90,8 @@ class GarminError(RuntimeError):
 
 
 class GarminService:
-    def __init__(self) -> None:
+    def __init__(self, token_dir: Path = TOKEN_DIR) -> None:
+        self.token_dir = token_dir
         self._client = None
         self._pending_mfa: tuple[Any, Any] | None = None
 
@@ -102,7 +103,7 @@ class GarminService:
     def status(self) -> dict:
         if self._client:
             return {"connected": True, "name": getattr(self._client, "full_name", None)}
-        if (TOKEN_DIR / "garmin_tokens.json").exists():
+        if (self.token_dir / "garmin_tokens.json").exists():
             try:
                 self.client()
                 return {"connected": True, "name": getattr(self._client, "full_name", None)}
@@ -111,9 +112,9 @@ class GarminService:
         return {"connected": False}
 
     def login(self, email: str, password: str) -> dict:
-        TOKEN_DIR.mkdir(parents=True, exist_ok=True)
+        self.token_dir.mkdir(parents=True, exist_ok=True)
         g = self._new(email, password)
-        status, state = g.login(str(TOKEN_DIR))
+        status, state = g.login(str(self.token_dir))
         if status == "needs_mfa":
             self._pending_mfa = (g, state)
             return {"connected": False, "needs_mfa": True}
@@ -125,7 +126,7 @@ class GarminService:
 
     def _persist(self, g) -> None:
         try:
-            g.client.dump(str(TOKEN_DIR))
+            g.client.dump(str(self.token_dir))
         except Exception:  # noqa: BLE001 - token persistence is best effort
             log.warning("could not persist garmin tokens", exc_info=True)
         if not getattr(g, "full_name", None) and hasattr(g, "_load_profile_and_settings"):
@@ -151,13 +152,17 @@ class GarminService:
             except Exception:  # noqa: BLE001
                 pass
         self._client = None
+        try:
+            (self.token_dir / "garmin_tokens.json").unlink()
+        except OSError:
+            pass
 
     def client(self):
         if self._client is None:
-            if not (TOKEN_DIR / "garmin_tokens.json").exists():
+            if not (self.token_dir / "garmin_tokens.json").exists():
                 raise GarminError("Garmin no conectado")
             g = self._new()
-            g.login(str(TOKEN_DIR))
+            g.login(str(self.token_dir))
             self._client = g
         return self._client
 
@@ -289,4 +294,30 @@ def normalize_activity(a: dict) -> dict:
     }
 
 
-garmin = GarminService()
+
+class _PerUser:
+    """`garmin.<method>` acts on the current user's Garmin account (see app/tenancy.py).
+    User 1 keeps the original token folder, so single-user installs keep their login."""
+
+    def __init__(self) -> None:
+        self._services: dict[int, GarminService] = {}
+
+    def for_user(self, uid: int) -> GarminService:
+        if uid not in self._services:
+            self._services[uid] = GarminService(TOKEN_DIR if uid == 1 else TOKEN_DIR / "users" / str(uid))
+        return self._services[uid]
+
+    def forget(self, uid: int) -> None:
+        svc = self.for_user(uid)
+        svc._client = None
+        import shutil
+        if uid != 1:
+            shutil.rmtree(svc.token_dir, ignore_errors=True)
+        self._services.pop(uid, None)
+
+    def __getattr__(self, name):
+        from ..tenancy import current_user_id
+        return getattr(self.for_user(current_user_id()), name)
+
+
+garmin = _PerUser()

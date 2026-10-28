@@ -21,6 +21,7 @@ from sqlmodel import Session
 
 from .ai import coach
 from .db import engine, init_db
+from .tenancy import as_user
 
 
 def _instructions() -> str:
@@ -55,7 +56,7 @@ def call_remote(name: str, args: dict) -> types.CallToolResult:
 def call(name: str, args: dict) -> types.CallToolResult:
     if REMOTE_URL:
         return call_remote(name, args)
-    with Session(engine) as s:
+    with as_user(int(os.getenv("OPENRUN_USER_ID", "1"))), Session(engine) as s:
         try:
             out = coach.run_tool(s, name, args or {})
             return types.CallToolResult(content=[types.TextContent(text=json.dumps(out, default=str, ensure_ascii=False)[:60000])])

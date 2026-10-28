@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { addDays, api, DAY_NAMES, daysBetween, DIST_LABEL, fmtDate, iso, PHASE_LABEL, useApi, workoutLevel, ZONE_LABEL, zoneLevel, zoneVar, type PaceRange, type Plan, type PlanWeek, type Race, type Workout } from '../api'
 import WorkoutDetail from '../components/WorkoutDetail'
+import { DragGhost, useWorkoutDrag } from '../components/dnd'
 import { Banner, Icon, Sheet, Skeleton } from '../ui'
 
 
@@ -164,10 +165,19 @@ function VolumeChart({ plan, onPick }: { plan: Plan; onPick: (i: number) => void
   )
 }
 
-function WChip({ w, onPick }: { w: Workout; onPick: (w: Workout) => void }) {
+type DnD = ReturnType<typeof useWorkoutDrag>
+
+function WChip({ w, onPick, dnd }: { w: Workout; onPick: (w: Workout) => void; dnd: DnD }) {
   const today = iso(new Date())
+  const movable = w.status !== 'done' && w.date >= today
+  const dragging = dnd.drag?.w.id === w.id
   return (
-    <button className={`wchip ${w.status} ${w.date === today ? 'today' : ''}`} style={{ ['--zc' as string]: zoneVar(workoutLevel(w)) }} onClick={() => onPick(w)}>
+    <button className={`wchip ${w.status} ${w.date === today ? 'today' : ''} ${movable ? 'movable' : ''} ${dragging ? 'is-dragging' : ''}`}
+      style={{ ['--zc' as string]: zoneVar(workoutLevel(w)) }}
+      title={movable ? 'Arrastra para cambiar de día' : undefined}
+      onPointerDown={movable ? (e) => dnd.start(w, e) : undefined}
+      onContextMenu={movable ? (e) => e.preventDefault() : undefined}
+      onClick={() => { if (!dnd.suppressClick.current) onPick(w) }}>
       <span className="t">{w.race_id ? '🏁 ' : ''}{w.title.replace(/^🏁\s*/, '')}</span>
       <span className="m row" style={{ gap: 6 }}>
         {w.sport === 'running' ? `${w.distance_km} km` : 'Fuerza'}
@@ -179,14 +189,15 @@ function WChip({ w, onPick }: { w: Workout; onPick: (w: Workout) => void }) {
   )
 }
 
-function WeekRow({ w, open, current, toggle, onPick, onAdd }: {
-  w: PlanWeek; open: boolean; current: boolean; toggle: () => void; onPick: (w: Workout) => void; onAdd: (week: PlanWeek, date?: string) => void
+function WeekRow({ w, open, current, toggle, onPick, onAdd, dnd }: {
+  w: PlanWeek; open: boolean; current: boolean; toggle: () => void; onPick: (w: Workout) => void; onAdd: (week: PlanWeek, date?: string) => void; dnd: DnD
 }) {
   const today = iso(new Date())
   const days = Array.from({ length: 7 }, (_, i) => addDays(w.start, i))
   const byDay = days.map((d) => w.workouts.filter((x) => x.date === d))
   const pct = w.planned_km ? Math.min(100, (w.done_km / w.planned_km) * 100) : 0
   const id = `week-${w.index}`
+  const dropCls = (d: string) => (dnd.drag ? (dnd.drag.over === d ? 'drop-over' : d >= today ? 'drop-ok' : '') : '')
   return (
     <section className="weekrow" id={id}>
       <button className={`weekhead ${current ? 'current' : ''}`} aria-expanded={open} aria-controls={`${id}-body`} onClick={toggle}>
@@ -207,20 +218,23 @@ function WeekRow({ w, open, current, toggle, onPick, onAdd }: {
         <div id={`${id}-body`}>
           <div className="days7">
             {days.map((d, i) => (
-              <div className="daycol" key={d}>
+              <div className={`daycol ${dropCls(d)}`} key={d} data-drop-date={d >= today ? d : undefined}>
                 <div className="dayhead" style={d === today ? { color: 'var(--accent-text)' } : undefined}>{DAY_NAMES[i]} {+d.slice(8)}</div>
-                {byDay[i].map((x) => <WChip key={x.id} w={x} onPick={onPick} />)}
+                {byDay[i].map((x) => <WChip key={x.id} w={x} onPick={onPick} dnd={dnd} />)}
                 {byDay[i].length === 0 && d >= today && <button className="addrun" onClick={() => onAdd(w, d)} aria-label={`Añadir rodaje el ${fmtDate(d)}`}>+ rodaje</button>}
               </div>
             ))}
           </div>
           <div className="weeklist">
-            {days.map((d, i) => byDay[i].length > 0 && (
-              <div key={d} style={{ marginBottom: 10 }}>
+            {days.map((d, i) => (byDay[i].length > 0 || (dnd.drag && d >= today)) ? (
+              <div key={d} className={`dayslot ${dropCls(d)}`} data-drop-date={d >= today ? d : undefined}>
                 <div className="small muted" style={{ fontWeight: 600, marginBottom: 6 }}>{fmtDate(d, { weekday: 'long', day: 'numeric' })}</div>
-                <div className="stack" style={{ gap: 6 }}>{byDay[i].map((x) => <WChip key={x.id} w={x} onPick={onPick} />)}</div>
+                <div className="stack" style={{ gap: 6 }}>
+                  {byDay[i].map((x) => <WChip key={x.id} w={x} onPick={onPick} dnd={dnd} />)}
+                  {byDay[i].length === 0 && <div className="dropzone">Descanso · suelta aquí</div>}
+                </div>
               </div>
-            ))}
+            ) : null)}
             {w.end >= today && <button className="btn btn-block" onClick={() => onAdd(w)}><Icon name="plus" />Añadir rodaje</button>}
           </div>
         </div>
@@ -276,6 +290,26 @@ export default function PlanPage({ plan, reload }: { plan: Plan | null | undefin
   const today = iso(new Date())
   const current = plan?.weeks.find((w) => w.start <= today && today <= w.end)?.index ?? plan?.weeks.find((w) => w.start > today)?.index ?? 1
   const [openW, setOpenW] = useState<Set<number>>(() => new Set([current]))
+  const [toast, setToast] = useState<{ tone: 'ok' | 'bad' | 'info'; text: string } | null>(null)
+  const onDrop = useCallback(async (w: Workout, date: string) => {
+    setToast({ tone: 'info', text: `Moviendo «${w.title}»…` })
+    try {
+      const r = await api.post<{ moved: { id: number; title: string; date: string }[]; warnings: string[]; watch: { ok: number; failed: number } }>(`/api/workouts/${w.id}/move`, { date, swap: true })
+      const swapped = r.moved.filter((x) => x.id !== w.id)
+      const text = [`«${w.title}» → ${fmtDate(date, { weekday: 'long', day: 'numeric' })}`,
+        ...swapped.map((x) => `«${x.title}» pasa al ${fmtDate(x.date, { weekday: 'long', day: 'numeric' })}`),
+        r.watch.failed ? 'No se pudo actualizar el reloj (reconecta Garmin en Ajustes)' : r.watch.ok ? 'Reloj actualizado' : '', ...r.warnings].filter(Boolean).join(' · ')
+      setToast({ tone: r.watch.failed ? 'bad' : r.warnings.length ? 'info' : 'ok', text })
+      reload()
+    } catch (e) { setToast({ tone: 'bad', text: (e as Error).message }) }
+  }, [reload])
+  const canDrop = useCallback((d: string) => d >= today, [today])
+  const dnd = useWorkoutDrag(onDrop, canDrop)
+  useEffect(() => {
+    if (!toast || toast.text.startsWith('Moviendo')) return
+    const id = window.setTimeout(() => setToast(null), toast.tone === 'ok' ? 4000 : 9000)
+    return () => window.clearTimeout(id)
+  }, [toast])
 
   if (plan === undefined) return <div className="stack"><Skeleton h={120} /><Skeleton h={160} /><Skeleton h={64} /><Skeleton h={64} /></div>
   if (!plan || creating) return <PlanForm onCreated={() => { setCreating(false); reload() }} onCancel={plan ? () => setCreating(false) : undefined} />
@@ -337,10 +371,12 @@ export default function PlanPage({ plan, reload }: { plan: Plan | null | undefin
       </div>
       <div>
         {plan.weeks.map((w) => (
-          <WeekRow key={w.index} w={w} current={w.index === current} open={openW.has(w.index)} onPick={setPick} onAdd={(week, date) => setAdd({ week, date })}
+          <WeekRow key={w.index} w={w} current={w.index === current} open={openW.has(w.index)} onPick={setPick} onAdd={(week, date) => setAdd({ week, date })} dnd={dnd}
             toggle={() => setOpenW((s) => { const n = new Set(s); if (n.has(w.index)) n.delete(w.index); else n.add(w.index); return n })} />
         ))}
       </div>
+      <DragGhost drag={dnd.drag} />
+      {toast && <div className="toast" role="status"><Banner tone={toast.tone}>{toast.text}</Banner></div>}
       {pick && <WorkoutDetail w={pick} onClose={() => setPick(null)} onChange={reload} />}
       {add && <AddRunSheet week={add.week} date={add.date} onClose={() => setAdd(null)}
         onDone={(t) => { setAdd(null); setMsg({ tone: t.includes('%') || t.includes('Mañana') || t.includes('doble') ? 'info' : 'ok', text: t }); reload() }} />}
