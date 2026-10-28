@@ -353,7 +353,7 @@ function CopyBlock({ text }: { text: string }) {
 
 function CoachCard() {
   const { data } = useApi<CoachInfo>('/api/coach/info')
-  const [tab, setTab] = useState<'mcp' | 'gemini' | 'ollama' | 'api'>('mcp')
+  const [tab, setTab] = useState<'mcp' | 'nvidia' | 'gemini' | 'ollama' | 'api'>('mcp')
   if (!data) return null
   const server = data.mcp.remote
     ? { command: '/Users/<tu-usuario>/OpenRun/backend/.venv/bin/python', args: ['-m', 'app.mcp_server'],
@@ -365,7 +365,7 @@ function CoachCard() {
       <ConnHead icon="sparkles" title="Coach IA" status={`${data.provider} · ${data.configured ? 'listo' : 'sin configurar'}`} tone={data.configured ? 'good' : 'warn'} />
       <p className="small text-2" style={{ marginTop: 10 }}>Elige cómo pagar (o no) la IA. Las herramientas y reglas del coach son las mismas en todos los casos.</p>
       <Segmented label="Opción de coach" value={tab} onChange={setTab}
-        options={[['mcp', 'Claude (suscripción)'], ['gemini', 'Gemini gratis'], ['ollama', 'Ollama local'], ['api', 'API de pago']]} />
+        options={[['mcp', 'Claude (suscripción)'], ['nvidia', 'NVIDIA gratis'], ['gemini', 'Gemini gratis'], ['ollama', 'Ollama local'], ['api', 'API de pago']]} />
       <div style={{ marginTop: 12 }} className="small">
         {tab === 'mcp' && (
           <>
@@ -373,6 +373,13 @@ function CoachCard() {
             {data.mcp.remote && <p className="muted">OpenRun está en un servidor: el MCP se ejecuta en tu ordenador (desde un clon del repo) y habla con el servidor usando el token de API.{!data.mcp.token_set && ' El servidor aún no tiene OPENRUN_API_TOKEN configurado.'}</p>}
             <CopyBlock text={claudeCfg} />
             <p className="muted">Reinicia Claude Desktop. También funciona con <b>Gemini CLI</b> (gratis con cuenta Google) en <code>~/.gemini/settings.json</code> con el mismo bloque <code>mcpServers</code>. Las suscripciones de ChatGPT/Claude/Gemini no dan acceso a la API para apps propias: por eso se usa MCP.</p>
+          </>
+        )}
+        {tab === 'nvidia' && (
+          <>
+            <p><b>Chat dentro de OpenRun gratis con NVIDIA:</b> crea una cuenta en build.nvidia.com (NVIDIA Developer, verificación por teléfono, sin tarjeta), genera una API key (<code>nvapi-…</code>) y configura:</p>
+            <CopyBlock text={'OPENRUN_PROVIDER=nvidia\nNVIDIA_API_KEY=nvapi-...\n# opcional: OPENRUN_MODEL=moonshotai/kimi-k2.6 (por defecto)'} />
+            <p className="muted">~40 peticiones por minuto (cada respuesta del coach puede usar varias). Condiciones de prueba/evaluación: NVIDIA puede limitar o cortar el acceso. En el servidor, ponlas como variables de entorno en Coolify.</p>
           </>
         )}
         {tab === 'gemini' && (

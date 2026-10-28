@@ -12,6 +12,7 @@ services:
       OPENRUN_PROVIDER: ${OPENRUN_PROVIDER:-anthropic}
       OPENRUN_MODEL: ${OPENRUN_MODEL:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
     volumes:
       - openrun-data:/data
     expose:

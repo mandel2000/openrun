@@ -227,6 +227,8 @@ def _client() -> anthropic.Anthropic:
 # OpenAI-compatible providers (free or local options). Base URL / key env / default model.
 OPENAI_COMPAT = {
     "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY", "gemini-flash-latest"),
+    # build.nvidia.com: free for NVIDIA Developer Program members (~40 req/min, trial/evaluation terms)
+    "nvidia": ("https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY", "moonshotai/kimi-k2.6"),
     "ollama": ("http://localhost:11434/v1", None, "qwen3:8b"),
     "groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY", "openai/gpt-oss-120b"),
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "openai/gpt-oss-120b:free"),
@@ -260,7 +262,8 @@ def _openai_client():
         raise ValueError(f"OPENRUN_PROVIDER desconocido: {p}")
     base, key_env, _ = OPENAI_COMPAT[p]
     key = os.getenv("OPENRUN_API_KEY") or (os.getenv(key_env) if key_env else None) or "ollama"
-    return openai.OpenAI(base_url=os.getenv("OPENRUN_BASE_URL", base), api_key=key)
+    # Free tiers rate-limit hard (NVIDIA ~40 req/min): let the SDK back off and retry 429s
+    return openai.OpenAI(base_url=os.getenv("OPENRUN_BASE_URL", base), api_key=key, max_retries=4, timeout=120)
 
 
 def _dump_call(c) -> dict:

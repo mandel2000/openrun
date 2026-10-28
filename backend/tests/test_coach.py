@@ -105,3 +105,13 @@ def test_openai_compat_loop(monkeypatch):
         assert msgs[2]["tool_calls"][0]["function"]["name"] == "calculate_vdot"
         assert fake.calls[0]["tools"][0]["type"] == "function"
         assert [m["role"] for m in coach.visible_history(s)] == ["user", "tool", "assistant"]
+
+
+def test_nvidia_provider_config(monkeypatch):
+    monkeypatch.setenv("OPENRUN_PROVIDER", "nvidia")
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test")
+    monkeypatch.delenv("OPENRUN_MODEL", raising=False)
+    info = coach.provider_info()
+    assert info == {"provider": "nvidia", "model": "moonshotai/kimi-k2.6", "configured": True}
+    c = coach._openai_client()
+    assert str(c.base_url).startswith("https://integrate.api.nvidia.com/v1") and c.max_retries == 4

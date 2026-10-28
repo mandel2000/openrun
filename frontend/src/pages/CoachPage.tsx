@@ -21,7 +21,7 @@ const TOOL_LABEL: Record<string, string> = {
   list_races: 'Revisó tus carreras', search_race_calendar: 'Buscó en Orycron', add_race: 'Apuntó una carrera', delete_race: 'Quitó una carrera',
 }
 const CHANGES = /workout|plan|garmin|feeling|adapt|calculate|race|extra/
-const PROVIDER_NAME: Record<string, string> = { anthropic: 'Claude (API)', gemini: 'Gemini', ollama: 'Ollama (local)', groq: 'Groq', openrouter: 'OpenRouter', openai: 'OpenAI' }
+const PROVIDER_NAME: Record<string, string> = { anthropic: 'Claude (API)', gemini: 'Gemini', nvidia: 'NVIDIA', ollama: 'Ollama (local)', groq: 'Groq', openrouter: 'OpenRouter', openai: 'OpenAI' }
 
 export default function CoachPage({ onChange }: { onChange: () => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([])
