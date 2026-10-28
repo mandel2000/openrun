@@ -68,3 +68,25 @@ El MCP se ejecuta en tu ordenador (desde un clon del repo) y llama a la API del 
 ## Coolify
 
 Recurso nuevo → repositorio Git (este repo) → *Dockerfile* o *Docker Compose* → puerto 8000 → variables de entorno de arriba → dominio (certificado Let's Encrypt automático) → volumen persistente en `/data`.
+
+## Despliegue actual (VPS + Coolify)
+
+| Dato | Valor |
+|---|---|
+| URL | https://openrun.<server-ip>.sslip.io (dominio temporal; cambiar en Coolify cuando haya uno propio y actualizar `OPENRUN_PUBLIC_URL`) |
+| Coolify | proyecto `OpenRun`, app `<APP_UUID>`, destino (red) `openrun` |
+| Datos | carpeta del servidor `/data/openrun` → `/data` en el contenedor |
+| Secretos | variables de Coolify; copia en el Llavero del Mac (`openrun-password`, `<keychain-item>`) |
+| Acceso al repo | clave de despliegue de solo lectura (`~/.ssh/<deploy-key>`) |
+
+Redesplegar tras un `git push`:
+
+```bash
+TOKEN=$(security find-generic-password -a "$USER" -s <keychain-item> -w)
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  http://<SERVER_IP>:8000/api/v1/deploy -d '{"uuid":"<APP_UUID>"}'
+```
+
+Ver la contraseña de acceso: app *Acceso a Llaveros* → buscar `openrun-password`, o `security find-generic-password -s openrun-password -w`.
+
+**Por qué una red propia (`openrun`)**: la red `coolify` del servidor tiene la puerta de enlace IPv6 guardada como `fde4:…::1/64` (fallo de Docker 27) y la versión de Docker Compose del ayudante de Coolify la rechaza (`ParseAddr … unexpected character`), así que cualquier despliegue en esa red falla. OpenRun usa una red solo IPv4 creada a mano y conectada al proxy (`docker network create --attachable openrun && docker network connect openrun coolify-proxy`).
