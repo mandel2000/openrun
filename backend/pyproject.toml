@@ -1,6 +1,6 @@
 [project]
 name = "openrun"
-version = "0.1.0"
+version = "0.2.0"
 description = "Open-source, evidence-based running coach: training plans, Garmin sync, HRV readiness and an AI coach"
 license = "AGPL-3.0-or-later"
 requires-python = ">=3.12"
