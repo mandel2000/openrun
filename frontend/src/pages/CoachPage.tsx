@@ -8,7 +8,7 @@ type Info = { provider: string; model: string; configured: boolean }
 const SUGGESTIONS = [
   'Analiza mi última semana y dime cómo voy',
   '¿Qué tiempo podría hacer en un 10K ahora mismo?',
-  'Busca carreras en Salamanca en noviembre que encajen en mi plan',
+  'Busca carreras el mes que viene que encajen en mi plan',
   'Mi HRV está baja, ¿qué hago hoy?',
 ]
 const TOOL_LABEL: Record<string, string> = {

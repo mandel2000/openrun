@@ -3,7 +3,8 @@ name: Uptime
 # Checks the production server every hour (database + background scheduler via /api/health?deep=1).
 # A failed run makes GitHub email the repository owner. Optional phone alert: create a repository
 # secret NTFY_TOPIC with a long random name and subscribe to it in the ntfy app (ntfy.sh).
-# Repository variable OPENRUN_URL overrides the address.
+# Set the address to check as repository secret OPENRUN_URL (a secret keeps it out of public logs);
+# without it the workflow does nothing, so forks are not affected.
 on:
   schedule:
     - cron: "17 * * * *"
@@ -16,12 +17,13 @@ jobs:
     steps:
       - name: Health check
         env:
-          URL: ${{ vars.OPENRUN_URL || 'https://openrun.example.com' }}
+          URL: ${{ secrets.OPENRUN_URL }}
         run: |
+          if [ -z "$URL" ]; then echo "OPENRUN_URL secret not set: nothing to check"; exit 0; fi
           for i in 1 2 3; do
             code=$(curl -s -o body.json -w '%{http_code}' --max-time 20 "$URL/api/health?deep=1" || echo 000)
-            if [ "$code" = "200" ] && grep -q '"ok":true' body.json; then cat body.json; exit 0; fi
-            echo "attempt $i: HTTP $code $(cat body.json 2>/dev/null)"
+            if [ "$code" = "200" ] && grep -q '"ok":true' body.json; then echo "healthy"; exit 0; fi
+            echo "attempt $i: HTTP $code"
             sleep 30
           done
           echo "status=$code" >> "$GITHUB_ENV"

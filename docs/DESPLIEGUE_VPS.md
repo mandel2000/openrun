@@ -62,8 +62,8 @@ Avisos: entreno del día tras la rutina de la mañana, análisis de cada carrera
 
 ## Dominio propio
 
-1. En el proveedor del dominio, crea un registro **A** `run.tudominio.com → <SERVER_IP>` (y AAAA si tienes IPv6). Espera a que resuelva (`dig +short run.tudominio.com`).
-2. En Coolify, app OpenRun › *Domains*: cambia `https://openrun.<server-ip>.sslip.io` por `https://run.tudominio.com` (puedes dejar los dos separados por coma durante el cambio). Traefik pide el certificado de Let's Encrypt solo.
+1. En el proveedor del dominio, crea un registro **A** `run.tudominio.com → <IP de tu servidor>` (y AAAA si tienes IPv6). Espera a que resuelva (`dig +short run.tudominio.com`).
+2. En Coolify, app OpenRun › *Domains*: cambia el dominio provisional (p. ej. `https://openrun.<ip-con-guiones>.sslip.io`) por `https://run.tudominio.com` (puedes dejar los dos separados por coma durante el cambio). Traefik pide el certificado de Let's Encrypt solo.
 3. Cambia la variable `OPENRUN_PUBLIC_URL` a la nueva dirección y redespliega.
 4. En el móvil, abre la nueva dirección, inicia sesión, vuelve a añadirla a la pantalla de inicio y reactiva las notificaciones (son por dominio).
 
@@ -111,24 +111,9 @@ El MCP se ejecuta en tu ordenador (desde un clon del repo) y llama a la API del 
 
 Recurso nuevo → repositorio Git (este repo) → *Dockerfile* o *Docker Compose* → puerto 8000 → variables de entorno de arriba → dominio (certificado Let's Encrypt automático) → volumen persistente en `/data`.
 
-## Despliegue actual (VPS + Coolify)
-
-| Dato | Valor |
-|---|---|
-| URL | https://openrun.<server-ip>.sslip.io (dominio temporal; cambiar en Coolify cuando haya uno propio y actualizar `OPENRUN_PUBLIC_URL`) |
-| Coolify | proyecto `OpenRun`, app `<APP_UUID>`, destino (red) `openrun` |
-| Datos | carpeta del servidor `/data/openrun` → `/data` en el contenedor |
-| Secretos | variables de Coolify; copia en el Llavero del Mac (`openrun-password`, `<keychain-item>`) |
-| Acceso al repo | clave de despliegue de solo lectura (`~/.ssh/<deploy-key>`) |
-
-Redesplegar tras un `git push`:
+Redesplegar tras un `git push`: botón *Redeploy* en Coolify, un webhook de GitHub, o la API de Coolify:
 
 ```bash
-TOKEN=$(security find-generic-password -a "$USER" -s <keychain-item> -w)
-curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  http://<SERVER_IP>:8000/api/v1/deploy -d '{"uuid":"<APP_UUID>"}'
+curl -s -X POST -H "Authorization: Bearer $COOLIFY_TOKEN" -H "Content-Type: application/json" \
+  http://<coolify-host>:8000/api/v1/deploy -d '{"uuid":"<app-uuid>"}'
 ```
-
-Ver la contraseña de acceso: app *Acceso a Llaveros* → buscar `openrun-password`, o `security find-generic-password -s openrun-password -w`.
-
-**Red propia (`openrun`)**: OpenRun se desplegó en una red solo IPv4 creada a mano y conectada al proxy (`docker network create --attachable openrun && docker network connect openrun coolify-proxy`) porque la red `coolify` tenía la puerta de enlace IPv6 mal guardada (`fde4:…::1/64`, fallo de Docker 27) y el Docker Compose del ayudante de Coolify la rechazaba. La red `coolify` se recreó el 2026-10-28 con subredes explícitas y ya funciona; OpenRun puede quedarse en `openrun` sin problema.
