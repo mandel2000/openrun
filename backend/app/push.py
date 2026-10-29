@@ -16,6 +16,7 @@ from pathlib import Path
 from sqlmodel import Session, select
 
 from .db import PushSubscription, engine
+from .i18n import _
 
 log = logging.getLogger("openrun.push")
 DATA = Path(os.getenv("OPENRUN_DATA", str(Path.home() / ".openrun")))
@@ -60,7 +61,7 @@ def subscribe(uid: int, sub: dict) -> None:
     endpoint = sub.get("endpoint", "")
     keys = sub.get("keys") or {}
     if not _allowed(endpoint) or not keys.get("p256dh") or not keys.get("auth"):
-        raise ValueError("Suscripción no válida")
+        raise ValueError(_("Invalid subscription"))
     with Session(engine) as s:
         row = s.exec(select(PushSubscription).where(PushSubscription.endpoint == endpoint)).first()
         row = row or PushSubscription(endpoint=endpoint, user_id=uid)

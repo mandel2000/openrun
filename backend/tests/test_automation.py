@@ -87,7 +87,7 @@ def test_apply_heat_and_restore(monkeypatch):
         ch = S.apply_heat(s, days=1)
         assert any(c["id"] == pw.id and c["pct"] == 5.3 for c in ch)
         s.refresh(pw)
-        assert pw.data["steps"][1]["steps"][0]["pace_fast"] == round(274 * 1.053, 1) and "calor" in pw.note
+        assert pw.data["steps"][1]["steps"][0]["pace_fast"] == round(274 * 1.053, 1) and "heat" in pw.note
         assert S.apply_heat(s, days=1) == [] or all(c["id"] != pw.id for c in S.apply_heat(s, days=1))  # idempotent
         hot[f"{today}T08:00"] = {"temp": 12, "dew": 4, "rh": 60}
         S.apply_heat(s, days=1)
@@ -348,7 +348,7 @@ def test_move_workout_swaps_and_warns(monkeypatch):
         assert {x["title"]: x["date"] for x in r["moved"]} == {"Series": d[2], "Largo": d[0]}
         assert r["watch"] == {"ok": 1, "failed": 0} and r["warnings"] == []
         r = S.move_workout(s, a.id, d[1], swap=True)  # series the day after the long run
-        assert r["warnings"] and "seguidos" in r["warnings"][0]
+        assert r["warnings"] and "in a row" in r["warnings"][0]
         import pytest
         with pytest.raises(ValueError):
             S.move_workout(s, a.id, "2020-01-01")
@@ -373,7 +373,7 @@ def test_weekly_review_facts_and_cache(monkeypatch):
         assert len(calls) == 1
         monkeypatch.setattr(coach, "complete", lambda *a, **k: None)
         r = S.weekly_review(s, monday.isoformat(), regenerate=True)
-        assert not r["ai"] and "1 de 2" in r["comment"]
+        assert not r["ai"] and "1 of 2" in r["comment"]
 
 
 def test_push_subscribe_send_and_cleanup(monkeypatch, tmp_path):
@@ -413,4 +413,4 @@ def test_today_message(monkeypatch):
         s.add(PlannedWorkout(date=today, data={"title": "Fuerza general", "sport": "strength"}))
         s.commit()
         title, body = S.today_message(s)
-        assert title == "Hoy: Series 6×800" and "9 km" in body and "calor" in body and "Fuerza general" in body
+        assert title == "Today: Series 6×800" and "9 km" in body and "heat" in body and "Fuerza general" in body

@@ -73,7 +73,7 @@ def test_replan_apply_and_break(monkeypatch):
         r = S.replan_apply(s, miss.id, True)
         s.refresh(miss)
         s.refresh(tgt)
-        assert miss.date == day(2) and tgt.status == "skipped" and "pasa al" in r["message"]
+        assert miss.date == day(2) and tgt.status == "skipped" and "moves to" in r["message"]
         assert [x["title"] for x in S.auto_skip_missed(s)] == []
         s.refresh(easy_lost)
         assert easy_lost.status == "skipped"
@@ -91,7 +91,7 @@ def test_replan_apply_and_break(monkeypatch):
         s.commit()
         b = S.report_break(s, 10, "illness")
         s.refresh(q)
-        assert b["vdot"] < 45 and q.data["intensity"] == "low" and q.status == "modified" and "enfermedad" in q.note
+        assert b["vdot"] < 45 and q.data["intensity"] == "low" and q.status == "modified" and "illness" in q.note
 
 
 def test_ai_daily_limit():
@@ -104,7 +104,7 @@ def test_ai_daily_limit():
             s2.add(u)
             s2.commit()
         assert S.ai_allowed(s) and S.ai_allowed(s, "readiness") and not S.ai_allowed(s)
-        assert S.ai_usage(s)["count"] == 2 and "límite de 2" in S.ai_limit_message(s)
+        assert S.ai_usage(s)["count"] == 2 and "limit of 2" in S.ai_limit_message(s)
     with as_user(admin), Session(engine) as s:
         assert S.ai_usage(s)["limit"] is None and all(S.ai_allowed(s) for _ in range(5))
 

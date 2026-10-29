@@ -25,6 +25,7 @@ scheduler.py (thread): daily routine, intraday sync, backups ─► services.py
 | `auth.py` | Passwords (scrypt), signed sessions, personal API tokens, rate limiting |
 | `scheduler.py` | Per-user daily routine, intraday sync, daily backup, health state |
 | `push.py` | Web Push (VAPID) |
+| `i18n.py`, `locales/` | Server-side translations: `_()` picks the current user's language ([CONTRIBUTING.md](../CONTRIBUTING.md#translations)) |
 
 ### Multi-user
 
@@ -40,7 +41,7 @@ The model chooses *what* to do (a 6×800 m session, move the long run…); the s
 
 ## Frontend (`frontend/src/`)
 
-React + TypeScript + Vite, no UI framework. `pages/` are the six tabs (Today, Plan, Races, Progress, Coach, Settings); `components/` the shared pieces; `api.ts` the typed API client; `index.css` the design tokens (light and dark). Charts use Recharts, maps Leaflet. The service worker (`public/sw.js`) only handles push notifications.
+React + TypeScript + Vite, no UI framework. `pages/` are the six tabs (Today, Plan, Races, Progress, Coach, Settings); `components/` the shared pieces; `api.ts` the typed API client; `i18n.ts` + `locales/` the translations (`t()`); `index.css` the design tokens (light and dark). Charts use Recharts, maps Leaflet. The service worker (`public/sw.js`) only handles push notifications.
 
 ## Tests
 

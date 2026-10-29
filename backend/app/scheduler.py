@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 
 from . import services as S
 from .db import User, engine
+from .i18n import _
 from .tenancy import as_user
 
 log = logging.getLogger("openrun.scheduler")
@@ -51,7 +52,7 @@ def tick() -> dict | None:
             except Exception as e:  # noqa: BLE001
                 log.exception("backup failed")
                 if STATE.get("backup_error") is None:
-                    _alert_admins("Copia de seguridad fallida", f"La copia diaria de OpenRun ha fallado: {e}")
+                    _alert_admins(_("Backup failed"), _("The daily OpenRun backup failed: {e}", e=e))
                 STATE["backup_error"] = str(e)
         _hourly(out)
         STATE["last_tick"] = dt.datetime.now().isoformat(timespec="seconds")

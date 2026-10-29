@@ -10,7 +10,9 @@ from collections import defaultdict
 
 from sqlmodel import Session, select
 
+from . import i18n
 from .db import Activity, Athlete, Meta, Plan, PlannedWorkout, Race, Wellness, engine
+from .i18n import N_, _, language_name
 from .integrations.garmin import garmin
 from .training import adapt, load
 from .training import records as R
@@ -168,7 +170,7 @@ def save_custom_workout(s: Session, date: str, title: str, type: str, steps: lis
     if replace_id:
         pw = s.get(PlannedWorkout, replace_id)
         if not pw:
-            raise ValueError(f"workout {replace_id} no existe")
+            raise ValueError(f"workout {replace_id} does not exist")
         pw.data = {**w.to_dict(), "phase": pw.data.get("phase", "")}
         pw.date, pw.status = date, "modified"
     else:
@@ -195,8 +197,8 @@ def add_extra_run(s: Session, date: str, km: float | None = None) -> dict:
     prev_km = _run_km(s, monday - dt.timedelta(days=7))
     km = km or min(max(round(week_km * 0.2), 4), 10)
     w = W.easy_run(training_paces(a.vdot or 40.0), km)
-    w.title = f"Rodaje extra {w.distance_km:g} km"
-    w.description += " Opcional: añadido por ti fuera del plan base."
+    w.title = _("Extra run {km} km", km=f"{w.distance_km:g}")
+    w.description += " " + _("Optional: added by you outside the base plan.")
     plan = active_plan(s)
     pw = PlannedWorkout(plan_id=plan.id if plan else None, date=date, data={**w.to_dict(), "extra": True},
                         week=_week_of(s, plan, date))
@@ -206,14 +208,14 @@ def add_extra_run(s: Session, date: str, km: float | None = None) -> dict:
     warnings = []
     same_day = [x for x in list_workouts(s, date, date) if x["id"] != pw.id]
     if same_day:
-        warnings.append("Ese día ya tienes otro entreno: doble sesión.")
+        warnings.append(_("You already have a workout that day: double session."))
     new_km = week_km + w.distance_km
     if prev_km and new_km > prev_km * 1.1:
-        warnings.append(f"La semana pasa a {new_km:.0f} km (+{(new_km / prev_km - 1) * 100:.0f} % vs la anterior). "
-                        "Más de +10 % sube el riesgo de lesión; acórtalo o quítalo en semanas de descarga.")
+        warnings.append(_("The week goes up to {km} km (+{pct}% vs the previous one). More than +10% raises the injury "
+                          "risk; shorten or drop it in recovery weeks.", km=f"{new_km:.0f}", pct=f"{(new_km / prev_km - 1) * 100:.0f}"))
     nxt = list_workouts(s, (d + dt.timedelta(days=1)).isoformat(), (d + dt.timedelta(days=1)).isoformat())
     if any(x.get("intensity") in ("moderate", "high") or x.get("type") == "long" for x in nxt):
-        warnings.append("Mañana tienes sesión clave: mantenlo muy suave.")
+        warnings.append(_("Tomorrow is a key session: keep it very easy."))
     return {**workout_dict(pw), "week_km": round(new_km, 1), "warnings": warnings}
 
 
@@ -241,12 +243,12 @@ def move_workout(s: Session, workout_id: int, new_date: str, swap: bool = False)
     moved one's place (drag & drop in the plan). Warns when two hard days end up back to back."""
     pw = s.get(PlannedWorkout, workout_id)
     if not pw:
-        raise ValueError("workout no existe")
+        raise ValueError(_("workout does not exist"))
     if pw.status == "done":
-        raise ValueError("Ese entreno ya está hecho")
+        raise ValueError(_("That workout is already done"))
     dt.date.fromisoformat(new_date)
     if new_date < dt.date.today().isoformat():
-        raise ValueError("No se puede mover a un día pasado")
+        raise ValueError(_("Can't move it to a past day"))
     old_date = pw.date
     if old_date == new_date:
         return {**workout_dict(pw), "moved": [], "warnings": []}
@@ -283,7 +285,7 @@ def _hard_day_warnings(s: Session, dates: set[str]) -> list[str]:
         hard = {r.date for r in rows if _is_hard(r.data)}
         for a in sorted(hard):
             b = (dt.date.fromisoformat(a) + dt.timedelta(days=1)).isoformat()
-            msg = f"Dos días duros seguidos ({a[8:]}/{a[5:7]} y {b[8:]}/{b[5:7]}): deja al menos un día suave entre sesiones de calidad."
+            msg = _("Two hard days in a row ({a} and {b}): leave at least one easy day between quality sessions.", a=f"{a[8:]}/{a[5:7]}", b=f"{b[8:]}/{b[5:7]}")
             if b in hard and msg not in out:
                 out.append(msg)
     return out
@@ -294,7 +296,7 @@ def push_to_garmin(s: Session, workout_ids: list[int]) -> list[dict]:
     for wid in workout_ids:
         pw = s.get(PlannedWorkout, wid)
         if not pw or pw.data.get("sport") != "running":
-            res.append({"id": wid, "ok": False, "error": "no es un entreno de carrera"})
+            res.append({"id": wid, "ok": False, "error": _("not a running workout")})
             continue
         try:
             if pw.garmin_workout_id:
@@ -440,9 +442,9 @@ def save_checkin(s: Session, feel: int | None, legs: int | None, sick: bool = Fa
     return readiness_view(s)
 
 
-READINESS_SYSTEM = """Eres el entrenador de running del atleta (OpenRun). En español, tono cercano, sin saludos. Con el JSON
-de su estado de hoy (nota de readiness 0-100 y sus partes, entreno previsto y la propuesta de la app) explica en 2-3 frases
-(máximo 60 palabras) por qué conviene la propuesta o por qué puede entrenar tal cual. Cita 1-2 datos concretos. Sin listas."""
+READINESS_SYSTEM = """You are the athlete's running coach (OpenRun). Write in {language}, warm tone, no greetings. From the
+JSON with their state today (0-100 readiness score and its parts, planned workout and the app's proposal) explain in 2-3
+sentences (60 words max.) why the proposal makes sense or why they can train as planned. Quote 1-2 concrete figures. No lists."""
 
 
 def readiness_view(s: Session, explain: bool = False) -> dict:
@@ -464,7 +466,7 @@ def readiness_view(s: Session, explain: bool = False) -> dict:
            "checkin": next(({k: w.get(k) for k in ("feel", "legs", "sick")} for w in wellness_rows(s, 1)
                             if w["date"] == today and (w.get("feel") or w.get("legs") or w.get("sick"))), None)}
     cache = meta_get(s, "readiness_explain")
-    key = f"{today}:{r.get('score')}:{r['status']}:{bool(proposal)}"
+    key = f"{today}:{r.get('score')}:{r['status']}:{bool(proposal)}:{i18n.lang()}"
     out["explanation"] = cache.get("text") if cache.get("key") == key else None
     if explain and not out["explanation"]:
         import json
@@ -472,7 +474,7 @@ def readiness_view(s: Session, explain: bool = False) -> dict:
         from .ai import coach
         facts = {"readiness": {k: r.get(k) for k in ("status", "score", "components", "reasons")},
                  "entreno_hoy": pw.data.get("title") if pw else None, "propuesta": proposal}
-        text = coach.complete(READINESS_SYSTEM, json.dumps(facts, ensure_ascii=False, default=str), 300) if ai_allowed(s, "readiness") else None
+        text = coach.complete(READINESS_SYSTEM.format(language=language_name()), json.dumps(facts, ensure_ascii=False, default=str), 300) if ai_allowed(s, "readiness") else None
         text = text or _readiness_fallback(r, proposal, pw)
         meta_set(s, "readiness_explain", {"key": key, "text": text})
         out["explanation"] = text
@@ -483,10 +485,11 @@ def _readiness_fallback(r: dict, proposal: dict | None, pw: PlannedWorkout | Non
     comps = sorted(r.get("components") or [], key=lambda c: c["score"])
     weak = ", ".join(f"{c['label'].lower()} {c['value']}" for c in comps[:2] if c["score"] < 60)
     if proposal:
-        return f"Hoy vienes con {weak or 'algo de fatiga'}. Mejor «{proposal['to']}» que «{proposal['from']}»: mantienes el estímulo sin cavar más hondo y recuperas la calidad otro día."
+        return _("Today you come in with {weak}. Better “{to}” than “{frm}”: you keep the stimulus without digging a deeper hole, and make up the quality another day.",
+                 weak=weak or _("some fatigue"), to=proposal["to"], frm=proposal["from"])
     if pw and r["status"] == "green":
-        return f"Todo en rango (nota {r.get('score')}/100): adelante con «{pw.data.get('title')}»."
-    return "Escucha al cuerpo: si en el calentamiento las piernas no responden, quédate en suave."
+        return _("All in range (score {score}/100): go ahead with “{title}”.", score=r.get("score"), title=pw.data.get("title"))
+    return _("Listen to your body: if your legs don't respond in the warm-up, keep it easy.")
 
 
 def apply_readiness(s: Session, accept: bool) -> dict:
@@ -587,7 +590,7 @@ def not_feeling_well(s: Session, days: int, mode: str = "reduce") -> list[dict]:
     new = adapt.deload_workouts([p.data for p in pws], a.vdot or 40, mode)
     for pw, nd in zip(pws, new):
         pw.data, pw.status = {**pw.data, **nd}, "modified"
-        pw.note = "Ajustado: 'no me encuentro al 100%'"
+        pw.note = _("Adjusted: 'not feeling 100%'")
         s.add(pw)
     s.commit()
     on_watch = [p.id for p in pws if p.garmin_workout_id and p.data.get("sport") == "running"]
@@ -634,23 +637,23 @@ def replan_apply(s: Session, workout_id: int, accept: bool) -> dict:
     otherwise mark it as not done."""
     pw = s.get(PlannedWorkout, workout_id)
     if not pw or pw.status not in ("planned", "modified"):
-        raise ValueError("Ese entreno ya no está pendiente")
+        raise ValueError(_("That workout is no longer pending"))
     item = next((m for m in replan_check(s)["missed"] if m["id"] == workout_id), None)
     touched = [pw]
     if accept and item and item["slot"]:
         sl = item["slot"]
         old = pw.date
         pw.date, pw.data = sl["date"], {**pw.data, "date": sl["date"]}
-        pw.status, pw.note = "modified", f"Recuperada del {old[8:]}/{old[5:7]}"
+        pw.status, pw.note = "modified", _("Moved from {date}", date=f"{old[8:]}/{old[5:7]}")
         if sl["replaces_id"]:
             rep = s.get(PlannedWorkout, sl["replaces_id"])
-            rep.status, rep.note = "skipped", f"Sustituido por «{pw.data.get('title')}» (recuperada)"
+            rep.status, rep.note = "skipped", _("Replaced by “{title}” (rescheduled)", title=pw.data.get("title"))
             s.add(rep)
             touched.append(rep)
-        result = f"«{pw.data.get('title')}» pasa al {sl['date'][8:]}/{sl['date'][5:7]}."
+        result = _("“{title}” moves to {date}.", title=pw.data.get("title"), date=f"{sl['date'][8:]}/{sl['date'][5:7]}")
     else:
-        pw.status, pw.note = "skipped", "No realizado"
-        result = f"«{pw.data.get('title')}» marcado como no realizado."
+        pw.status, pw.note = "skipped", _("Skipped")
+        result = _("“{title}” marked as skipped.", title=pw.data.get("title"))
     s.add(pw)
     s.commit()
     _resync_garmin(s, touched)
@@ -668,7 +671,7 @@ def auto_skip_missed(s: Session) -> list[str]:
         old = (today - dt.date.fromisoformat(m["date"])).days
         if (not m["key"] and old >= 2) or (m["key"] and not m["slot"] and old >= 2):
             pw = s.get(PlannedWorkout, m["id"])
-            pw.status, pw.note = "skipped", "No realizado"
+            pw.status, pw.note = "skipped", _("Skipped")
             s.add(pw)
         elif m["key"] and m["slot"]:
             pending.append(m)
@@ -708,19 +711,19 @@ def report_break(s: Session, days_off: int, reason: str = "other") -> dict:
     days_off = max(1, min(int(days_off), 120))
     today = dt.date.today()
     p = RPL.break_protocol(days_off, reason)
-    label = {"illness": "enfermedad", "injury": "lesión", "travel": "viaje"}.get(reason, "pausa")
+    label = {"illness": _("illness"), "injury": _("injury"), "travel": _("travel")}.get(reason) or _("break")
     for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.date >= (today - dt.timedelta(days=days_off)).isoformat(),
                                                   PlannedWorkout.date < today.isoformat(),
                                                   PlannedWorkout.status.in_(["planned", "modified"]))).all():
-        pw.status, pw.note = "skipped", f"No realizado ({label})"
+        pw.status, pw.note = "skipped", f"{_('Skipped')} ({label})"
         s.add(pw)
     s.commit()
     a = get_athlete(s)
     vdot = a.vdot or 40.0
     if p["vdot_factor"] < 1 and a.vdot:
         vdot = round(a.vdot * p["vdot_factor"], 1)
-        recalibrate_paces(s, vdot, f"vuelta tras {days_off} días de {label}")
-    note = f"Vuelta tras {label} ({days_off} d)"
+        recalibrate_paces(s, vdot, _("return after {n} days of {label}", n=days_off, label=label))
+    note = _("Return after {label} ({n} d)", label=label, n=days_off)
     touched = _soften_range(s, today, p["easy_days"], "easy", 30 if days_off > 7 else 20, note, vdot)
     if p["reduce_days"] > p["easy_days"]:
         touched += _soften_range(s, today + dt.timedelta(days=p["easy_days"]), p["reduce_days"] - p["easy_days"],
@@ -812,23 +815,23 @@ def apply_race(s: Session, r: Race) -> dict:
     plan = active_plan(s)
     changes: list[str] = []
     touched: list[PlannedWorkout] = []
-    note = f"Ajustado por carrera: {r.name}"
+    note = _("Adjusted for race: {name}", name=r.name)
     d = dt.date.fromisoformat(r.date)
     dist = r.distance_m or 10000
 
     for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.date == r.date)).all():
         if pw.data.get("sport") == "running" and pw.data.get("race_id") != r.id:
             pw.data = {**pw.data, "_orig": pw.data.get("_orig") or dict(pw.data)}
-            pw.status, pw.note = "skipped", f"Sustituido por {r.name}"
+            pw.status, pw.note = "skipped", _("Replaced by {name}", name=r.name)
             s.add(pw)
             touched.append(pw)
-            changes.append(f"{pw.date}: {pw.data.get('title')} → sustituido por la carrera")
+            changes.append(f"{pw.date}: {pw.data.get('title')} → " + _("replaced by the race"))
 
     w = W.race(training_paces(vdot), "", dist, _zone_for(dist))
-    w.title = f"🏁 {r.name}" + (" (C · a ritmo de entreno)" if r.priority == "C" else "")
+    w.title = f"🏁 {r.name}" + (" " + _("(C · at training pace)") if r.priority == "C" else "")
     if r.priority == "C":
         w.intensity = "moderate"
-        w.description = "Carrera de entreno: esfuerzo controlado (umbral–ritmo 10K), sin vaciarte. Cuenta como sesión de calidad."
+        w.description = _("Training race: controlled effort (threshold to 10K pace), without emptying the tank. It counts as a quality session.")
     pw = PlannedWorkout(plan_id=plan.id if plan else None, date=r.date, week=_week_of(s, plan, r.date),
                         data={**w.to_dict(), "race_id": r.id, "phase": "race"})
     s.add(pw)
@@ -840,11 +843,11 @@ def apply_race(s: Session, r: Race) -> dict:
                 if i == 1 and x.data.get("sport") == "running":
                     _soften(x, vdot, note, "shakeout")
                     touched.append(x)
-                    changes.append(f"{day}: activación pre-carrera")
+                    changes.append(f"{day}: " + _("pre-race shakeout"))
                 elif x.data.get("intensity") in ("moderate", "high") or x.data.get("type") == "long":
                     _soften(x, vdot, note, "easy")
                     touched.append(x)
-                    changes.append(f"{day}: calidad → suave + progresivos")
+                    changes.append(f"{day}: " + _("quality → easy + strides"))
     rec_days = 1 if r.priority == "C" else min(7, max(2, round(dist / 3000)))
     for i in range(1, rec_days + 1):
         day = (d + dt.timedelta(days=i)).isoformat()
@@ -852,17 +855,17 @@ def apply_race(s: Session, r: Race) -> dict:
             if x.data.get("sport") == "running" and (i == 1 or x.data.get("intensity") in ("moderate", "high") or x.data.get("type") == "long"):
                 _soften(x, vdot, note, "recovery" if i == 1 else "easy")
                 touched.append(x)
-                changes.append(f"{day}: {'regenerativo' if i == 1 else 'calidad → suave'} (recuperación post-carrera)")
+                changes.append(f"{day}: " + (_("recovery run") if i == 1 else _("quality → easy")) + " " + _("(post-race recovery)"))
     s.commit()
     _resync_garmin(s, touched)
     suggestion = None
     if r.priority == "A" and (not plan or plan.summary.get("race_date") != r.date):
-        suggestion = "Es tu carrera objetivo: genera un plan con esta fecha de carrera para periodizar y afinar hacia ella."
+        suggestion = _("It's your goal race: generate a plan with this race date to periodise and taper towards it.")
     return {"changes": changes, "recovery_days": rec_days, "suggestion": suggestion}
 
 
 def _restore_race_changes(s: Session, r: Race) -> None:
-    note = f"Ajustado por carrera: {r.name}"
+    notes = i18n.all_langs("Adjusted for race: {name}", name=r.name) | i18n.all_langs("Replaced by {name}", name=r.name)
     restored: list[PlannedWorkout] = []
     for pw in s.exec(select(PlannedWorkout)).all():
         if pw.data.get("race_id") == r.id:
@@ -872,7 +875,7 @@ def _restore_race_changes(s: Session, r: Race) -> None:
                 except Exception:  # noqa: BLE001
                     pass
             s.delete(pw)
-        elif (pw.note == note or pw.note == f"Sustituido por {r.name}") and pw.data.get("_orig"):
+        elif pw.note in notes and pw.data.get("_orig"):
             pw.data, pw.status, pw.note = pw.data["_orig"], "planned", None
             s.add(pw)
             restored.append(pw)
@@ -886,7 +889,7 @@ def list_races(s: Session) -> list[dict]:
 
 def add_race(s: Session, name: str, date: str, distance_m: float | None = None, priority: str = "B", **extra) -> dict:
     if priority not in ("A", "B", "C"):
-        raise ValueError("prioridad A, B o C")
+        raise ValueError(_("priority A, B or C"))
     r = Race(name=name, date=date, distance_m=distance_m, priority=priority,
              **{k: v for k, v in extra.items() if k in Race.model_fields and v is not None})
     s.add(r)
@@ -899,7 +902,7 @@ def add_race(s: Session, name: str, date: str, distance_m: float | None = None, 
 def update_race(s: Session, race_id: int, **fields) -> dict:
     r = s.get(Race, race_id)
     if not r:
-        raise ValueError("carrera no existe")
+        raise ValueError(_("race does not exist"))
     _restore_race_changes(s, r)
     for k, v in fields.items():
         if k in Race.model_fields and k != "id" and v is not None:
@@ -1064,7 +1067,7 @@ def ai_allowed(s: Session, kind: str = "chat") -> bool:
 
 
 def ai_limit_message(s: Session) -> str:
-    return f"Has llegado al límite de {ai_usage(s)['limit']} peticiones diarias al coach IA. Se renueva mañana; mientras, el plan y los ajustes automáticos siguen funcionando."
+    return _("You have reached the limit of {n} daily AI coach requests. It resets tomorrow; meanwhile the plan and the automatic adjustments keep working.", n=ai_usage(s)["limit"])
 
 
 # ---------------------------------------------------------------- settings
@@ -1196,9 +1199,10 @@ def apply_heat(s: Session, days: int = 2) -> list[dict]:
             if w["pct"] >= 1:
                 if h and h["pct"] == w["pct"]:
                     continue
-                note = f"Ritmos +{w['pct']:g} % por calor ({w['temp']:.0f} °C, rocío {w['dew']:.0f} °C a las {w['hour']}h). Mantén el esfuerzo, no el ritmo."
+                note = _("Paces +{pct}% for heat ({temp} °C, dew point {dew} °C at {hour}h). Keep the effort, not the pace.",
+                         pct=f"{w['pct']:g}", temp=f"{w['temp']:.0f}", dew=f"{w['dew']:.0f}", hour=w["hour"])
                 if w["too_hot"] and pw.data.get("intensity") in ("moderate", "high"):
-                    note += " Calor extremo: mejor hazla en cinta, a primera hora o cámbiala por suave."
+                    note += " " + _("Extreme heat: better on a treadmill, first thing in the morning, or swap it for an easy run.")
                 pw.data = {**pw.data, "steps": HEAT.scale_steps(base, w["pct"]),
                            "_heat": {"pct": w["pct"], "temp": w["temp"], "dew": w["dew"], "orig_steps": base}}
                 pw.note, pw.status = note, "modified"
@@ -1255,17 +1259,17 @@ def daily_routine(s: Session, force: bool = False) -> dict:
     connected = garmin.status().get("connected")
     if connected:
         step("sync", lambda: {k: v for k, v in sync_garmin(s, 3).items() if k != "metrics"})
-    step("análisis", lambda: {"analizadas": analyze_recent(s)})
-    step("entrenos perdidos", lambda: {"pendientes": [m["title"] for m in auto_skip_missed(s)]})
-    step("ritmos", lambda: (lambda r: {"aplicado": r["applied"], "pendiente": r["pending"]})(pace_insights(s)))
+    step("analysis", lambda: {"analysed": analyze_recent(s)})
+    step("missed", lambda: {"pending": [m["title"] for m in auto_skip_missed(s)]})
+    step("paces", lambda: (lambda r: {"applied": r["applied"], "pending": r["pending"]})(pace_insights(s)))
     if dt.date.today().weekday() == 0:
-        step("resumen semanal", lambda: (lambda r: {"ia": r["ai"]})(weekly_review(s)))
+        step("weekly review", lambda: (lambda r: {"ai": r["ai"]})(weekly_review(s)))
     if st["heat_adjust"]:
-        step("calor", lambda: apply_heat(s))
+        step("heat", lambda: apply_heat(s))
     if st["auto_adapt"]:
         step("readiness", lambda: adapt_today(s)["changes"])
     if connected and st["auto_push"]:
-        step("reloj", lambda: (lambda r: {"enviados": sum(1 for x in r if x["ok"]), "errores": [x.get("error") for x in r if not x["ok"]]})(push_changed(s)))
+        step("watch", lambda: (lambda r: {"sent": sum(1 for x in r if x["ok"]), "errors": [x.get("error") for x in r if not x["ok"]]})(push_changed(s)))
     hist = meta_get(s, "daily_log").get("items", [])
     meta_set(s, "daily_log", {"items": (hist + [log])[-14:], "last_date": dt.date.today().isoformat()})
     try:
@@ -1296,38 +1300,38 @@ def today_message(s: Session) -> tuple[str, str] | None:
     run = next((w for w in ws if w.get("sport") == "running"), None)
     other = [w["title"] for w in ws if w is not run]
     if run:
-        title = f"Hoy: {run['title']}"
+        title = _("Today: {title}", title=run["title"])
         bits = [f"{run.get('distance_km')} km" if run.get("distance_km") else None]
         if run.get("_heat"):
-            bits.append(f"ritmos +{run['_heat'].get('pct')} % por calor")
+            bits.append(_("paces +{pct}% for heat", pct=run["_heat"].get("pct")))
         if run["status"] == "modified":
-            bits.append("ajustado a tu estado de hoy")
+            bits.append(_("adjusted to how you are today"))
         if other:
             bits.append(" + ".join(other))
         body = " · ".join(b for b in bits if b) or run.get("description", "")[:120]
     else:
-        title, body = f"Hoy: {other[0]}", "Sesión de fuerza. Ábrela para ver los ejercicios."
+        title, body = _("Today: {title}", title=other[0]), _("Strength session. Open it to see the exercises.")
     return title, body
 
 
 def morning_notifications(s: Session, log: dict, connected: bool) -> None:
     sync = next((x for x in log["steps"] if x["step"] == "sync"), None)
-    if sync and not sync["ok"] and any(k in (sync.get("error") or "").lower() for k in ("auth", "401", "login", "token", "no conectado")):
-        notify(s, None, "Garmin desconectado", "Vuelve a conectar Garmin en Ajustes para sincronizar y enviar entrenos al reloj.", "/#ajustes", "garmin")
+    if sync and not sync["ok"] and any(k in (sync.get("error") or "").lower() for k in ("auth", "401", "login", "token", "not connected", "no conectado")):
+        notify(s, None, _("Garmin disconnected"), _("Reconnect Garmin in Settings to sync and send workouts to the watch."), "/#ajustes", "garmin")
     msg = today_message(s)
     if msg:
         notify(s, "morning", msg[0], msg[1], "/#hoy", "today")
-    lost = next((x for x in log["steps"] if x["step"] == "entrenos perdidos" and x["ok"]), None)
-    pend = (lost or {}).get("result", {}).get("pendientes") or []
+    lost = next((x for x in log["steps"] if x["step"] == "missed" and x["ok"]), None)
+    pend = (lost or {}).get("result", {}).get("pending") or []
     if pend:
-        notify(s, "morning", "¿Recuperamos la sesión?", f"No vi «{pend[0]}». Tengo un hueco para recolocarla esta semana: revísalo en Hoy.", "/#hoy", "replan")
+        notify(s, "morning", _("Shall we make up the session?"), _("I didn't see “{title}”. There's a slot to reschedule it this week: check Today.", title=pend[0]), "/#hoy", "replan")
     if dt.date.today().weekday() == 0:
         rev = meta_get(s, "weekly_reviews").get((_monday(dt.date.today()) - dt.timedelta(days=7)).isoformat())
         if rev:
-            notify(s, "weekly", "Tu resumen semanal", rev["comment"][:200], "/#hoy", "weekly")
+            notify(s, "weekly", _("Your weekly summary"), rev["comment"][:200], "/#hoy", "weekly")
 
 
-VERDICT_TEXT = {"on_target": "en objetivo ✅", "too_easy": "más fácil de lo previsto", "too_hard": "más dura de lo previsto"}
+VERDICT_TEXT = {"on_target": N_("on target ✅"), "too_easy": N_("easier than planned"), "too_hard": N_("harder than planned")}
 
 
 def intraday_sync(s: Session) -> dict:
@@ -1346,13 +1350,13 @@ def intraday_sync(s: Session) -> dict:
         except Exception:  # noqa: BLE001
             res = None
         km = round((act.data.get("distance_m") or 0) / 1000, 1)
-        title = f"{act.data.get('name') or 'Carrera'} · {km} km"
+        title = f"{act.data.get('name') or _('Run')} · {km} km"
         if res and res.get("planned_title"):
-            body = f"{res['planned_title']}: {VERDICT_TEXT.get(res.get('verdict'), 'analizada')}."
+            body = f"{res['planned_title']}: {_(VERDICT_TEXT.get(res.get('verdict'), 'analysed'))}."
             if res.get("notes"):
                 body += " " + res["notes"][0]
         else:
-            body = "Sincronizada. Mira el mapa y tus parciales."
+            body = _("Synced. Check the map and your splits.")
         notify(s, "analysis", title, body, "/#progreso", f"act-{act.id}")
     return {"new": len(new)}
 
@@ -1397,6 +1401,7 @@ def delete_user(uid: int) -> None:
             s.delete(u)
         s.commit()
     garmin.forget(uid)
+    i18n.forget_user(uid)
 
 
 # ---------------------------------------------------------------- race-day strategy
@@ -1413,7 +1418,7 @@ def _race_course(r: Race) -> dict:
     if b and (not r.distance_m or abs(r.distance_m - b["distance_m"]) < 1500):
         return {**b, "builtin": True}
     dist = r.distance_m or 10000
-    return {"name": "Recorrido llano (sube el GPX para el perfil real)", "profile": RP.flat_profile(dist), "flat": True, "builtin": False}
+    return {"name": _("Flat course (upload the GPX for the real profile)"), "profile": RP.flat_profile(dist), "flat": True, "builtin": False}
 
 
 def race_weather(lat: float, lon: float, date: str, hour: int) -> dict | None:
@@ -1443,7 +1448,7 @@ def race_strategy(s: Session, race_id: int, mode: str | None = None, target_s: f
                   start_time: str | None = None) -> dict:
     r = s.get(Race, race_id)
     if not r:
-        raise ValueError("carrera no existe")
+        raise ValueError(_("race does not exist"))
     saved = r.strategy or {}
     mode = mode or saved.get("mode") or "realistic"
     course = _race_course(r)
@@ -1471,7 +1476,7 @@ def race_strategy(s: Session, race_id: int, mode: str | None = None, target_s: f
     elif r.goal_time_s:
         mode, base = "goal", r.goal_time_s
     else:
-        raise ValueError("Necesito tu VDOT (Ajustes › Perfil) o un tiempo objetivo para calcular la estrategia")
+        raise ValueError(_("I need your VDOT (Settings › Profile) or a goal time to compute the strategy"))
     target = base * (1 + heat_pct / 100)
     plan = RP.pace_plan(profile, target, course.get("notes"))
     gain, loss = RP.gain_loss(profile)
@@ -1494,7 +1499,7 @@ def race_strategy(s: Session, race_id: int, mode: str | None = None, target_s: f
 def save_race_strategy(s: Session, race_id: int, mode: str | None, target_s: float | None, start_time: str | None) -> dict:
     r = s.get(Race, race_id)
     if not r:
-        raise ValueError("carrera no existe")
+        raise ValueError(_("race does not exist"))
     cur = dict(r.strategy or {})
     if mode:
         cur["mode"] = mode
@@ -1511,7 +1516,7 @@ def save_race_strategy(s: Session, race_id: int, mode: str | None, target_s: flo
 def set_race_course(s: Session, race_id: int, filename: str, content: bytes) -> dict:
     r = s.get(Race, race_id)
     if not r:
-        raise ValueError("carrera no existe")
+        raise ValueError(_("race does not exist"))
     pts = RP.fill_elevation(RP.parse_track(filename, content))
     profile = RP.profile_from_track(pts)
     builtin = RP.builtin_for(r.name)
@@ -1541,8 +1546,8 @@ def push_race_strategy(s: Session, race_id: int) -> dict:
     existing = next((pw for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.date == r.date)).all()
                      if pw.data.get("race_id") == r.id or pw.data.get("type") == "race"), None)
     from .training.vdot import fmt_pace
-    desc = (f"Estrategia {r.name}: objetivo {fmt_time(st['target_s'])} ({fmt_pace(st['avg_pace_s'])}/km de media, "
-            f"{st['course']['gain_m']} m D+). Ritmo por km ajustado al desnivel: corre por esfuerzo en las subidas.")
+    desc = _("{name} strategy: goal {goal} ({pace}/km average, {gain} m D+). Pace per km adjusted for elevation: run the climbs by effort.",
+             name=r.name, goal=fmt_time(st["target_s"]), pace=fmt_pace(st["avg_pace_s"]), gain=st["course"]["gain_m"])
     w = save_custom_workout(s, r.date, f"🏁 {r.name}"[:50], "race", RP.watch_steps(st["kms"]), desc, "high",
                             existing.id if existing else None)
     pw = s.get(PlannedWorkout, w["id"])
@@ -1591,7 +1596,7 @@ def activity_detail(s: Session, activity_id: int, refresh: bool = False) -> dict
 
     act = s.get(Activity, activity_id)
     if not act:
-        raise ValueError("actividad no existe")
+        raise ValueError(_("activity does not exist"))
     row = s.get(ActivityStream, activity_id)
     if (row is None or refresh) and act.external_id.startswith("garmin:"):
         streams = garmin.fetch_streams(act.external_id)
@@ -1616,10 +1621,10 @@ def activity_detail(s: Session, activity_id: int, refresh: bool = False) -> dict
 
 # ---------------------------------------------------------------- weekly review
 
-REVIEW_SYSTEM = """Eres el entrenador de running del atleta (OpenRun). Escribe en español, tono cercano y directo, sin saludos
-ni despedidas. Con los datos JSON de su semana escribe 3 párrafos cortos (máximo 90 palabras en total):
-1) cómo fue la semana (cumplimiento, sensaciones de las sesiones clave, carga); 2) qué significa (forma, fatiga, riesgo);
-3) foco concreto para la semana que viene. No inventes datos que no estén en el JSON. Sin listas ni títulos."""
+REVIEW_SYSTEM = """You are the athlete's running coach (OpenRun). Write in {language}, warm and direct, no greetings or
+sign-offs. From the JSON data of their week (keys are in Spanish) write 3 short paragraphs (90 words max. in total):
+1) how the week went (completion, how the key sessions felt, load); 2) what it means (fitness, fatigue, risk);
+3) a concrete focus for next week. Don't make up data that isn't in the JSON. No lists or headings."""
 
 
 def _monday(d: dt.date) -> dt.date:
@@ -1680,15 +1685,16 @@ def weekly_facts(s: Session, week_start: dt.date) -> dict:
 def _fallback_comment(f: dict) -> str:
     parts = []
     if f["cumplimiento_pct"] is not None:
-        parts.append(f"Completaste {f['hechas']} de {f['sesiones_plan']} sesiones ({f['cumplimiento_pct']} %) y corriste {f['km']} km de {f['km_plan']} previstos.")
+        parts.append(_("You completed {done} of {total} sessions ({pct}%) and ran {km} of {km_plan} planned km.",
+                       done=f["hechas"], total=f["sesiones_plan"], pct=f["cumplimiento_pct"], km=f["km"], km_plan=f["km_plan"]))
     else:
-        parts.append(f"Corriste {f['km']} km en {f['carreras']} salidas.")
+        parts.append(_("You ran {km} km in {n} runs.", km=f["km"], n=f["carreras"]))
     c = f["carga"]
     if c.get("acwr"):
-        parts.append("La carga sube rápido (ACWR > 1,3): prioriza dormir y no añadas extras." if c["acwr"] > 1.3
-                     else "Carga estable." if c["acwr"] >= 0.8 else "Semana suave: buen momento para asimilar.")
+        parts.append(_("Load is rising fast (ACWR > 1.3): prioritise sleep and don't add extras.") if c["acwr"] > 1.3
+                     else _("Stable load.") if c["acwr"] >= 0.8 else _("Easy week: a good time to absorb the training."))
     if f["proxima_semana"]["clave"]:
-        parts.append("Próxima semana, lo importante: " + ", ".join(f["proxima_semana"]["clave"]) + ".")
+        parts.append(_("Next week, what matters: ") + ", ".join(f["proxima_semana"]["clave"]) + ".")
     return " ".join(parts)
 
 
@@ -1698,14 +1704,14 @@ def weekly_review(s: Session, week_start: str | None = None, regenerate: bool = 
     ws = _monday(ws)
     store = meta_get(s, "weekly_reviews")
     key = ws.isoformat()
-    if key in store and not regenerate:
+    if key in store and not regenerate and store[key].get("lang", "es") == i18n.lang():  # pre-i18n reviews were Spanish
         return store[key]
     facts = weekly_facts(s, ws)
     text = None
     if ai:
         from .ai import coach
-        text = None if not ai_allowed(s, "weekly") else coach.complete(REVIEW_SYSTEM, json.dumps(facts, ensure_ascii=False, default=str))
-    review = {"week_start": key, "facts": facts, "comment": text or _fallback_comment(facts), "ai": bool(text),
+        text = None if not ai_allowed(s, "weekly") else coach.complete(REVIEW_SYSTEM.format(language=language_name()), json.dumps(facts, ensure_ascii=False, default=str))
+    review = {"week_start": key, "facts": facts, "comment": text or _fallback_comment(facts), "ai": bool(text), "lang": i18n.lang(),
               "created_at": dt.datetime.now().isoformat(timespec="seconds")}
     store[key] = review
     for old in sorted(store)[:-12]:  # keep ~3 months

@@ -18,119 +18,121 @@ from sqlmodel import Session, select
 
 from .. import services as S
 from ..db import ChatMessage
+from ..i18n import _, language_name
 from ..training.vdot import RACE_DISTANCES_M, parse_time, race_predictions, training_paces, vdot_from_race
 
 MODEL = os.getenv("OPENRUN_MODEL", "claude-opus-5-5")
 EFFORT = os.getenv("OPENRUN_EFFORT", "medium")
 MAX_TOOL_ROUNDS = 12
 
-SYSTEM = """Eres el entrenador de running de OpenRun. Hablas en español, directo y cercano.
+SYSTEM = """You are OpenRun's running coach. Direct and friendly.
 
-Principios (obligatorios, basados en evidencia):
-- Distribución de intensidad ~80/20 (Seiler): como máximo 2 sesiones de calidad por semana + tirada larga suave.
-- Ritmos SIEMPRE desde el VDOT del atleta (Daniels). Usa los nombres de zona: recovery, easy, long, marathon, half,
-  threshold, ten_k, five_k, interval, repetition. Nunca escribas ritmos inventados: el servidor los calcula.
-- Límites por sesión (Daniels): umbral <= 10% del volumen semanal; intervalos I (3-5 min) <= min(10 km, 8%);
-  repeticiones R <= min(8 km, 5%). Calentamiento >= 10-15' antes de calidad.
-- Progresión de volumen <= ~10%/semana con semana de descarga cada 3-4; ACWR por debajo de ~1.3.
-- Readiness: si la HRV (media 7 días) está por debajo de la base ±0.5 DE, o FC reposo +5 ppm, o mal sueño,
-  reduce o cambia la calidad por suave (entrenamiento guiado por HRV, Javaloyes 2019).
-- Taper: -40-60% volumen en 1-3 semanas manteniendo intensidad (Bosquet 2007).
-- Fuerza 2x/semana (pesado + pliometría) mejora la economía (Blagrove 2018).
-- Carreras durante la preparación: A = objetivo (plan periodizado hacia ella), B = preparatoria (mini-taper 2-3 días y
-  ~1 día suave por cada 3 km de carrera), C = entreno (sin taper, cuenta como sesión de calidad). Máximo una B cada
-  3-4 semanas y nunca en las 3 semanas previas a una A de medio/maratón.
-- Predicciones: usa get_race_predictions; explica que son estimaciones y que el consenso combina varios modelos.
-- Si hay dolor, lesión o síntomas médicos, recomienda parar y consultar a un profesional sanitario.
+Principles (mandatory, evidence-based):
+- ~80/20 intensity distribution (Seiler): at most 2 quality sessions per week + an easy long run.
+- Paces ALWAYS from the athlete's VDOT (Daniels). Use the zone names: recovery, easy, long, marathon, half,
+  threshold, ten_k, five_k, interval, repetition. Never write made-up paces: the server computes them.
+- Per-session limits (Daniels): threshold <= 10% of weekly volume; I intervals (3-5 min) <= min(10 km, 8%);
+  R repetitions <= min(8 km, 5%). Warm-up >= 10-15' before quality.
+- Volume progression <= ~10%/week with a recovery week every 3-4; ACWR below ~1.3.
+- Readiness: if HRV (7-day average) is below baseline ±0.5 SD, or resting HR +5 bpm, or poor sleep,
+  reduce the quality or swap it for easy running (HRV-guided training, Javaloyes 2019).
+- Taper: -40-60% volume over 1-3 weeks keeping intensity (Bosquet 2007).
+- Strength 2x/week (heavy + plyometrics) improves economy (Blagrove 2018).
+- Races during the build-up: A = goal (plan periodised towards it), B = tune-up (2-3 day mini-taper and
+  ~1 easy day per 3 km raced), C = training (no taper, counts as a quality session). At most one B every
+  3-4 weeks and never in the 3 weeks before a half/marathon A race.
+- Predictions: use get_race_predictions; explain they are estimates and the consensus combines several models.
+- With pain, injury or medical symptoms, recommend stopping and seeing a health professional.
 
-Forma de trabajar:
-- Antes de recomendar, consulta los datos con las herramientas (perfil, plan, actividades recientes, readiness, carga).
-- Cuando el atleta pida un entreno, créalo con create_workout (estructura + zonas) y explica brevemente el porqué
-  (adaptación fisiológica buscada y evidencia). Ofrece enviarlo a Garmin con push_to_garmin.
-- Para cambiar un entreno existente usa create_workout con replace_id.
-- Sé concreto: números, fechas, ritmos (lee los ritmos de las herramientas). Respuestas breves.
-- Solo los entrenos de carrera se pueden enviar a Garmin (no la fuerza). No prometas acciones que tus herramientas no hacen.
-- NUNCA uses herramientas que cambian datos (generate_plan, create_workout, move_workout, delete_workout, add_extra_run,
-  not_feeling_100, adapt_today_to_readiness, push_to_garmin, add_race, delete_race, update_athlete_profile, calculate_vdot con save)
-  si el atleta no lo ha pedido explícitamente en su último mensaje. Si crees que conviene, propónlo y pregunta primero.
-- Eficiencia: el RESUMEN ACTUAL ya trae plan, próximos entrenos, readiness, carga, actividades, récords, predicciones y
-  carreras. No llames herramientas para leer eso. Si necesitas varias herramientas, pídelas todas a la vez en una sola respuesta.
-- Responde siempre en español, sin palabras de otros idiomas.
-Fecha de hoy: {today}."""
+How to work:
+- Before recommending, check the data with the tools (profile, plan, recent activities, readiness, load).
+- When the athlete asks for a workout, create it with create_workout (structure + zones) and briefly explain why
+  (the physiological adaptation sought and the evidence). Offer to send it to Garmin with push_to_garmin.
+- To change an existing workout use create_workout with replace_id.
+- Be concrete: numbers, dates, paces (read paces from the tools). Keep answers short.
+- Only running workouts can be sent to Garmin (not strength). Don't promise actions your tools can't do.
+- NEVER use tools that change data (generate_plan, create_workout, move_workout, delete_workout, add_extra_run,
+  not_feeling_100, adapt_today_to_readiness, push_to_garmin, add_race, delete_race, update_athlete_profile, calculate_vdot with save)
+  unless the athlete explicitly asked for it in their last message. If you think it's a good idea, propose it and ask first.
+- Efficiency: the CURRENT SUMMARY already has the plan, upcoming workouts, readiness, load, activities, records, predictions and
+  races (its keys are in Spanish). Don't call tools to read that. If you need several tools, request them all at once in one answer.
+- Always answer in {language}, without words from other languages. Workout titles and notes come from the app in
+  the athlete's language.
+Today's date: {today}."""
 
-SNAPSHOT_INTRO = ("\n\nRESUMEN ACTUAL DEL ATLETA (datos reales de OpenRun, ya leídos para ti). Úsalo directamente; "
-                  "llama a herramientas solo si necesitas más detalle (pasos de un entreno, historial más largo) o para hacer cambios:\n")
+SNAPSHOT_INTRO = ("\n\nCURRENT ATHLETE SUMMARY (real OpenRun data, already read for you). Use it directly; "
+                  "only call tools if you need more detail (a workout's steps, a longer history) or to make changes:\n")
 
 STEP_SCHEMA = {
     "type": "object",
     "properties": {
         "kind": {"type": "string", "enum": ["warmup", "run", "recovery", "rest", "cooldown", "repeat"]},
-        "duration_type": {"type": "string", "enum": ["distance", "time", "open"], "description": "distance en metros, time en segundos"},
+        "duration_type": {"type": "string", "enum": ["distance", "time", "open"], "description": "distance in metres, time in seconds"},
         "duration_value": {"type": "number"},
         "zone": {"type": "string", "enum": ["recovery", "easy", "long", "marathon", "half", "threshold", "ten_k", "five_k", "interval", "repetition"]},
-        "repeat": {"type": "integer", "description": "solo para kind=repeat"},
-        "steps": {"type": "array", "items": {"type": "object"}, "description": "solo para kind=repeat: pasos hijos con el mismo formato"},
+        "repeat": {"type": "integer", "description": "only for kind=repeat"},
+        "steps": {"type": "array", "items": {"type": "object"}, "description": "only for kind=repeat: child steps in the same format"},
         "note": {"type": "string"},
     },
     "required": ["kind"],
 }
 
 TOOLS: list[dict[str, Any]] = [
-    {"name": "get_athlete_profile", "description": "Perfil del atleta: VDOT, ritmos por zona, predicciones, zonas de FC.",
+    {"name": "get_athlete_profile", "description": "Athlete profile: VDOT, paces per zone, predictions, HR zones.",
      "input_schema": {"type": "object", "properties": {}}},
-    {"name": "update_athlete_profile", "description": "Actualiza datos del atleta (edad, sexo, FC máx, FC reposo, LTHR, km/semana).",
+    {"name": "update_athlete_profile", "description": "Updates athlete data (age, sex, max HR, resting HR, LTHR, km/week).",
      "input_schema": {"type": "object", "properties": {"age": {"type": "integer"}, "sex": {"type": "string", "enum": ["male", "female"]},
                                                          "max_hr": {"type": "integer"}, "rest_hr": {"type": "integer"}, "lthr": {"type": "integer"},
                                                          "weekly_km": {"type": "number"}}}},
-    {"name": "get_plan_overview", "description": "Plan activo: objetivo, fases, volumen semanal, % baja intensidad, warnings (sin detalle de cada entreno).",
+    {"name": "get_plan_overview", "description": "Active plan: goal, phases, weekly volume, % low intensity, warnings (no per-workout detail).",
      "input_schema": {"type": "object", "properties": {}}},
-    {"name": "get_workouts", "description": "Entrenos planificados entre dos fechas (YYYY-MM-DD) con id, estado y pasos.",
+    {"name": "get_workouts", "description": "Planned workouts between two dates (YYYY-MM-DD) with id, status and steps.",
      "input_schema": {"type": "object", "properties": {"start": {"type": "string"}, "end": {"type": "string"}}, "required": ["start", "end"]}},
-    {"name": "get_recent_activities", "description": "Actividades reales recientes (Garmin): distancia, ritmo, FC, TRIMP, training effect.",
+    {"name": "get_recent_activities", "description": "Recent real activities: distance, pace, HR, TRIMP, training effect.",
      "input_schema": {"type": "object", "properties": {"days": {"type": "integer", "default": 21}}}},
-    {"name": "get_readiness", "description": "Readiness de hoy: nota 0-100 y sus partes (HRV, sueño, FC reposo, carga, check-in de sensaciones), la propuesta para el entreno de hoy y los últimos 14 días de bienestar.",
+    {"name": "get_readiness", "description": "Today's readiness: 0-100 score and its parts (HRV, sleep, resting HR, load, feel check-in), the proposal for today's workout and the last 14 days of wellness.",
      "input_schema": {"type": "object", "properties": {}}},
-    {"name": "get_training_load", "description": "Carga: CTL (fitness 42d), ATL (fatiga 7d), TSB (forma) y ACWR, últimos 28 días.",
+    {"name": "get_training_load", "description": "Load: CTL (fitness 42d), ATL (fatigue 7d), TSB (form) and ACWR, last 28 days.",
      "input_schema": {"type": "object", "properties": {}}},
-    {"name": "calculate_vdot", "description": "VDOT, ritmos de entrenamiento y predicciones a partir de una marca.",
+    {"name": "calculate_vdot", "description": "VDOT, training paces and predictions from a race result.",
      "input_schema": {"type": "object", "properties": {"distance": {"type": "string", "enum": list(RACE_DISTANCES_M)},
-                                                         "time": {"type": "string", "description": "h:mm:ss o mm:ss"},
-                                                         "save": {"type": "boolean", "description": "true para actualizar el VDOT del atleta y re-calcular ritmos de entrenos futuros"}},
+                                                         "time": {"type": "string", "description": "h:mm:ss or mm:ss"},
+                                                         "save": {"type": "boolean", "description": "true to update the athlete's VDOT and recompute the paces of future workouts"}},
                       "required": ["distance", "time"]}},
-    {"name": "create_workout", "description": "Crea (o reemplaza con replace_id) un entreno estructurado. Los ritmos se calculan del VDOT según 'zone'.",
+    {"name": "create_workout", "description": "Creates (or replaces with replace_id) a structured workout. Paces are computed from the VDOT by 'zone'.",
      "input_schema": {"type": "object", "properties": {
          "date": {"type": "string"}, "title": {"type": "string"},
          "type": {"type": "string", "enum": ["easy", "recovery", "long", "strides", "hills", "progression", "tempo", "threshold", "intervals", "reps", "race_pace", "fartlek", "test"]},
-         "description": {"type": "string", "description": "Objetivo fisiológico y justificación"},
+         "description": {"type": "string", "description": "Physiological goal and rationale"},
          "intensity": {"type": "string", "enum": ["low", "moderate", "high"]},
          "steps": {"type": "array", "items": STEP_SCHEMA},
          "replace_id": {"type": "integer"}},
          "required": ["date", "title", "type", "steps", "description", "intensity"]}},
-    {"name": "delete_workout", "description": "Elimina un entreno planificado por id.",
+    {"name": "delete_workout", "description": "Deletes a planned workout by id.",
      "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]}},
-    {"name": "move_workout", "description": "Mueve un entreno a otra fecha. Con swap=true, lo que hubiera ese día pasa a la fecha original (intercambio). Devuelve avisos si quedan dos días duros seguidos.",
+    {"name": "move_workout", "description": "Moves a workout to another date. With swap=true, whatever was on that day moves to the original date (swap). Returns warnings if two hard days end up in a row.",
      "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}, "date": {"type": "string"}, "swap": {"type": "boolean"}}, "required": ["id", "date"]}},
-    {"name": "add_extra_run", "description": "Añade un rodaje suave opcional a una semana (fuera del plan base). Devuelve avisos si sube el volumen > 10 % o precede a una sesión clave.",
+    {"name": "add_extra_run", "description": "Adds an optional easy run to a week (outside the base plan). Returns warnings if volume rises > 10% or it comes before a key session.",
      "input_schema": {"type": "object", "properties": {"date": {"type": "string"}, "km": {"type": "number"}}, "required": ["date"]}},
-    {"name": "get_personal_records", "description": "Récords personales (1K, milla, 5K, 10K, media, maratón) históricos, último año, 6 meses y 30 días, desde los mejores tramos de Garmin.",
+    {"name": "get_personal_records", "description": "Personal records (1K, mile, 5K, 10K, half, marathon): all time, last year, 6 months and 30 days, from best efforts.",
      "input_schema": {"type": "object", "properties": {}}},
-    {"name": "get_race_predictions", "description": "Predicciones de tiempo en carrera (VDOT de mejores esfuerzos 90 d, Riegel, Garmin, FC) y consenso; tendencia mensual de VDOT; sugiere recalibrar si difiere del VDOT del plan.",
+    {"name": "get_race_predictions", "description": "Race time predictions (VDOT from 90-day best efforts, Riegel, Garmin, HR) and consensus; monthly VDOT trend; suggests recalibrating if it differs from the plan's VDOT.",
      "input_schema": {"type": "object", "properties": {}}},
-    {"name": "list_races", "description": "Carreras apuntadas por el atleta (prioridad A objetivo / B preparatoria / C entreno).",
+    {"name": "list_races", "description": "Races the athlete has entered (priority A goal / B tune-up / C training).",
      "input_schema": {"type": "object", "properties": {}}},
-    {"name": "get_race_strategy", "description": "Estrategia de una carrera apuntada: ritmo objetivo km a km ajustado al desnivel del recorrido (perfil GPX o aproximado), predicción en llano vs recorrido, previsión de calor y plan de geles/hidratos.",
+    {"name": "get_race_strategy", "description": "Strategy for an entered race: km-by-km target pace adjusted for the course elevation (GPX or approximate profile), flat vs course prediction, heat forecast and gel/carb plan.",
      "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}, "mode": {"type": "string", "enum": ["conservative", "realistic", "ambitious"]}}, "required": ["id"]}},
-    {"name": "search_race_calendar", "description": "Busca próximas carreras en el calendario de Orycron Sport (Salamanca y alrededores). Con external_id devuelve la ficha (lugar, hora, distancias).",
+    {"name": "search_race_calendar", "description": "Searches upcoming races in the Orycron Sport calendar (Salamanca area, Spain). With external_id returns the details (place, time, distances).",
      "input_schema": {"type": "object", "properties": {"query": {"type": "string"}, "external_id": {"type": "string"}}}},
-    {"name": "add_race", "description": "Apunta una carrera y la integra en el plan: B = mini-taper 3 días + recuperación; C = como entreno de calidad; A = objetivo (sugiere regenerar plan). Pide confirmación al atleta antes.",
+    {"name": "add_race", "description": "Enters a race and fits it into the plan: B = 3-day mini-taper + recovery; C = as a quality session; A = goal (suggests regenerating the plan). Ask the athlete to confirm first.",
      "input_schema": {"type": "object", "properties": {
          "name": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
          "distance_m": {"type": "number"}, "priority": {"type": "string", "enum": ["A", "B", "C"]},
          "location": {"type": "string"}, "url": {"type": "string"}, "external_id": {"type": "string"}},
          "required": ["name", "date", "distance_m", "priority"]}},
-    {"name": "delete_race", "description": "Quita una carrera y deshace sus ajustes en el plan.",
+    {"name": "delete_race", "description": "Removes a race and undoes its plan adjustments.",
      "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]}},
-    {"name": "generate_plan", "description": "Genera un plan nuevo (reemplaza el activo). Pide confirmación al atleta antes de usarla.",
+    {"name": "generate_plan", "description": "Generates a new plan (replaces the active one). Ask the athlete to confirm before using it.",
      "input_schema": {"type": "object", "properties": {
          "goal": {"type": "string", "enum": ["5k", "10k", "half", "marathon", "base"]},
          "start_date": {"type": "string"}, "race_date": {"type": "string"}, "weeks": {"type": "integer"},
@@ -140,19 +142,19 @@ TOOLS: list[dict[str, Any]] = [
          "recent_race_distance": {"type": "string", "enum": list(RACE_DISTANCES_M)}, "recent_race_time": {"type": "string"},
          "goal_time": {"type": "string"}, "include_strength": {"type": "boolean"}},
          "required": ["goal", "days_per_week", "current_weekly_km", "level"]}},
-    {"name": "adapt_today_to_readiness", "description": "Ajusta el entreno de hoy según la readiness (HRV/FC/sueño).",
+    {"name": "adapt_today_to_readiness", "description": "Adjusts today's workout to readiness (HRV/HR/sleep).",
      "input_schema": {"type": "object", "properties": {}}},
-    {"name": "not_feeling_100", "description": "El atleta no está al 100%: reduce (o descanso activo) los próximos N días.",
+    {"name": "not_feeling_100", "description": "The athlete isn't 100%: reduces (or active rest) the next N days.",
      "input_schema": {"type": "object", "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 14},
                                                          "mode": {"type": "string", "enum": ["reduce", "rest"]}}, "required": ["days"]}},
-    {"name": "get_missed_sessions", "description": "Entrenos de los últimos días no realizados y, para las sesiones clave, el hueco propuesto para recuperarlas esta semana.",
+    {"name": "get_missed_sessions", "description": "Workouts from the last few days that weren't done and, for key sessions, the proposed slot to make them up this week.",
      "input_schema": {"type": "object", "properties": {}}},
-    {"name": "reschedule_missed", "description": "Recupera una sesión clave perdida en su hueco propuesto (accept=true) o la da por no realizada (accept=false).",
+    {"name": "reschedule_missed", "description": "Reschedules a missed key session into its proposed slot (accept=true) or marks it as skipped (accept=false).",
      "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}, "accept": {"type": "boolean"}}, "required": ["id", "accept"]}},
-    {"name": "report_break", "description": "El atleta ha estado parado N días (enfermedad, lesión, viaje): cierra los entrenos perdidos, ajusta ritmos si hace falta y suaviza la vuelta. Pide confirmación antes.",
+    {"name": "report_break", "description": "The athlete has been off for N days (illness, injury, travel): closes the missed workouts, adjusts paces if needed and eases the return. Ask to confirm first.",
      "input_schema": {"type": "object", "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 120},
                                                          "reason": {"type": "string", "enum": ["illness", "injury", "travel", "other"]}}, "required": ["days"]}},
-    {"name": "push_to_garmin", "description": "Envía entrenos (ids) al calendario de Garmin Connect para sincronizar con el reloj.",
+    {"name": "push_to_garmin", "description": "Sends workouts (ids) to the Garmin Connect calendar to sync with the watch.",
      "input_schema": {"type": "object", "properties": {"ids": {"type": "array", "items": {"type": "integer"}}}, "required": ["ids"]}},
 ]
 
@@ -295,7 +297,7 @@ def _openai_client():
     p = provider()
     if p not in OPENAI_COMPAT:
         raise ValueError(f"OPENRUN_PROVIDER desconocido: {p}")
-    base, key_env, _ = OPENAI_COMPAT[p]
+    base, key_env, _model = OPENAI_COMPAT[p]
     key = os.getenv("OPENRUN_API_KEY") or (os.getenv(key_env) if key_env else None) or "ollama"
     # Free tiers rate-limit hard (NVIDIA ~40 req/min): let the SDK back off and retry 429s
     return openai.OpenAI(base_url=os.getenv("OPENRUN_BASE_URL", base), api_key=key, max_retries=4, timeout=120)
@@ -374,7 +376,7 @@ def context_snapshot(s: Session) -> str:
 
 
 def system_prompt(s: Session) -> str:
-    return SYSTEM.format(today=dt.date.today().strftime("%A %d/%m/%Y")) + SNAPSHOT_INTRO + context_snapshot(s)
+    return SYSTEM.format(today=dt.date.today().strftime("%A %d/%m/%Y"), language=language_name()) + SNAPSHOT_INTRO + context_snapshot(s)
 
 
 # Small free models sometimes leak tokens from other scripts (Hangul, CJK, Cyrillic...) into Spanish text.
@@ -499,7 +501,7 @@ def chat_events(s: Session, user_text: str):
     tool_log: list[dict] = []
     reply: list[str] = []
     stream = provider() in STREAMING
-    for _ in range(MAX_TOOL_ROUNDS):
+    for _round in range(MAX_TOOL_ROUNDS):
         history = [m.content[0] for m in s.exec(select(ChatMessage).where(ChatMessage.role == "oa").order_by(ChatMessage.id)).all()]
         msg = None
         while models:
@@ -510,32 +512,32 @@ def chat_events(s: Session, user_text: str):
                         round_text.append(val)
                         yield {"type": "text", "delta": val}
                     elif kind == "thinking":
-                        yield {"type": "status", "text": "Pensando"}
+                        yield {"type": "status", "text": _("Thinking")}
                     else:
                         msg = val
                 break
             except openai.AuthenticationError:
-                yield {"type": "done", "reply": f"Falta la API key para {provider()} o no es válida.", "tools": tool_log, "error": True}
+                yield {"type": "done", "reply": _("The API key for {provider} is missing or invalid.", provider=provider()), "tools": tool_log, "error": True}
                 return
             except openai.APIConnectionError as e:
                 if isinstance(e, openai.APITimeoutError) and len(models) > 1:
                     pass
                 elif provider() == "ollama":
-                    yield {"type": "done", "reply": "No hay conexión con Ollama (¿está arrancado?).", "tools": tool_log, "error": True}
+                    yield {"type": "done", "reply": _("Cannot connect to Ollama (is it running?)."), "tools": tool_log, "error": True}
                     return
-                err = "no responde"
+                err = _("not responding")
             except (openai.RateLimitError, openai.NotFoundError, openai.InternalServerError) as e:
                 err = f"error {getattr(e, 'status_code', '')}".strip()
             except openai.APIStatusError as e:
-                yield {"type": "done", "reply": f"Error del proveedor ({e.status_code}): {e.message}", "tools": tool_log, "error": True}
+                yield {"type": "done", "reply": _("Provider error ({code}): {msg}", code=e.status_code, msg=e.message), "tools": tool_log, "error": True}
                 return
             failed = models.pop(0)
             if round_text:
                 yield {"type": "text", "delta": "\n\n"}
             if not models:
-                yield {"type": "done", "reply": "El modelo de IA no responde ahora mismo (plan gratuito saturado). Prueba en un rato.", "tools": tool_log, "error": True}
+                yield {"type": "done", "reply": _("The AI model is not responding right now (free tier overloaded). Try again later."), "tools": tool_log, "error": True}
                 return
-            yield {"type": "status", "text": f"{failed} {err}; probando con {models[0]}"}
+            yield {"type": "status", "text": _("{failed} {err}; trying {model}", failed=failed, err=err, model=models[0])}
         calls = msg["tool_calls"]
         if msg["content"]:
             reply.append(msg["content"])
@@ -556,7 +558,7 @@ def chat_events(s: Session, user_text: str):
             _save(s, "oa", [{"role": "tool", "tool_call_id": c["id"], "content": content}])
         if calls:
             system = system_prompt(s)  # tools may have changed the plan: refresh the summary
-    yield {"type": "done", "reply": "He alcanzado el límite de pasos para esta petición.", "tools": tool_log}
+    yield {"type": "done", "reply": _("I reached the step limit for this request."), "tools": tool_log}
 
 
 def _chat_openai_compat(s: Session, user_text: str) -> dict:
@@ -573,7 +575,7 @@ def _chat_anthropic(s: Session, user_text: str) -> dict:
     client = _client()
     system = system_prompt(s)
     tool_log: list[dict] = []
-    for _ in range(MAX_TOOL_ROUNDS):
+    for _round in range(MAX_TOOL_ROUNDS):
         try:
             resp = client.beta.messages.create(
                 model=MODEL,
@@ -588,19 +590,19 @@ def _chat_anthropic(s: Session, user_text: str) -> dict:
                 fallbacks="default",
             )
         except anthropic.AuthenticationError:
-            return {"reply": "Falta la API key de Anthropic (ANTHROPIC_API_KEY) o no es válida.", "tools": tool_log, "error": True}
+            return {"reply": _("The Anthropic API key (ANTHROPIC_API_KEY) is missing or invalid."), "tools": tool_log, "error": True}
         except anthropic.RateLimitError:
-            return {"reply": "Límite de uso de la API alcanzado; inténtalo en un momento.", "tools": tool_log, "error": True}
+            return {"reply": _("API rate limit reached; try again in a moment."), "tools": tool_log, "error": True}
         except anthropic.APIStatusError as e:
-            return {"reply": f"Error de la API ({e.status_code}): {e.message}", "tools": tool_log, "error": True}
+            return {"reply": _("API error ({code}): {msg}", code=e.status_code, msg=e.message), "tools": tool_log, "error": True}
         except anthropic.APIConnectionError:
-            return {"reply": "No hay conexión con la API de Anthropic.", "tools": tool_log, "error": True}
+            return {"reply": _("Cannot connect to the Anthropic API."), "tools": tool_log, "error": True}
 
         content = [b.model_dump(exclude_none=True) for b in resp.content]
         _save(s, "assistant", content)
 
         if resp.stop_reason == "refusal":
-            return {"reply": "No puedo ayudar con esa petición.", "tools": tool_log}
+            return {"reply": _("I can't help with that request."), "tools": tool_log}
         if resp.stop_reason != "tool_use":
             text = "\n".join(b.text for b in resp.content if b.type == "text")
             return {"reply": text, "tools": tool_log}
@@ -617,7 +619,7 @@ def _chat_anthropic(s: Session, user_text: str) -> dict:
                 results.append({"type": "tool_result", "tool_use_id": b.id, "content": f"Error: {e}", "is_error": True})
                 tool_log.append({"tool": b.name, "ok": False, "error": str(e)})
         _save(s, "user", results)
-    return {"reply": "He alcanzado el límite de pasos para esta petición.", "tools": tool_log}
+    return {"reply": _("I reached the step limit for this request."), "tools": tool_log}
 
 
 def visible_history(s: Session) -> list[dict]:

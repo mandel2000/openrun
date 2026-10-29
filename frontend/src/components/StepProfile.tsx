@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { fmtPace, ZONE_LABEL, zoneLevel, zoneVar, type Step } from '../api'
+import { t } from '../i18n'
 
 export const KIND: Record<string, string> = {
-  warmup: 'Calentamiento', run: 'Trabajo', recovery: 'Recuperación', rest: 'Descanso', cooldown: 'Vuelta a la calma',
+  warmup: t('Warm-up'), run: t('Work'), recovery: t('Recovery'), rest: t('Rest'), cooldown: t('Cool-down'),
 }
 const HEIGHT = [0.2, 0.3, 0.45, 0.6, 0.75, 0.9, 1]
 
@@ -51,7 +52,7 @@ export default function StepProfile({ steps, height = 72, legend = true, onHover
   const W = 1000, gap = segs.length > 40 ? 0.6 : 1.5
   let x = 0
   const totalMin = Math.round(total / 60)
-  const label = `Perfil del entreno: ${totalMin} minutos. ` + zoneMinutes(segs).map(([l, m]) => `Z${l} ${Math.round(m)} min`).join(', ')
+  const label = t('Workout profile: {n} minutes. ', { n: totalMin }) + zoneMinutes(segs).map(([l, m]) => `Z${l} ${Math.round(m)} min`).join(', ')
   return (
     <div style={{ position: 'relative' }}>
       <svg className="profile" viewBox={`0 0 ${W} 100`} preserveAspectRatio="none" style={{ height }} role="img" aria-label={label}
@@ -74,7 +75,7 @@ export default function StepProfile({ steps, height = 72, legend = true, onHover
       {tip && <div className="tooltip" style={{ left: `${tip.x}%`, top: 0 }}>{tip.text}</div>}
       {legend && (
         <div className="profile-legend">
-          <span><b style={{ color: 'var(--text)' }}>{totalMin >= 60 ? `${Math.floor(totalMin / 60)} h ${totalMin % 60}′` : `${totalMin}′`}</b> total</span>
+          <span><b style={{ color: 'var(--text)' }}>{totalMin >= 60 ? `${Math.floor(totalMin / 60)} h ${totalMin % 60}′` : `${totalMin}′`}</b> {t('total')}</span>
           {zoneMinutes(segs).map(([l, m]) => (
             <span key={l}><i style={{ background: zoneVar(l) }} />Z{l} {Math.round(m)}′</span>
           ))}

@@ -3,11 +3,12 @@ import { api } from '../api'
 import { PlanForm } from '../pages/PlanPage'
 import { GarminCard, HistoryImportCard } from '../pages/SettingsPage'
 import { Banner, Icon } from '../ui'
+import { t } from '../i18n'
 
 // First run for a new user: about you → where your runs come from → goal and plan → done.
 export type OnbState = { done: boolean; needed: boolean; activities: number; garmin: boolean; profile: boolean; weekly_km: number | null; longest_km: number | null; vdot: number | null }
 
-const STEPS = ['Sobre ti', 'Tus datos', 'Tu objetivo', 'Listo']
+const STEPS = [t('About you'), t('Your data'), t('Your goal'), t('Ready')]
 
 function AboutYou({ name, onNext }: { name: string; onNext: () => void }) {
   const [a, setA] = useState({ name, sex: 'male', age: '', weight_kg: '', max_hr: '', rest_hr: '' })
@@ -29,16 +30,16 @@ function AboutYou({ name, onNext }: { name: string; onNext: () => void }) {
         onNext()
       } catch (e) { setErr((e as Error).message) }
     }}>
-      <p className="text-2" style={{ margin: 0 }}>Con esto calculo tus zonas de pulso y la carga de cada entreno. Si no sabes tus pulsaciones, déjalas vacías: se estiman de tus actividades.</p>
+      <p className="text-2" style={{ margin: 0 }}>{t('This sets your heart-rate zones and the load of each workout. If you don\'t know your heart rates, leave them empty: they are estimated from your activities.')}</p>
       <div className="form-grid">
-        <label className="field">Nombre<input value={a.name} onChange={(e) => set('name', e.target.value)} /></label>
-        <label className="field">Sexo<select value={a.sex} onChange={(e) => set('sex', e.target.value)}><option value="male">Hombre</option><option value="female">Mujer</option></select></label>
-        <label className="field">Edad<input type="number" inputMode="numeric" min={10} max={100} required value={a.age} onChange={(e) => set('age', e.target.value)} /></label>
-        <label className="field">Peso (kg)<input type="number" inputMode="decimal" min={30} max={200} value={a.weight_kg} onChange={(e) => set('weight_kg', e.target.value)} /></label>
-        <label className="field">FC máxima (opcional)<input type="number" inputMode="numeric" min={120} max={230} value={a.max_hr} onChange={(e) => set('max_hr', e.target.value)} /></label>
-        <label className="field">FC en reposo (opcional)<input type="number" inputMode="numeric" min={30} max={100} value={a.rest_hr} onChange={(e) => set('rest_hr', e.target.value)} /></label>
+        <label className="field">{t('Name')}<input value={a.name} onChange={(e) => set('name', e.target.value)} /></label>
+        <label className="field">{t('Sex')}<select value={a.sex} onChange={(e) => set('sex', e.target.value)}><option value="male">{t('Male')}</option><option value="female">{t('Female')}</option></select></label>
+        <label className="field">{t('Age')}<input type="number" inputMode="numeric" min={10} max={100} required value={a.age} onChange={(e) => set('age', e.target.value)} /></label>
+        <label className="field">{t('Weight (kg)')}<input type="number" inputMode="decimal" min={30} max={200} value={a.weight_kg} onChange={(e) => set('weight_kg', e.target.value)} /></label>
+        <label className="field">{t('Max HR (optional)')}<input type="number" inputMode="numeric" min={120} max={230} value={a.max_hr} onChange={(e) => set('max_hr', e.target.value)} /></label>
+        <label className="field">{t('Resting HR (optional)')}<input type="number" inputMode="numeric" min={30} max={100} value={a.rest_hr} onChange={(e) => set('rest_hr', e.target.value)} /></label>
       </div>
-      <div className="row"><button className="btn btn-primary">Continuar<Icon name="chevronRight" size={16} /></button>{err && <span className="err small">{err}</span>}</div>
+      <div className="row"><button className="btn btn-primary">{t('Continue')}<Icon name="chevronRight" size={16} /></button>{err && <span className="err small">{err}</span>}</div>
     </form>
   )
 }
@@ -46,24 +47,24 @@ function AboutYou({ name, onNext }: { name: string; onNext: () => void }) {
 function YourData({ st, refresh, onNext }: { st: OnbState; refresh: () => Promise<void>; onNext: () => void }) {
   const [pick, setPick] = useState<'garmin' | 'files' | null>(st.garmin ? 'garmin' : null)
   const opts: [typeof pick, string, string][] = [
-    ['garmin', 'Tengo reloj Garmin', 'Sincroniza actividades, sueño y HRV, y envía cada entreno a tu reloj.'],
-    ['files', 'Otro reloj o Strava', 'Sube tu exportación de Strava (.zip) o archivos FIT/GPX/TCX. Después puedes subir cada carrera.'],
+    ['garmin', t('I have a Garmin watch'), t('Syncs activities, sleep and HRV, and sends every workout to your watch.')],
+    ['files', t('Another watch or Strava'), t('Upload your Strava export (.zip) or FIT/GPX/TCX files. Afterwards you can upload each run.')],
   ]
   return (
     <div className="stack">
-      <p className="text-2" style={{ margin: 0 }}>Con tu historial el plan parte de tu nivel real y los ritmos se ajustan solos. Puedes hacerlo ahora o más tarde en Ajustes.</p>
+      <p className="text-2" style={{ margin: 0 }}>{t('With your history the plan starts from your real level and paces adjust themselves. You can do it now or later in Settings.')}</p>
       <div className="choice-grid">
-        {opts.map(([k, t, d]) => (
+        {opts.map(([k, title, d]) => (
           <button key={k} type="button" className={`choice${pick === k ? ' on' : ''}`} aria-pressed={pick === k} onClick={() => setPick(k)}>
-            <Icon name={k === 'garmin' ? 'watch' : 'upload'} /><b>{t}</b><span className="small muted">{d}</span>
+            <Icon name={k === 'garmin' ? 'watch' : 'upload'} /><b>{title}</b><span className="small muted">{d}</span>
           </button>
         ))}
       </div>
       {pick === 'garmin' && <GarminCard onChange={refresh} />}
       {pick === 'files' && <HistoryImportCard />}
-      {st.activities > 0 && <Banner tone="ok">{st.activities} actividades cargadas{st.weekly_km != null ? ` · media reciente ${st.weekly_km} km/semana` : ''}.</Banner>}
+      {st.activities > 0 && <Banner tone="ok">{t('{n} activities loaded', { n: st.activities })}{st.weekly_km != null ? ` · ${t('recent average {km} km/week', { km: st.weekly_km })}` : ''}.</Banner>}
       <div className="row">
-        <button className="btn btn-primary" onClick={() => refresh().then(onNext)}>{st.activities ? 'Continuar' : 'Continuar sin datos'}<Icon name="chevronRight" size={16} /></button>
+        <button className="btn btn-primary" onClick={() => refresh().then(onNext)}>{st.activities ? t('Continue') : t('Continue without data')}<Icon name="chevronRight" size={16} /></button>
       </div>
     </div>
   )
@@ -88,24 +89,24 @@ export default function Onboarding({ name, onFinish }: { name: string; onFinish:
     <div className="stack" style={{ maxWidth: 820 }}>
       <div className="card stack">
         <div className="row spread">
-          <h2 style={{ margin: 0 }}>{step === 0 ? `Hola${name ? `, ${name}` : ''} 👋` : STEPS[step]}</h2>
-          {step < 3 && <button className="btn btn-ghost btn-sm" onClick={finish}>Saltar por ahora</button>}
+          <h2 style={{ margin: 0 }}>{step === 0 ? `${t('Hi')}${name ? `, ${name}` : ''} 👋` : STEPS[step]}</h2>
+          {step < 3 && <button className="btn btn-ghost btn-sm" onClick={finish}>{t('Skip for now')}</button>}
         </div>
-        <ol className="onb-steps" aria-label="Pasos">
+        <ol className="onb-steps" aria-label={t('Steps')}>
           {STEPS.map((s, i) => <li key={s} className={i === step ? 'on' : i < step ? 'done' : ''} aria-current={i === step ? 'step' : undefined}>{i < step ? <Icon name="check" size={14} /> : i + 1} {s}</li>)}
         </ol>
         {step === 0 && <AboutYou name={name} onNext={() => setStep(1)} />}
         {step === 1 && <YourData st={st} refresh={refresh} onNext={() => setStep(2)} />}
         {step === 3 && (
           <div className="stack">
-            <p style={{ margin: 0 }}>Tu plan está listo. Cada mañana la app revisa cómo llegas (sueño, pulso, tus sensaciones) y ajusta el entreno si hace falta.</p>
+            <p style={{ margin: 0 }}>{t('Your plan is ready. Every morning the app checks how you are (sleep, heart rate, how you feel) and adjusts the workout if needed.')}</p>
             <ul className="small text-2" style={{ margin: 0, paddingLeft: 18 }}>
-              <li>En <b>Hoy</b> tienes el entreno del día y un check-in de dos toques.</li>
-              <li>Si faltas a una sesión clave, te propongo dónde recolocarla.</li>
-              <li>Activa los avisos en <a href="#ajustes">Ajustes › Notificaciones</a> (en iPhone, primero añade la app a la pantalla de inicio).</li>
-              <li>El <b>Coach IA</b> responde dudas y puede cambiar tu plan.</li>
+              <li>{t('Today shows the workout of the day and a two-tap check-in.')}</li>
+              <li>{t('If you miss a key session, I\'ll suggest where to reschedule it.')}</li>
+              <li>{t('Turn on alerts in')} <a href="#ajustes">{t('Settings › Notifications')}</a> {t('(on iPhone, first add the app to the home screen).')}</li>
+              <li>{t('The AI coach answers questions and can change your plan.')}</li>
             </ul>
-            <div className="row"><button className="btn btn-primary" onClick={finish}>Empezar<Icon name="chevronRight" size={16} /></button></div>
+            <div className="row"><button className="btn btn-primary" onClick={finish}>{t('Start')}<Icon name="chevronRight" size={16} /></button></div>
           </div>
         )}
       </div>

@@ -19,6 +19,7 @@ import datetime as dt
 from dataclasses import dataclass, field
 from typing import Literal
 
+from ..i18n import _
 from . import workouts as W
 from .vdot import RACE_DISTANCES_M, fmt_time, predict_race_time, race_predictions, training_paces, vdot_from_race
 
@@ -173,13 +174,13 @@ def _quality_sessions(goal: Goal, phase: str, wk_in_phase: int, n_q: int, level:
         elif goal == "10k":
             pool = [W.race_pace_intervals(paces, "ten_k", [5, 4, 6][prog], [1600, 2000, 1000][prog], 90, "10K"), cruise()]
         elif goal == "half":
-            pool = [W.race_pace_intervals(paces, "half", [3, 4, 3][prog], [3000, 3000, 4000][prog], 120, "medio maratón"), vo2()]
+            pool = [W.race_pace_intervals(paces, "half", [3, 4, 3][prog], [3000, 3000, 4000][prog], 120, _("half marathon")), vo2()]
         elif goal == "marathon":
-            pool = [cruise(), W.race_pace_intervals(paces, "marathon", 2, [5000, 6000, 7000][prog], 180, "maratón")]
+            pool = [cruise(), W.race_pace_intervals(paces, "marathon", 2, [5000, 6000, 7000][prog], 180, _("marathon"))]
         else:
             pool = [cruise(), vo2()]
     else:  # taper: keep intensity, cut volume (Bosquet 2007)
-        zone, label = {"5k": ("five_k", "5K"), "10k": ("ten_k", "10K"), "half": ("half", "medio maratón"), "marathon": ("marathon", "maratón")}[goal]
+        zone, label = {"5k": ("five_k", "5K"), "10k": ("ten_k", "10K"), "half": ("half", _("half marathon")), "marathon": ("marathon", _("marathon"))}[goal]
         pool = [W.race_pace_intervals(paces, zone, 3, 1000, 90, label), W.easy_with_strides(paces, weekly_km * 0.15)]
     return pool[:n_q]
 
@@ -209,12 +210,12 @@ def generate_plan(req: PlanRequest) -> dict:
         n_weeks = req.weeks or {"5k": 8, "10k": 10, "half": 12, "marathon": 16, "base": 8}[req.goal]
     warnings: list[str] = []
     if n_weeks < lo:
-        warnings.append(f"Plan corto ({n_weeks} sem.). Recomendado al menos {lo} semanas para {req.goal}.")
+        warnings.append(_("Short plan ({n} weeks). At least {lo} weeks are recommended for {goal}.", n=n_weeks, lo=lo, goal=req.goal))
     if n_weeks > hi and req.race_date:
         # Too far out: start the specific plan later; until then the athlete does base running.
         race_monday = req.race_date - dt.timedelta(days=req.race_date.weekday())
         req.start_date = race_monday - dt.timedelta(weeks=hi - 1)
-        warnings.append(f"Carrera lejana: el plan empieza el {req.start_date.isoformat()} ({hi} semanas). Hasta entonces, plan 'base'.")
+        warnings.append(_("Race far away: the plan starts on {date} ({n} weeks). Until then, base running.", date=req.start_date.isoformat(), n=hi))
     n_weeks = max(min(n_weeks, hi), min(lo, n_weeks), 2)
 
     vdot0 = resolve_vdot(req)
@@ -224,11 +225,11 @@ def generate_plan(req: PlanRequest) -> dict:
         attainable = vdot0 + VDOT_GAIN_PER_WEEK[req.level] * n_weeks
         if goal_vdot > attainable + 0.5:
             pred = predict_race_time(attainable, RACE_DISTANCES_M[req.goal])
-            warnings.append(f"Objetivo ambicioso: VDOT objetivo {goal_vdot:.1f} vs actual {vdot0:.1f}. "
-                            f"Una predicción realista al final del plan es ~{fmt_time(pred)}. "
-                            "Los ritmos se ajustarán según tus resultados reales.")
+            warnings.append(_("Ambitious goal: goal VDOT {goal} vs current {now}. A realistic prediction at the end of the "
+                              "plan is ~{pred}. Paces will adjust to your actual results.",
+                              goal=f"{goal_vdot:.1f}", now=f"{vdot0:.1f}", pred=fmt_time(pred)))
     if not (req.recent_race_distance or req.vdot):
-        warnings.append("Sin marca reciente: ritmos estimados. Haz un test de 5K o 30' en la semana 1-2 para calibrar.")
+        warnings.append(_("No recent race: paces are estimated. Do a 5K or 30' test in week 1-2 to calibrate."))
 
     phases = _phase_split(n_weeks, req.goal)
     vols, recov = _volumes(req, phases)

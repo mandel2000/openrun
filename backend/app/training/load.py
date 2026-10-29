@@ -20,6 +20,7 @@ import math
 import statistics
 from dataclasses import dataclass
 
+from ..i18n import _
 from .vdot import vo2_cost
 
 
@@ -101,25 +102,25 @@ def readiness(wellness: list[dict], today: dt.date | None = None, load_today: di
         out.swc_low, out.swc_high = round(math.exp(lo), 1), round(math.exp(hi), 1)
         if r7 < lo:
             status = "amber"
-            reasons.append("HRV media 7d por debajo de tu rango normal: posible fatiga acumulada.")
+            reasons.append(_("7-day HRV average below your normal range: possible accumulated fatigue."))
             if recent[-1] < mu - 1.0 * sd:
                 status = "red"
-                reasons.append("HRV de hoy muy baja (< -1 SD).")
+                reasons.append(_("Today's HRV is very low (< -1 SD)."))
         else:
             status = "green"
-            reasons.append("HRV dentro/encima de tu rango normal.")
+            reasons.append(_("HRV within/above your normal range."))
     else:
-        reasons.append("Faltan datos de HRV (mín. 14 días de base) para valorar la readiness.")
+        reasons.append(_("Not enough HRV data (min. 14 days of baseline) to assess readiness."))
 
     rhr = [(w["date"], w["rest_hr"]) for w in rows if w.get("rest_hr")]
     base_rhr = [v for d, v in rhr if d >= cutoff60]
     if len(base_rhr) >= 14 and rhr[-1][0] >= cutoff7:
         if rhr[-1][1] >= statistics.mean(base_rhr) + 5:
-            reasons.append("FC en reposo +5 ppm sobre tu media: vigila fatiga/enfermedad.")
+            reasons.append(_("Resting HR +5 bpm above your average: watch for fatigue/illness."))
             status = "amber" if status in ("green", "unknown") else status
     sleep = [w for w in rows if w.get("sleep_score") and w["date"] >= cutoff7]
     if sleep and sleep[-1]["sleep_score"] < 50:
-        reasons.append("Sueño pobre anoche.")
+        reasons.append(_("Poor sleep last night."))
         status = "amber" if status in ("green", "unknown") else status
     out.status = status
     _score(out, rows, today, load_today, base, recent)
@@ -141,29 +142,29 @@ def _score(out: Readiness, rows: list[dict], today: dt.date, load_today: dict | 
     elif last("hrv_status") in GARMIN_HRV:
         comps.append({"key": "hrv", "label": "HRV", "score": GARMIN_HRV[last("hrv_status")], "value": str(last("hrv_status")).lower()})
     if last("sleep_score") is not None:
-        comps.append({"key": "sleep", "label": "Sueño", "score": _clip(last("sleep_score")), "value": f"{last('sleep_score'):.0f}/100"})
+        comps.append({"key": "sleep", "label": _("Sleep"), "score": _clip(last("sleep_score")), "value": f"{last('sleep_score'):.0f}/100"})
     elif last("sleep_hours"):
         h = last("sleep_hours")
-        comps.append({"key": "sleep", "label": "Sueño", "score": _clip(25 * (h - 4)), "value": f"{h:.1f} h"})
+        comps.append({"key": "sleep", "label": _("Sleep"), "score": _clip(25 * (h - 4)), "value": f"{h:.1f} h"})
     rhr_base = [w["rest_hr"] for w in rows if w.get("rest_hr") and w["date"] >= (today - dt.timedelta(days=60)).isoformat()]
     if last("rest_hr") and len(rhr_base) >= 7:
         delta = last("rest_hr") - statistics.mean(rhr_base)
-        comps.append({"key": "rhr", "label": "FC reposo", "score": _clip(75 - 8 * delta), "value": f"{last('rest_hr'):.0f} ppm" + (f" ({round(delta):+d})" if round(delta) else "")})
+        comps.append({"key": "rhr", "label": _("Resting HR"), "score": _clip(75 - 8 * delta), "value": f"{last('rest_hr'):.0f} " + _("bpm") + (f" ({round(delta):+d})" if round(delta) else "")})
     if load_today and load_today.get("tsb") is not None:
         tsb, acwr = load_today["tsb"], load_today.get("acwr")
         sc = 80 if tsb >= -5 else 75 + 2 * (tsb + 5)
         if acwr and acwr > 1.5:
             sc -= 15
-        comps.append({"key": "load", "label": "Carga", "score": _clip(sc), "value": f"forma {round(tsb):+d}" + (f" · ACWR {acwr:.2f}" if acwr else "")})
+        comps.append({"key": "load", "label": _("Load"), "score": _clip(sc), "value": _("form") + f" {round(tsb):+d}" + (f" · ACWR {acwr:.2f}" if acwr else "")})
     feel = [w for w in rows if w["date"] == d0 and (w.get("feel") or w.get("legs"))]
     if feel:
         f = feel[-1]
         scale = {1: 15, 2: 35, 3: 60, 4: 80, 5: 95}
         vals = [scale[int(f[k])] for k in ("feel", "legs") if f.get(k) and int(f[k]) in scale]
         if vals:
-            comps.append({"key": "feel", "label": "Sensaciones", "score": _clip(sum(vals) / len(vals)), "value": "check-in de hoy"})
+            comps.append({"key": "feel", "label": _("Feel"), "score": _clip(sum(vals) / len(vals)), "value": _("today's check-in")})
         if f.get("sick"):
-            out.reasons.append("Has marcado que estás enfermo: hoy descanso o muy suave (regla del cuello).")
+            out.reasons.append(_("You marked that you're ill: rest or very easy today (neck check rule)."))
             out.status = "red"
     out.components = comps
     if not comps or (len(comps) == 1 and comps[0]["key"] == "load"):
@@ -174,7 +175,7 @@ def _score(out: Readiness, rows: list[dict], today: dt.date, load_today: dict | 
     if RANK[st] > RANK[out.status] or out.status == "unknown":
         if out.status != "unknown" and st != out.status:
             weak = min(comps, key=lambda c: c["score"])
-            out.reasons.append(f"Nota global {out.score}/100: lo que más baja es {weak['label'].lower()} ({weak['value']}).")
+            out.reasons.append(_("Overall score {score}/100: the lowest part is {what} ({value}).", score=out.score, what=weak["label"].lower(), value=weak["value"]))
         out.status = st
 
 

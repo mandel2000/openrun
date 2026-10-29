@@ -37,6 +37,7 @@ class User(SQLModel, table=True):
     created_at: str = ""
     ai_daily_limit: int | None = None  # AI requests per day; None = OPENRUN_AI_DAILY_LIMIT (admins: unlimited)
     api_token_hash: str | None = Field(default=None, index=True)  # personal token (MCP), sha256
+    lang: str | None = None  # "en" | "es"; None = browser / OPENRUN_LANG (see app/i18n.py)
 
 
 class Invite(SQLModel, table=True):
@@ -225,6 +226,9 @@ def _add_missing_columns() -> None:
             for col in table.columns:
                 if col.name not in have and col.nullable:
                     c.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col.type.compile(engine.dialect)}'))
+                    if (table.name, col.name) == ("user", "lang"):
+                        # accounts from before 0.2 used the then Spanish-only app: keep their notifications in Spanish
+                        c.execute(text('UPDATE "user" SET lang = \'es\''))
 
 
 def init_db() -> None:

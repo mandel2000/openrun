@@ -32,7 +32,7 @@ Checks (CI runs the same on every pull request):
 
 ```bash
 cd backend && .venv/bin/ruff check . && .venv/bin/python -m pytest -q
-cd frontend && npm run lint && npm run build
+cd frontend && npm run lint && npm run i18n:check && npm run build
 ```
 
 ## Workflow
@@ -71,7 +71,17 @@ chore(lint): ruff for the backend, lint both sides in CI
 - Python: `ruff` (config in `backend/pyproject.toml`), type hints, docstrings that explain *why* (and cite sources for training rules). Business logic goes in `services.py` / `training/`, not in endpoints.
 - TypeScript/React: `eslint` (config in `frontend/eslint.config.js`), function components, design tokens from `index.css` (no hard-coded colours), layouts that work at phone width.
 - Match the comment density and naming of the surrounding code.
-- The UI is in Spanish today. New user-facing strings go in Spanish too until the app has an i18n layer (contributions toward one are welcome).
+- Every user-facing string is written in English and wrapped for translation (see below).
+
+### Translations
+
+Text is written in English in the code and looked up per language, gettext style. The English sentence is the key, so code stays readable and a missing translation falls back to English.
+
+- **Frontend**: `t('Add run')`, with placeholders `t('{n} days to go', { n })`. Translations live in `frontend/src/locales/es.ts`. `npm run i18n:check` (also in CI) lists strings without a translation and unused entries.
+- **Backend** (workout titles, notifications, errors, analysis): `_("Easy run {km} km", km=…)` from `app/i18n.py`; module-level constants are marked with `N_()` and translated when used. Translations live in `backend/app/locales/es.py`; a test fails if one is missing or its placeholders differ.
+- The language comes from the user's setting (*Settings › Appearance and language*), else the browser, else `OPENRUN_LANG`. Text stored in the database (a workout title) keeps the language it was created in.
+- The AI coach's prompts are in English and ask the model to answer in the user's language.
+- **New language**: add its code to `LANGS` in `frontend/src/i18n.ts` and `app/i18n.py`, then create `locales/<code>.ts` and `locales/<code>.py` by copying the Spanish files. Native speakers who know running vocabulary make the best translations.
 
 ## Releases
 

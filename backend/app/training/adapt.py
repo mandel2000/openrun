@@ -7,6 +7,7 @@ readiness is normal, go easy when it is suppressed.
 
 from __future__ import annotations
 
+from ..i18n import _
 from . import workouts as W
 from .vdot import training_paces
 
@@ -16,10 +17,10 @@ def adjust_for_readiness(workout: dict, status: str, paces_vdot: float) -> tuple
     w = W.Workout.from_dict(workout)
     paces = training_paces(paces_vdot)
     if w.sport != "running" or w.intensity == "low" or status in ("green", "unknown"):
-        return workout, "Sin cambios: readiness normal o sesión ya suave."
+        return workout, _("No changes: normal readiness or already an easy session.")
     if status == "red":
         new = W.recovery_run(paces, min(6.0, max(3.0, w.distance_km * 0.5)))
-        msg = "Readiness baja (HRV suprimida): sesión sustituida por regenerativo. Recupera la calidad otro día de la semana si te encuentras bien."
+        msg = _("Low readiness (suppressed HRV): session replaced by a recovery run. Make up the quality on another day this week if you feel good.")
     else:  # amber: keep the stimulus, reduce dose ~25-30% (fewer reps), or move tempo to easy+strides
         new = W.clone(w)
         reduced = False
@@ -29,9 +30,9 @@ def adjust_for_readiness(workout: dict, status: str, paces_vdot: float) -> tuple
                 reduced = True
         if not reduced:
             new = W.easy_with_strides(paces, w.distance_km * 0.8)
-        new.title += " (reducida)"
+        new.title += " " + _("(reduced)")
         W.recompute(new)
-        msg = "Readiness moderada: volumen de calidad reducido ~30% manteniendo intensidad."
+        msg = _("Moderate readiness: quality volume reduced ~30%, keeping the intensity.")
     new.date, new.phase = w.date, w.phase
     return new.to_dict(), msg
 

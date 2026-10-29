@@ -3,6 +3,7 @@ import { Area, AreaChart, Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAx
 import { api, fmtDate, fmtPace, fmtTime, type Race } from '../api'
 import { Banner, Icon, Segmented, Skeleton } from '../ui'
 import type { Mark } from './RouteMap'
+import { t } from '../i18n'
 
 const RouteMap = lazy(() => import('./RouteMap'))
 
@@ -17,8 +18,10 @@ export type Strategy = {
   heat_pct: number; kms: Km[]; fuel: string[]; tips: string[]
 }
 
-const MODE_LABEL: Record<string, string> = { conservative: 'Prudente', realistic: 'Realista', ambitious: 'Ambicioso', custom: 'Mi tiempo' }
+const MODE_LABEL: Record<string, string> = { conservative: t('Safe'), realistic: t('Realistic'), ambitious: t('Ambitious'), custom: t('My time') }
 const TERRAIN_COLOR: Record<string, string> = { subida: 'var(--z4)', bajada: 'var(--z1)', llano: 'var(--z2)' }
+// terrain ids come from the API in Spanish; labels are translated here
+const TERRAIN_LABEL: Record<string, string> = { subida: t('uphill'), bajada: t('downhill'), llano: t('flat') }
 
 function useTokens() {
   const read = () => {
@@ -54,12 +57,12 @@ function CourseCard({ st, onCourse }: { st: Strategy; onCourse: (s: Strategy) =>
     <details className="card" open={st.course.flat || st.course.approx}>
       <summary className="row" style={{ cursor: 'pointer' }}>
         <Icon name="upload" size={18} /><b className="grow">Recorrido: {st.course.name}</b>
-        {st.course.approx && <span className="chip chip-warn">aproximado</span>}
-        {st.course.flat && <span className="chip chip-warn">sin perfil</span>}
+        {st.course.approx && <span className="chip chip-warn">{t('approximate')}</span>}
+        {st.course.flat && <span className="chip chip-warn">{t('no profile')}</span>}
       </summary>
       <p className="small text-2">
-        {st.course.flat ? 'Sin perfil, calculo como si fuera llano. ' : st.course.approx ? 'Perfil reconstruido con la descripción oficial km a km. ' : ''}
-        Sube el GPX oficial (o un TCX/KML, o el .zip de la organización) para el perfil exacto. Si el archivo no trae altitud, la saco de un modelo del terreno.
+        {st.course.flat ? t('No profile: computed as if it were flat.') + ' ' : st.course.approx ? t('Profile rebuilt from the official km-by-km description.') + ' ' : ''}
+        {t('Upload the official GPX (or a TCX/KML, or the organiser’s .zip) for the exact profile. If the file has no elevation, it comes from a terrain model.')}
       </p>
       <div className="row">
         <input ref={file} type="file" accept=".gpx,.tcx,.kml,.zip" hidden onChange={(e) => {
@@ -70,14 +73,14 @@ function CourseCard({ st, onCourse }: { st: Strategy; onCourse: (s: Strategy) =>
           run(() => api.post<Strategy>(`/api/races/${st.race.id}/course`, fd))
           e.target.value = ''
         }} />
-        <button className="btn btn-sm" disabled={busy} onClick={() => file.current?.click()}><Icon name="upload" size={16} />Subir GPX</button>
-        {st.race.has_course && <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => api.del<Strategy>(`/api/races/${st.race.id}/course`))}>Quitar GPX</button>}
+        <button className="btn btn-sm" disabled={busy} onClick={() => file.current?.click()}><Icon name="upload" size={16} />{t('Upload GPX')}</button>
+        {st.race.has_course && <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => api.del<Strategy>(`/api/races/${st.race.id}/course`))}>{t('Remove GPX')}</button>}
       </div>
       <div className="row" style={{ marginTop: 8, alignItems: 'flex-end' }}>
-        <label className="field grow">o pega el enlace del GPX<input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…/recorrido.gpx" inputMode="url" /></label>
-        <button className="btn btn-sm" disabled={busy || !url.startsWith('https://')} onClick={() => run(() => api.post<Strategy>(`/api/races/${st.race.id}/course/url`, { url }))}>Importar</button>
+        <label className="field grow">{t('or paste the GPX link')}<input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…/course.gpx" inputMode="url" /></label>
+        <button className="btn btn-sm" disabled={busy || !url.startsWith('https://')} onClick={() => run(() => api.post<Strategy>(`/api/races/${st.race.id}/course/url`, { url }))}>{t('Import')}</button>
       </div>
-      {busy && <p className="small muted">Procesando recorrido…</p>}
+      {busy && <p className="small muted">{t('Processing course…')}</p>}
       {err && <div style={{ marginTop: 8 }}><Banner tone="bad">{err}</Banner></div>}
     </details>
   )
@@ -108,7 +111,7 @@ export default function RaceStrategy({ race, onBack }: { race: Race; onBack: () 
     return ms
   }, [coords, st])
 
-  if (err && !st) return <div className="stack"><button className="btn btn-ghost btn-sm" onClick={onBack}>← Carreras</button><Banner tone="bad">{err}</Banner></div>
+  if (err && !st) return <div className="stack"><button className="btn btn-ghost btn-sm" onClick={onBack}>← {t('Races')}</button><Banner tone="bad">{err}</Banner></div>
   if (!st) return <div className="stack"><Skeleton h={120} /><Skeleton h={220} /><Skeleton h={300} /></div>
 
   const profile = st.course.profile.map(([d, e]) => ({ km: +(d / 1000).toFixed(2), ele: e }))
@@ -120,42 +123,42 @@ export default function RaceStrategy({ race, onBack }: { race: Race; onBack: () 
 
   return (
     <div className="stack">
-      <div><button className="btn btn-ghost btn-sm" onClick={onBack}>← Carreras</button></div>
+      <div><button className="btn btn-ghost btn-sm" onClick={onBack}>← {t('Races')}</button></div>
       <div className="card hero" style={{ ['--hero-zone' as string]: 'var(--accent)' }}>
-        <div className="micro">Estrategia de carrera · {fmtDate(st.race.date, { weekday: 'long', day: 'numeric', month: 'long' })} · {st.start_time}</div>
+        <div className="micro">{t('Race strategy')} · {fmtDate(st.race.date, { weekday: 'long', day: 'numeric', month: 'long' })} · {st.start_time}</div>
         <h2 style={{ marginTop: 6 }}>{st.race.name}</h2>
         <div className="row" style={{ marginTop: 12, gap: 24, alignItems: 'flex-end' }}>
-          <div><div className="micro">Objetivo</div><div className="big-time">{fmtTime(st.target_s)}</div></div>
-          <div><div className="micro">Media</div><div className="num" style={{ fontSize: 22, fontWeight: 700 }}>{fmtPace(st.avg_pace_s)}/km</div></div>
-          <div><div className="micro">Mitad</div><div className="num" style={{ fontSize: 22, fontWeight: 700 }}>{fmtTime(st.half_s)}</div></div>
-          <div><div className="micro">Desnivel</div><div className="num" style={{ fontSize: 22, fontWeight: 700 }}>+{st.course.gain_m} m</div></div>
+          <div><div className="micro">{t('Goal')}</div><div className="big-time">{fmtTime(st.target_s)}</div></div>
+          <div><div className="micro">{t('Average')}</div><div className="num" style={{ fontSize: 22, fontWeight: 700 }}>{fmtPace(st.avg_pace_s)}/km</div></div>
+          <div><div className="micro">{t('Halfway')}</div><div className="num" style={{ fontSize: 22, fontWeight: 700 }}>{fmtTime(st.half_s)}</div></div>
+          <div><div className="micro">{t('Elevation gain')}</div><div className="num" style={{ fontSize: 22, fontWeight: 700 }}>+{st.course.gain_m} m</div></div>
         </div>
         <div className="row small" style={{ marginTop: 12 }}>
-          {st.prediction.flat_s && <span className="chip">En llano harías {fmtTime(st.prediction.flat_s)} (VDOT {st.prediction.vdot})</span>}
+          {st.prediction.flat_s && <span className="chip">{t('On the flat you would run {time}', { time: fmtTime(st.prediction.flat_s) })} (VDOT {st.prediction.vdot})</span>}
           {st.course.factor > 1.005 && <span className="chip">Recorrido +{((st.course.factor - 1) * 100).toFixed(1)} % vs llano</span>}
-          {w ? <span className={`chip chip-wrap ${st.heat_pct > 0 ? 'chip-warn' : ''}`}>{Math.round(w.temp)} °C · rocío {Math.round(w.dew)} °C{w.rain_pct != null ? ` · lluvia ${w.rain_pct} %` : ''}{w.wind_kmh != null ? ` · viento ${Math.round(w.wind_kmh)} km/h` : ''}{st.heat_pct > 0 ? ` · +${st.heat_pct} % por calor` : ''}</span>
-            : <span className="chip">Previsión del tiempo disponible 16 días antes</span>}
+          {w ? <span className={`chip chip-wrap ${st.heat_pct > 0 ? 'chip-warn' : ''}`}>{Math.round(w.temp)} °C · {t('dew point')} {Math.round(w.dew)} °C{w.rain_pct != null ? ` · ${t('rain')} ${w.rain_pct} %` : ''}{w.wind_kmh != null ? ` · ${t('wind')} ${Math.round(w.wind_kmh)} km/h` : ''}{st.heat_pct > 0 ? ` · ${t('+{pct}% for heat', { pct: st.heat_pct })}` : ''}</span>
+            : <span className="chip">{t('Weather forecast available 16 days before')}</span>}
         </div>
       </div>
 
       <div className="card stack">
-        <div className="card-head"><span className="micro">Tiempo objetivo</span></div>
+        <div className="card-head"><span className="micro">{t('Goal time')}</span></div>
         {modes.length > 0 && (
-          <Segmented label="Objetivo" value={st.mode === 'custom' || st.mode === 'goal' ? ('custom' as string) : st.mode} onChange={(m) => m !== 'custom' && save({ mode: m })}
+          <Segmented label={t('Goal')} value={st.mode === 'custom' || st.mode === 'goal' ? ('custom' as string) : st.mode} onChange={(m) => m !== 'custom' && save({ mode: m })}
             options={[...modes.map(([k, v]) => [k, `${MODE_LABEL[k]} ${fmtTime(v)}`] as [string, string]), ['custom', MODE_LABEL.custom]]} />
         )}
         <div className="row" style={{ alignItems: 'flex-end' }}>
-          <label className="field" style={{ maxWidth: 160 }}>Mi tiempo<input placeholder="h:mm:ss" value={custom} onChange={(e) => setCustom(e.target.value)} /></label>
-          <button className="btn btn-sm" disabled={!custom} onClick={() => save({ target: custom })}>Usar</button>
-          <label className="field" style={{ maxWidth: 120 }}>Hora salida<input type="time" value={start} onChange={(e) => setStart(e.target.value)} /></label>
-          <button className="btn btn-sm" disabled={!start || start === st.start_time} onClick={() => save({ start_time: start })}>Guardar</button>
+          <label className="field" style={{ maxWidth: 160 }}>{t('My time')}<input placeholder="h:mm:ss" value={custom} onChange={(e) => setCustom(e.target.value)} /></label>
+          <button className="btn btn-sm" disabled={!custom} onClick={() => save({ target: custom })}>{t('Use')}</button>
+          <label className="field" style={{ maxWidth: 120 }}>{t('Start time')}<input type="time" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+          <button className="btn btn-sm" disabled={!start || start === st.start_time} onClick={() => save({ start_time: start })}>{t('Save')}</button>
         </div>
-        <p className="small muted" style={{ margin: 0 }}>Prudente/Realista/Ambicioso salen de tu VDOT actual, corregidos por el desnivel del recorrido{st.heat_pct > 0 ? ' y el calor previsto' : ''}. Mi tiempo: el objetivo que tú fijes.</p>
+        <p className="small muted" style={{ margin: 0 }}>{t('Safe/Realistic/Ambitious come from your current VDOT, corrected for the course elevation')}{st.heat_pct > 0 ? ` ${t('and the forecast heat')}` : ''}. {t('My time: the goal you set.')}</p>
         {err && <Banner tone="bad">{err}</Banner>}
       </div>
 
       <div className="card">
-        <div className="card-head"><span className="micro">Perfil y ritmo por km</span></div>
+        <div className="card-head"><span className="micro">{t('Profile and pace per km')}</span></div>
         <ResponsiveContainer width="100%" height={150}>
           <AreaChart data={profile} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
             onMouseMove={(e) => { const i = (e as { activeTooltipIndex?: number }).activeTooltipIndex; setHover(i != null && coords ? Math.round((i / Math.max(1, profile.length - 1)) * (coords.length - 1)) : null) }}
@@ -172,9 +175,9 @@ export default function RaceStrategy({ race, onBack }: { race: Race; onBack: () 
             <XAxis dataKey="label" stroke={c.muted} fontSize={11} tickLine={false} axisLine={false} interval={0} />
             <YAxis hide domain={[0, Math.ceil(hi - lo + 14)]} />
             <Tooltip contentStyle={tooltipStyle} cursor={{ fill: c.border, opacity: 0.4 }}
-              formatter={(_v, _n, p) => [`${fmtPace((p?.payload as Km).pace_s)}/km`, 'Ritmo']} labelFormatter={(l, p) => {
+              formatter={(_v, _n, p) => [`${fmtPace((p?.payload as Km).pace_s)}/km`, t('Pace')]} labelFormatter={(l, p) => {
                 const k = p?.[0]?.payload as Km | undefined
-                return k ? `Km ${l} · ${k.terrain}${k.grade_pct ? ` ${k.grade_pct > 0 ? '+' : ''}${k.grade_pct} %` : ''} · paso ${fmtTime(k.cum_s)}` : `Km ${l}`
+                return k ? `Km ${l} · ${TERRAIN_LABEL[k.terrain] ?? k.terrain}${k.grade_pct ? ` ${k.grade_pct > 0 ? '+' : ''}${k.grade_pct} %` : ''} · ${t('split')} ${fmtTime(k.cum_s)}` : `Km ${l}`
               }} />
             <Bar dataKey="fast" radius={[4, 4, 0, 0]} isAnimationActive={false}>
               {paceData.map((k) => <Cell key={k.km} fill={k.terrain === 'subida' ? c.up : k.terrain === 'bajada' ? c.down : c.flat} />)}
@@ -182,10 +185,10 @@ export default function RaceStrategy({ race, onBack }: { race: Race; onBack: () 
           </BarChart>
         </ResponsiveContainer>
         <div className="row small muted" style={{ justifyContent: 'center', gap: 14 }}>
-          <span className="row" style={{ gap: 6 }}><span className="dot" style={{ background: 'var(--z4)' }} />subida</span>
-          <span className="row" style={{ gap: 6 }}><span className="dot" style={{ background: 'var(--z2)' }} />llano</span>
-          <span className="row" style={{ gap: 6 }}><span className="dot" style={{ background: 'var(--z1)' }} />bajada</span>
-          <span>· barra más alta = más rápido</span>
+          <span className="row" style={{ gap: 6 }}><span className="dot" style={{ background: 'var(--z4)' }} />{t('uphill')}</span>
+          <span className="row" style={{ gap: 6 }}><span className="dot" style={{ background: 'var(--z2)' }} />{t('flat')}</span>
+          <span className="row" style={{ gap: 6 }}><span className="dot" style={{ background: 'var(--z1)' }} />{t('downhill')}</span>
+          <span>· {t('taller bar = faster')}</span>
         </div>
       </div>
 
@@ -199,15 +202,15 @@ export default function RaceStrategy({ race, onBack }: { race: Race; onBack: () 
 
       <div className="card">
         <div className="card-head row spread">
-          <span className="micro">Plan km a km</span>
+          <span className="micro">{t('Km-by-km plan')}</span>
           <button className="btn btn-primary btn-sm" onClick={async () => {
-            setPush({ tone: 'info', text: 'Guardando…' })
+            setPush({ tone: 'info', text: t('Saving…') })
             try {
               const r = await api.post<{ garmin: { ok: boolean; error?: string } | null }>(`/api/races/${race.id}/strategy/push`)
-              setPush(r.garmin ? (r.garmin.ok ? { tone: 'ok', text: 'En tu reloj: un paso por km con su ritmo (±6 s). Sincroniza Garmin Connect.' } : { tone: 'bad', text: `Guardado en el plan, pero Garmin falló: ${r.garmin.error}` })
-                : { tone: 'ok', text: 'Guardado como entreno del día de carrera. Conecta Garmin para enviarlo al reloj.' })
+              setPush(r.garmin ? (r.garmin.ok ? { tone: 'ok', text: t('On your watch: one step per km with its pace (±6 s). Sync Garmin Connect.') } : { tone: 'bad', text: t('Saved in the plan, but Garmin failed: {err}', { err: r.garmin.error ?? '' }) })
+                : { tone: 'ok', text: t('Saved as the race-day workout. Connect Garmin to send it to the watch.') })
             } catch (e) { setPush({ tone: 'bad', text: (e as Error).message }) }
-          }}><Icon name="watch" size={16} />Enviar al reloj</button>
+          }}><Icon name="watch" size={16} />{t('Send to watch')}</button>
         </div>
         {push && <div style={{ marginBottom: 10 }}><Banner tone={push.tone}>{push.text}</Banner></div>}
         <div className="splits">
@@ -217,7 +220,7 @@ export default function RaceStrategy({ race, onBack }: { race: Race; onBack: () 
               <div className="split-main">
                 <div className="row" style={{ gap: 8 }}>
                   <b className="num">{fmtPace(k.pace_s)}/km</b>
-                  <span className="small muted">{k.terrain}{k.gain_m || k.loss_m ? ` · +${k.gain_m}/−${k.loss_m} m` : ''}</span>
+                  <span className="small muted">{TERRAIN_LABEL[k.terrain] ?? k.terrain}{k.gain_m || k.loss_m ? ` · +${k.gain_m}/−${k.loss_m} m` : ''}</span>
                 </div>
                 {k.note && <div className="small text-2">{k.note}</div>}
               </div>
@@ -229,15 +232,15 @@ export default function RaceStrategy({ race, onBack }: { race: Race; onBack: () 
 
       <div className="grid-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
         <div className="card">
-          <div className="card-head"><span className="micro">Cómo correrla</span></div>
+          <div className="card-head"><span className="micro">{t('How to run it')}</span></div>
           <ul className="tips">{st.tips.map((t) => <li key={t}>{t}</li>)}</ul>
         </div>
         <div className="card">
-          <div className="card-head"><span className="micro">Comida y bebida</span></div>
+          <div className="card-head"><span className="micro">{t('Food and drink')}</span></div>
           <ul className="tips">{st.fuel.map((t) => <li key={t}>{t}</li>)}</ul>
         </div>
       </div>
-      <p className="small muted">Ritmo a esfuerzo constante sobre el perfil (coste energético según la pendiente, Minetti 2002), salida prudente y ajuste por calor (regla de Hadley). Las marcas de km del GPS pueden desviarse un poco de las oficiales.</p>
+      <p className="small muted">{t('Even-effort pacing over the profile (energy cost by gradient, Minetti 2002), a cautious start and heat adjustment (Hadley\'s rule). GPS km markers can differ slightly from the official ones.')}</p>
     </div>
   )
 }

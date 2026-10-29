@@ -3,6 +3,7 @@ import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContai
 import { api, daysBetween, DIST_LABEL, fmtDate, fmtPace, garminActivityUrl, iso, useApi, VERDICT } from '../api'
 import ActivityAnalysisSheet from '../components/ActivityAnalysis'
 import { Banner, Empty, Icon, Segmented, Skeleton, StatTile } from '../ui'
+import { t } from '../i18n'
 
 type Section = 'records' | 'pred' | 'load' | 'health' | 'acts'
 type PR = { time_s: number; time: string; pace: string; date: string; approx: boolean; name?: string; external_id?: string; source?: string }
@@ -50,11 +51,11 @@ function RecordsView() {
   return (
     <div className="card">
       <div className="card-head" style={{ flexWrap: 'wrap' }}>
-        <Segmented label="Periodo" value={win} onChange={setWin} options={[['all', 'Siempre'], ['1y', '12 meses'], ['6m', '6 meses'], ['1m', '30 días']]} />
+        <Segmented label={t('Period')} value={win} onChange={setWin} options={[['all', t('All time')], ['1y', t('12 months')], ['6m', t('6 months')], ['1m', t('30 days')]]} />
         {data.history_since && (
           <span className="small muted">
-            Histórico desde {fmtDate(data.history_since, { day: 'numeric', month: 'short', year: 'numeric' })} · {data.n_activities} actividades ·{' '}
-            <a href="#ajustes" onClick={() => setTimeout(() => document.getElementById('importar')?.scrollIntoView({ behavior: 'smooth' }), 300)}>Importar años anteriores</a>
+            {t('History since {date} · {n} activities', { date: fmtDate(data.history_since, { day: 'numeric', month: 'short', year: 'numeric' }), n: data.n_activities })} ·{' '}
+            <a href="#ajustes" onClick={() => setTimeout(() => document.getElementById('importar')?.scrollIntoView({ behavior: 'smooth' }), 300)}>{t('Import earlier years')}</a>
           </span>
         )}
       </div>
@@ -69,20 +70,20 @@ function RecordsView() {
                 <>
                   <div className="grow">
                     <div className="big-time">{r.time}</div>
-                    <div className="meta num">{r.pace} /km · {fmtDate(r.date, { day: 'numeric', month: 'short', year: 'numeric' })}{r.approx ? ' · aprox.' : ''}</div>
+                    <div className="meta num">{r.pace} /km · {fmtDate(r.date, { day: 'numeric', month: 'short', year: 'numeric' })}{r.approx ? ` · ${t('approx.')}` : ''}</div>
                   </div>
                   <div className="right row" style={{ flexWrap: 'nowrap' }}>
-                    {daysBetween(r.date, today) <= 30 && <span className="chip chip-accent">NUEVO</span>}
-                    {url && <a className="btn btn-ghost btn-icon" href={url} target="_blank" rel="noreferrer" aria-label={`Ver actividad de ${DIST_LABEL[k]} en Garmin`}><Icon name="external" size={18} /></a>}
+                    {daysBetween(r.date, today) <= 30 && <span className="chip chip-accent">{t('NEW')}</span>}
+                    {url && <a className="btn btn-ghost btn-icon" href={url} target="_blank" rel="noreferrer" aria-label={t('View the {dist} activity on Garmin', { dist: DIST_LABEL[k] })}><Icon name="external" size={18} /></a>}
                   </div>
                 </>
-              ) : <div className="grow muted">Sin marca</div>}
+              ) : <div className="grow muted">{t('No record')}</div>}
             </div>
           )
         })}
       </div>
       <p className="small muted" style={{ marginTop: 12, marginBottom: 0 }}>
-        Mejores tramos dentro de cualquier carrera (Garmin «fastest split»). «Aprox.» = actividad completa de distancia casi exacta escalada al ritmo, o tramo calculado solo con GPS (archivos GPX). Si el reloj tiene marcas más antiguas que el histórico, «Siempre» usa las de Garmin.
+        {t('Best efforts within any run (Garmin “fastest split”). “Approx.” = a whole activity of nearly the exact distance scaled at its pace, or an effort computed from GPS only (GPX files). If the watch has records older than the history, “All time” uses Garmin’s.')}
       </p>
     </div>
   )
@@ -95,22 +96,22 @@ function PredictionsView() {
   if (loading && !data) return <Skeleton h={320} />
   if (!data) return null
   const models = MODEL_ORDER.filter((m) => data.models[m])
-  if (!models.length) return <div className="card"><Empty icon="trophy" title="Sin datos para predecir">Sincroniza actividades con esfuerzos de al menos una milla.</Empty></div>
+  if (!models.length) return <div className="card"><Empty icon="trophy" title={t('No data to predict from')}>{t('Sync activities with efforts of at least a mile.')}</Empty></div>
   return (
     <div className="stack">
       {data.suggest_vdot && (
         <Banner tone="info">
-          Tus esfuerzos recientes indican VDOT <b>{data.suggest_vdot}</b> y tu plan usa <b>{data.current_vdot}</b>.{' '}
+          {t('Your recent efforts point to VDOT')} <b>{data.suggest_vdot}</b> {t('and your plan uses')} <b>{data.current_vdot}</b>.{' '}
           <button className="btn btn-sm" style={{ marginLeft: 8 }} onClick={async () => {
-            const r = await api.post<{ vdot: number; workouts_updated: number; garmin_updated: number }>('/api/athlete/recalibrate', { vdot: data.suggest_vdot, source: 'mejores esfuerzos 90 d' })
-            setMsg(`VDOT ${r.vdot}: ${r.workouts_updated} entrenos re-ajustados, ${r.garmin_updated} actualizados en Garmin.`)
+            const r = await api.post<{ vdot: number; workouts_updated: number; garmin_updated: number }>('/api/athlete/recalibrate', { vdot: data.suggest_vdot, source: t('best efforts 90 d') })
+            setMsg(t('VDOT {vdot}: {n} workouts re-paced, {g} updated on Garmin.', { vdot: r.vdot, n: r.workouts_updated, g: r.garmin_updated }))
             reload()
-          }}>Recalibrar ritmos</button>
+          }}>{t('Recalibrate paces')}</button>
         </Banner>
       )}
       {msg && <Banner tone="ok">{msg}</Banner>}
       <div className="card">
-        <div className="card-head"><span className="micro">Predicción de carrera</span>{data.consensus_vdot && <span className="chip num">VDOT consenso {data.consensus_vdot}</span>}</div>
+        <div className="card-head"><span className="micro">{t('Race prediction')}</span>{data.consensus_vdot && <span className="chip num">{t('Consensus VDOT')} {data.consensus_vdot}</span>}</div>
         <div className="only-mobile list">
           {PRED_KEYS.map((k) => (
             <div key={k} className="list-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
@@ -124,7 +125,7 @@ function PredictionsView() {
         </div>
         <div className="table-wrap only-desktop">
           <table>
-            <thead><tr><th>Distancia</th><th className="n">Consenso</th>{models.map((m) => <th key={m} className="n">{data.models[m].label}</th>)}</tr></thead>
+            <thead><tr><th>{t('Distance')}</th><th className="n">{t('Consensus')}</th>{models.map((m) => <th key={m} className="n">{data.models[m].label}</th>)}</tr></thead>
             <tbody>
               {PRED_KEYS.map((k) => (
                 <tr key={k}>
@@ -138,13 +139,13 @@ function PredictionsView() {
         </div>
         <ul className="small muted" style={{ margin: '12px 0 0', paddingLeft: 18 }}>
           {models.map((m) => <li key={m}><b>{data.models[m].label}</b>{data.models[m].vdot ? ` (VDOT ${data.models[m].vdot})` : ''}: {data.models[m].source}</li>)}
-          <li>Consenso = mediana de los modelos. VDOT y Riegel usan tus mejores esfuerzos de los últimos {data.window_days} días; en distancias largas asumen volumen suficiente.</li>
+          <li>{t('Consensus = median of the models. VDOT and Riegel use your best efforts of the last {n} days; for long distances they assume enough volume.', { n: data.window_days })}</li>
         </ul>
       </div>
       <PaceInsightsCard onApplied={reload} />
       {data.trend.length > 1 && (
         <div className="card">
-          <div className="card-head"><span className="micro">Tendencia de forma (VDOT por mes)</span></div>
+          <div className="card-head"><span className="micro">{t('Fitness trend (VDOT by month)')}</span></div>
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={data.trend} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid stroke={c.border} vertical={false} />
@@ -173,15 +174,15 @@ function LoadView() {
   return (
     <div className="stack">
       <div className="grid stats">
-        <StatTile label="Fitness (CTL 42 d)" value={last?.ctl ?? '–'} />
-        <StatTile label="Fatiga (ATL 7 d)" value={last?.atl ?? '–'} />
-        <StatTile label="Forma (TSB)" value={last?.tsb ?? '–'} sub="−10 a +5: zona productiva" />
-        <StatTile label="ACWR 7:28" value={acwr ?? '–'} tone={acwr && acwr > 1.5 ? 'bad' : acwr && acwr > 1.3 ? 'warn' : ''} sub="Prudente 0,8–1,3 (orientativo)" />
-        <StatTile label="VDOT por FC" value={est.data?.vdot ?? '–'} sub={est.data ? `${est.data.n_runs} rodajes · orientativo` : 'Necesita FC máx/reposo'} />
+        <StatTile label={t(t('Fitness (CTL 42 d)'))} value={last?.ctl ?? '–'} />
+        <StatTile label={t('Fatigue (ATL 7 d)')} value={last?.atl ?? '–'} />
+        <StatTile label={t('Form (TSB)')} value={last?.tsb ?? '–'} sub={t('−10 to +5: productive zone')} />
+        <StatTile label="ACWR 7:28" value={acwr ?? '–'} tone={acwr && acwr > 1.5 ? 'bad' : acwr && acwr > 1.3 ? 'warn' : ''} sub={t('Safe 0.8–1.3 (rough guide)')} />
+        <StatTile label={t('VDOT from HR')} value={est.data?.vdot ?? '–'} sub={est.data ? t('{n} runs · rough guide', { n: est.data.n_runs }) : t('Needs max/resting HR')} />
       </div>
       <div className="card">
-        <div className="card-head"><span className="micro">Carga de entrenamiento (TRIMP)</span></div>
-        {series.length === 0 ? <Empty icon="activity" title="Sin carga todavía">Sincroniza Garmin.</Empty> : (
+        <div className="card-head"><span className="micro">{t('Training load (TRIMP)')}</span></div>
+        {series.length === 0 ? <Empty icon="activity" title={t('No load yet')}>{t('Sync Garmin.')}</Empty> : (
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={series} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid stroke={c.border} vertical={false} />
@@ -190,9 +191,9 @@ function LoadView() {
               <ReferenceArea y1={-10} y2={5} fill={c.good} fillOpacity={0.08} />
               <Tooltip {...tip} />
               <Legend />
-              <Line dataKey="ctl" name="Fitness (CTL)" stroke={c.s2} strokeWidth={2} dot={false} />
-              <Line dataKey="atl" name="Fatiga (ATL)" stroke={c.s1} strokeWidth={2} dot={false} />
-              <Line dataKey="tsb" name="Forma (TSB)" stroke={c.s3} strokeWidth={2} dot={false} />
+              <Line dataKey="ctl" name={t(t('Fitness (CTL)'))} stroke={c.s2} strokeWidth={2} dot={false} />
+              <Line dataKey="atl" name={t('Fatigue (ATL)')} stroke={c.s1} strokeWidth={2} dot={false} />
+              <Line dataKey="tsb" name={t('Form (TSB)')} stroke={c.s3} strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -209,9 +210,9 @@ function HealthView() {
   return (
     <div className="stack">
       <div className="card">
-        <div className="card-head"><span className="micro">HRV nocturna (RMSSD)</span></div>
-        <p className="small muted">Banda = tu rango normal (línea base 60 d ± 0,5 DE). Varios días por debajo → baja la intensidad.</p>
-        {!rows.some((r) => r.hrv_rmssd) ? <Empty icon="heart" title="Sin HRV todavía">Garmin, Zepp o medición con la Helio Strap.</Empty> : (
+        <div className="card-head"><span className="micro">{t('Overnight HRV (RMSSD)')}</span></div>
+        <p className="small muted">{t('Band = your normal range (60-day baseline ± 0.5 SD). Several days below it → lower the intensity.')}</p>
+        {!rows.some((r) => r.hrv_rmssd) ? <Empty icon="heart" title={t('No HRV yet')}>{t('Garmin, Zepp or a measurement with a chest/arm strap.')}</Empty> : (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={rows} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid stroke={c.border} vertical={false} />
@@ -225,8 +226,8 @@ function HealthView() {
         )}
       </div>
       <div className="card">
-        <div className="card-head"><span className="micro">Sueño y FC en reposo</span></div>
-        {!rows.some((r) => r.sleep_score || r.rest_hr) ? <Empty icon="moon" title="Sin datos" /> : (
+        <div className="card-head"><span className="micro">{t('Sleep and resting HR')}</span></div>
+        {!rows.some((r) => r.sleep_score || r.rest_hr) ? <Empty icon="moon" title={t('No data')} /> : (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={rows} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid stroke={c.border} vertical={false} />
@@ -234,8 +235,8 @@ function HealthView() {
               <YAxis stroke={c.muted} fontSize={12} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
               <Tooltip {...tip} />
               <Legend />
-              <Line dataKey="sleep_score" name="Sueño (0–100)" stroke={c.s2} strokeWidth={2} dot={{ r: 3 }} connectNulls />
-              <Line dataKey="rest_hr" name="FC reposo (ppm)" stroke={c.s1} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+              <Line dataKey="sleep_score" name={t('Sleep (0–100)')} stroke={c.s2} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+              <Line dataKey="rest_hr" name={t('Resting HR (bpm)')} stroke={c.s1} strokeWidth={2} dot={{ r: 3 }} connectNulls />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -255,17 +256,17 @@ function UploadActivity({ onDone }: { onDone: (msg: string) => void }) {
       for (let i = 0; i < 120; i++) {
         await new Promise((r) => setTimeout(r, 600))
         const j = await api.get<{ state: string; error: string | null; stats: { imported?: number; duplicates?: number } }>(`/api/import/history/${job}`)
-        if (j.state === 'error') throw new Error(j.error ?? 'Error al importar')
+        if (j.state === 'error') throw new Error(j.error ?? t('Import failed'))
         if (j.state === 'done') {
-          onDone(j.stats.imported ? `${j.stats.imported} actividad${j.stats.imported > 1 ? 'es' : ''} subida${j.stats.imported > 1 ? 's' : ''}.` : j.stats.duplicates ? 'Esa actividad ya estaba.' : 'No encontré carreras en el archivo.')
+          onDone(j.stats.imported ? (j.stats.imported > 1 ? t('{n} activities uploaded.', { n: j.stats.imported }) : t('1 activity uploaded.')) : j.stats.duplicates ? t('That activity was already there.') : t('No runs found in the file.'))
           return
         }
       }
     } catch (e) { onDone(`Error: ${(e as Error).message}`) } finally { setBusy(false) }
   }
   return (
-    <label className={`btn btn-sm${busy ? ' disabled' : ''}`} title="Archivos .fit, .gpx o .tcx de cualquier reloj o app">
-      <Icon name="upload" size={16} />{busy ? 'Subiendo…' : 'Subir actividad'}
+    <label className={`btn btn-sm${busy ? ' disabled' : ''}`} title={t('.fit, .gpx or .tcx files from any watch or app')}>
+      <Icon name="upload" size={16} />{busy ? t('Uploading…') : t('Upload activity')}
       <input type="file" multiple accept=".fit,.gpx,.tcx,.gz,.zip" hidden disabled={busy} onChange={(e) => { if (e.target.files?.length) upload(e.target.files); e.target.value = '' }} />
     </label>
   )
@@ -281,11 +282,11 @@ function ActivitiesView() {
   return (
     <div className="card">
       <div className="card-head">
-        <Segmented label="Tipo" value={f} onChange={setF} options={[['running', 'Carrera'], ['strength_training', 'Fuerza'], ['all', 'Todo']]} />
+        <Segmented label={t('Type')} value={f} onChange={setF} options={[['running', t('Running')], ['strength_training', t('Strength')], ['all', t('All')]]} />
         <UploadActivity onDone={(m) => { setUpMsg(m); reload() }} />
       </div>
       {upMsg && <div style={{ marginBottom: 10 }}><Banner tone={upMsg.startsWith('Error') ? 'bad' : 'ok'}>{upMsg}</Banner></div>}
-      {list.length === 0 ? <Empty icon="activity" title="Nada aún" /> : (
+      {list.length === 0 ? <Empty icon="activity" title={t('Nothing yet')} /> : (
         <div className="list">
           {list.map((a) => {
             const url = garminActivityUrl(a.external_id)
@@ -303,7 +304,7 @@ function ActivitiesView() {
                     {a.training_effect ? ` · TE ${a.training_effect.toFixed(1)}` : ''}
                   </div>
                 </div>
-                {url && <a className="btn btn-ghost btn-icon" href={url} target="_blank" rel="noreferrer" aria-label="Ver en Garmin Connect"><Icon name="external" size={18} /></a>}
+                {url && <a className="btn btn-ghost btn-icon" href={url} target="_blank" rel="noreferrer" aria-label={t('View on Garmin Connect')}><Icon name="external" size={18} /></a>}
               </div>
             )
           })}
@@ -323,20 +324,20 @@ function PaceInsightsCard({ onApplied }: { onApplied: () => void }) {
   if (!data) return null
   return (
     <div className="card">
-      <div className="card-head"><span className="micro">Ritmos automáticos (análisis post-entreno)</span><span className={`chip ${data.auto ? 'chip-good' : ''}`}>{data.auto ? 'Automático' : 'Manual'}</span></div>
-      <p className="small text-2">Cada sesión de calidad se compara vuelta a vuelta con lo planificado. Si 2 de las 3 últimas (21 días) salen más fáciles —o más duras— de lo previsto, el VDOT sube —o baja— 0,5 y se actualizan los entrenos y el reloj. Máximo un cambio por semana y nunca en los 10 días previos a tu carrera objetivo.</p>
+      <div className="card-head"><span className="micro">{t('Automatic paces (post-run analysis)')}</span><span className={`chip ${data.auto ? 'chip-good' : ''}`}>{data.auto ? t('Automatic') : t('Manual')}</span></div>
+      <p className="small text-2">{t('Each quality session is compared lap by lap with the plan. If 2 of the last 3 (21 days) are easier — or harder — than planned, VDOT goes up — or down — by 0.5 and the workouts and the watch are updated. At most one change a week, and never in the 10 days before your goal race.')}</p>
       {data.sessions.length > 0 ? (
         <div className="row" style={{ marginBottom: 10 }}>
           {data.sessions.map((x) => <span key={x.date} className={`chip ${VERDICT[x.verdict]?.[1] ?? ''}`}>{fmtDate(x.date, { day: 'numeric', month: 'short' })} · {VERDICT[x.verdict]?.[0] ?? x.verdict}</span>)}
         </div>
-      ) : <p className="small muted">Aún no hay sesiones de calidad de OpenRun analizadas. Empezarán con tu plan.</p>}
+      ) : <p className="small muted">{t('No OpenRun quality sessions analysed yet. They start with your plan.')}</p>}
       {data.pending && (
         <Banner tone="info">
-          Propuesta: VDOT {data.pending.from} → <b>{data.pending.to}</b> ({data.pending.reason}).{' '}
+          {t('Proposal')}: VDOT {data.pending.from} → <b>{data.pending.to}</b> ({data.pending.reason}).{' '}
           <button className="btn btn-sm" disabled={busy} style={{ marginLeft: 6 }} onClick={async () => {
             setBusy(true)
             try { await api.post('/api/pace-insights/apply'); reload(); onApplied() } finally { setBusy(false) }
-          }}>Aplicar</button>
+          }}>{t('Apply')}</button>
         </Banner>
       )}
       {data.log.length > 0 && (
@@ -355,8 +356,8 @@ export default function ProgressPage() {
   useEffect(() => { try { localStorage.setItem('progress-sec', sec) } catch { /* private mode */ } }, [sec])
   return (
     <div className="stack">
-      <Segmented label="Sección" value={sec} onChange={setSec}
-        options={[['records', 'Récords'], ['pred', 'Predicciones'], ['load', 'Carga'], ['health', 'Salud'], ['acts', 'Actividades']]} />
+      <Segmented label={t('Section')} value={sec} onChange={setSec}
+        options={[['records', t('Records')], ['pred', t('Predictions')], ['load', t('Load')], ['health', t('Health')], ['acts', t('Activities')]]} />
       {sec === 'records' && <RecordsView />}
       {sec === 'pred' && <PredictionsView />}
       {sec === 'load' && <LoadView />}

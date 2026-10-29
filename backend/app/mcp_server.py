@@ -25,7 +25,7 @@ from .tenancy import as_user
 
 
 def _instructions() -> str:
-    return coach.SYSTEM.format(today=dt.date.today().strftime("%A %d/%m/%Y"))
+    return coach.SYSTEM.format(today=dt.date.today().strftime("%A %d/%m/%Y"), language=coach.language_name())
 
 
 async def list_tools(ctx, params) -> types.ListToolsResult:
@@ -47,7 +47,7 @@ def call_remote(name: str, args: dict) -> types.CallToolResult:
         r.raise_for_status()
         out = r.json()
     except Exception as e:  # noqa: BLE001
-        return types.CallToolResult(content=[types.TextContent(text=f"Error conectando con OpenRun: {e}")], isError=True)
+        return types.CallToolResult(content=[types.TextContent(text=f"Error connecting to OpenRun: {e}")], isError=True)
     if not out.get("ok"):
         return types.CallToolResult(content=[types.TextContent(text=f"Error: {out.get('error')}")], isError=True)
     return types.CallToolResult(content=[types.TextContent(text=json.dumps(out["result"], default=str, ensure_ascii=False)[:60000])])
@@ -68,7 +68,7 @@ async def call_tool(ctx, params: types.CallToolRequestParams) -> types.CallToolR
     return await asyncio.to_thread(call, params.name, params.arguments or {})
 
 
-server = Server("openrun", version="0.2", title="OpenRun – entrenador de running",
+server = Server("openrun", version="0.2", title="OpenRun – running coach",
                 instructions=_instructions(), on_list_tools=list_tools, on_call_tool=call_tool)
 
 
