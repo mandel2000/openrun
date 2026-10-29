@@ -56,7 +56,7 @@ function CourseCard({ st, onCourse }: { st: Strategy; onCourse: (s: Strategy) =>
   return (
     <details className="card" open={st.course.flat || st.course.approx}>
       <summary className="row" style={{ cursor: 'pointer' }}>
-        <Icon name="upload" size={18} /><b className="grow">Recorrido: {st.course.name}</b>
+        <Icon name="upload" size={18} /><b className="grow">{t('Course')}: {st.course.name}</b>
         {st.course.approx && <span className="chip chip-warn">{t('approximate')}</span>}
         {st.course.flat && <span className="chip chip-warn">{t('no profile')}</span>}
       </summary>
@@ -135,7 +135,7 @@ export default function RaceStrategy({ race, onBack }: { race: Race; onBack: () 
         </div>
         <div className="row small" style={{ marginTop: 12 }}>
           {st.prediction.flat_s && <span className="chip">{t('On the flat you would run {time}', { time: fmtTime(st.prediction.flat_s) })} (VDOT {st.prediction.vdot})</span>}
-          {st.course.factor > 1.005 && <span className="chip">Recorrido +{((st.course.factor - 1) * 100).toFixed(1)} % vs llano</span>}
+          {st.course.factor > 1.005 && <span className="chip">{t('Course +{pct}% vs flat', { pct: ((st.course.factor - 1) * 100).toFixed(1) })}</span>}
           {w ? <span className={`chip chip-wrap ${st.heat_pct > 0 ? 'chip-warn' : ''}`}>{Math.round(w.temp)} °C · {t('dew point')} {Math.round(w.dew)} °C{w.rain_pct != null ? ` · ${t('rain')} ${w.rain_pct} %` : ''}{w.wind_kmh != null ? ` · ${t('wind')} ${Math.round(w.wind_kmh)} km/h` : ''}{st.heat_pct > 0 ? ` · ${t('+{pct}% for heat', { pct: st.heat_pct })}` : ''}</span>
             : <span className="chip">{t('Weather forecast available 16 days before')}</span>}
         </div>
@@ -165,7 +165,8 @@ export default function RaceStrategy({ race, onBack }: { race: Race; onBack: () 
             onMouseLeave={() => setHover(null)}>
             <defs><linearGradient id="eleFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={c.accent} stopOpacity={0.35} /><stop offset="100%" stopColor={c.accent} stopOpacity={0.04} /></linearGradient></defs>
             <XAxis dataKey="km" type="number" domain={[0, 'dataMax']} stroke={c.muted} fontSize={12} tickLine={false} axisLine={false} unit=" km" tickCount={6} />
-            <YAxis stroke={c.muted} fontSize={12} tickLine={false} axisLine={false} width={48} tickFormatter={(v) => `${Math.round(v)} m`} />
+            <YAxis stroke={c.muted} fontSize={12} tickLine={false} axisLine={false} width={48} tickFormatter={(v) => `${Math.round(v)} m`}
+              domain={[(min: number) => Math.max(0, Math.floor((min - 15) / 10) * 10), (max: number) => Math.ceil((max + 10) / 10) * 10]} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v} m`, 'Altitud']} labelFormatter={(l) => `km ${l}`} />
             <Area dataKey="ele" stroke={c.accent} strokeWidth={2} fill="url(#eleFill)" isAnimationActive={false} />
           </AreaChart>
