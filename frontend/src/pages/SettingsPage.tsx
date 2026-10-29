@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, fmtDate, useApi } from '../api'
 import type { Me } from '../App'
+import { DONATE_URL, REPO_URL } from '../project'
 import { Banner, Icon, Segmented, type IconName } from '../ui'
 import { getLang, LANGS, locale, setLang, t, type Lang } from '../i18n'
 
@@ -756,6 +757,19 @@ function ThemeCard() {
   )
 }
 
+function SupportCard() {
+  return (
+    <div className="card">
+      <ConnHead icon="heart" title={t('Support OpenRun')} status={null} />
+      <p className="small text-2" style={{ marginTop: 10 }}>{t('OpenRun is free and open source, made in spare time. If it helps your training, you can buy the developer a coffee: it pays for the time and keeps the project going.')}</p>
+      <div className="row">
+        <a className="btn btn-primary" href={DONATE_URL} target="_blank" rel="noreferrer"><Icon name="heart" />{t('Buy me a coffee')}</a>
+        <a className="btn btn-ghost" href={REPO_URL} target="_blank" rel="noreferrer"><Icon name="external" />{t('Code, ideas and bugs on GitHub')}</a>
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage({ onChange, me, onMe }: { onChange: () => void; me: Me | null; onMe: () => void }) {
   return (
     <div className="stack" style={{ maxWidth: 820 }}>
@@ -770,6 +784,7 @@ export default function SettingsPage({ onChange, me, onMe }: { onChange: () => v
       <ProfileCard />
       <ImportCard />
       <ThemeCard />
+      <SupportCard />
       {me?.is_admin && <UsersCard me={me} />}
       <p className="small muted">OpenRun · {t('only you can see your data')} · {fmtDate(new Date().toISOString().slice(0, 10), { year: 'numeric' })}</p>
     </div>
