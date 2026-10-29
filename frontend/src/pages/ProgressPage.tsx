@@ -244,8 +244,36 @@ function HealthView() {
   )
 }
 
+function UploadActivity({ onDone }: { onDone: (msg: string) => void }) {
+  const [busy, setBusy] = useState(false)
+  const upload = async (files: FileList) => {
+    setBusy(true)
+    const fd = new FormData()
+    Array.from(files).forEach((f) => fd.append('files', f))
+    try {
+      const { job } = await api.post<{ job: string }>('/api/import/history', fd)
+      for (let i = 0; i < 120; i++) {
+        await new Promise((r) => setTimeout(r, 600))
+        const j = await api.get<{ state: string; error: string | null; stats: { imported?: number; duplicates?: number } }>(`/api/import/history/${job}`)
+        if (j.state === 'error') throw new Error(j.error ?? 'Error al importar')
+        if (j.state === 'done') {
+          onDone(j.stats.imported ? `${j.stats.imported} actividad${j.stats.imported > 1 ? 'es' : ''} subida${j.stats.imported > 1 ? 's' : ''}.` : j.stats.duplicates ? 'Esa actividad ya estaba.' : 'No encontré carreras en el archivo.')
+          return
+        }
+      }
+    } catch (e) { onDone(`Error: ${(e as Error).message}`) } finally { setBusy(false) }
+  }
+  return (
+    <label className={`btn btn-sm${busy ? ' disabled' : ''}`} title="Archivos .fit, .gpx o .tcx de cualquier reloj o app">
+      <Icon name="upload" size={16} />{busy ? 'Subiendo…' : 'Subir actividad'}
+      <input type="file" multiple accept=".fit,.gpx,.tcx,.gz,.zip" hidden disabled={busy} onChange={(e) => { if (e.target.files?.length) upload(e.target.files); e.target.value = '' }} />
+    </label>
+  )
+}
+
 function ActivitiesView() {
-  const { data, loading } = useApi<Act[]>('/api/activities?days=120')
+  const { data, loading, reload } = useApi<Act[]>('/api/activities?days=120')
+  const [upMsg, setUpMsg] = useState<string | null>(null)
   const [f, setF] = useState<'running' | 'strength_training' | 'all'>('running')
   const [open, setOpen] = useState<Act | null>(null)
   if (loading && !data) return <Skeleton h={320} />
@@ -254,7 +282,9 @@ function ActivitiesView() {
     <div className="card">
       <div className="card-head">
         <Segmented label="Tipo" value={f} onChange={setF} options={[['running', 'Carrera'], ['strength_training', 'Fuerza'], ['all', 'Todo']]} />
+        <UploadActivity onDone={(m) => { setUpMsg(m); reload() }} />
       </div>
+      {upMsg && <div style={{ marginBottom: 10 }}><Banner tone={upMsg.startsWith('Error') ? 'bad' : 'ok'}>{upMsg}</Banner></div>}
       {list.length === 0 ? <Empty icon="activity" title="Nada aún" /> : (
         <div className="list">
           {list.map((a) => {
@@ -263,7 +293,7 @@ function ActivitiesView() {
               <div key={a.id} className="list-row">
                 <Icon name={a.sport === 'running' ? 'activity' : a.sport.includes('strength') ? 'dumbbell' : 'heart'} className="muted" />
                 <div className="grow">
-                  {a.sport === 'running' && a.external_id?.startsWith('garmin:')
+                  {a.sport === 'running'
                     ? <button className="title" style={{ background: 'none', border: 0, padding: 0, color: 'var(--link)', cursor: 'pointer', textAlign: 'left', font: 'inherit', fontWeight: 600 }} onClick={() => setOpen(a)}>{a.name}</button>
                     : <div className="title">{a.name}</div>}
                   {a.analysis?.verdict && <span className={`chip ${VERDICT[a.analysis.verdict][1]}`} style={{ height: 22, fontSize: 12, marginTop: 4 }}>{VERDICT[a.analysis.verdict][0]}</span>}
@@ -279,7 +309,7 @@ function ActivitiesView() {
           })}
         </div>
       )}
-      {open && <ActivityAnalysisSheet activityId={open.id} title={open.name} onClose={() => setOpen(null)} />}
+      {open && <ActivityAnalysisSheet activityId={open.id} title={open.name} laps={!!open.external_id?.startsWith('garmin:')} onClose={() => setOpen(null)} />}
     </div>
   )
 }

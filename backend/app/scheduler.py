@@ -15,6 +15,7 @@ from .tenancy import as_user
 
 log = logging.getLogger("openrun.scheduler")
 _lock = threading.Lock()
+STATE: dict = {"running": False, "last_tick": None, "last_backup": None, "backup_error": None}
 
 
 def due(settings: dict, last_date: str | None, now: dt.datetime) -> bool:
@@ -44,11 +45,32 @@ def tick() -> dict | None:
             except Exception:  # noqa: BLE001 - one user's failure must not stop the others
                 log.exception("daily routine failed for user %s", uid)
         if out or _backup_due():
-            S.backup_db()
+            try:
+                S.backup_db()
+                STATE.update(last_backup=dt.datetime.now().isoformat(timespec="seconds"), backup_error=None)
+            except Exception as e:  # noqa: BLE001
+                log.exception("backup failed")
+                if STATE.get("backup_error") is None:
+                    _alert_admins("Copia de seguridad fallida", f"La copia diaria de OpenRun ha fallado: {e}")
+                STATE["backup_error"] = str(e)
         _hourly(out)
+        STATE["last_tick"] = dt.datetime.now().isoformat(timespec="seconds")
     finally:
         _lock.release()
     return out
+
+
+def _alert_admins(title: str, body: str) -> None:
+    """Push to every admin's devices (operational problems only the server owner can fix)."""
+    from . import push
+
+    with Session(engine) as s:
+        admins = [u.id for u in s.exec(select(User).where(User.is_admin == True)).all()]  # noqa: E712
+    for uid in admins:
+        try:
+            push.send(uid, title, body, "/#ajustes", "ops")
+        except Exception:  # noqa: BLE001
+            log.warning("admin alert failed", exc_info=True)
 
 
 _last_backup: list[str] = []
@@ -106,4 +128,5 @@ def start(stop: threading.Event, interval_s: int = 60) -> threading.Thread:
 
     t = threading.Thread(target=loop, name="openrun-scheduler", daemon=True)
     t.start()
+    STATE.update(running=True, started=dt.datetime.now().isoformat(timespec="seconds"), interval_s=interval_s)
     return t

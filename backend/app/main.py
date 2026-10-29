@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from . import auth, scheduler, tenancy
@@ -69,8 +69,31 @@ async def access_control(request: Request, call_next):
 
 
 @app.get("/api/health")
-def health():
-    return {"ok": True}
+def health(deep: bool = False):
+    """Liveness for Docker/Coolify. deep=1 (uptime monitor) also checks the database and that the
+    background scheduler is still ticking; any problem answers 503."""
+    if not deep:
+        return {"ok": True}
+    from sqlalchemy import text
+
+    from .db import engine
+
+    problems = []
+    try:
+        with engine.connect() as c:
+            c.execute(text("SELECT 1"))
+    except Exception as e:  # noqa: BLE001
+        problems.append(f"db: {e}")
+    st = scheduler.STATE
+    if st["running"]:
+        ref = st["last_tick"] or st.get("started")
+        age = (dt.datetime.now() - dt.datetime.fromisoformat(ref)).total_seconds() if ref else 0
+        if age > max(600, 10 * st.get("interval_s", 60)):
+            problems.append(f"scheduler parado ({int(age)} s sin ejecutar)")
+    if st.get("backup_error"):
+        problems.append(f"backup: {st['backup_error']}")
+    body = {"ok": not problems, "problems": problems, "scheduler": {k: st.get(k) for k in ("running", "last_tick", "last_backup")}}
+    return body if not problems else JSONResponse(body, status_code=503)
 
 
 def _me(uid: int | None) -> dict | None:
@@ -178,8 +201,8 @@ class AccountIn(BaseModel):
 
 
 @app.get("/api/account")
-def account_get():
-    return _me(tenancy.current_user_id())
+def account_get(s: Session = DB):
+    return {**_me(tenancy.current_user_id()), "ai": S.ai_usage(s)}
 
 
 @app.put("/api/account")
@@ -210,7 +233,7 @@ def account_put(body: AccountIn, request: Request):
 def users_list():
     from sqlmodel import Session as _S, select
 
-    from .db import Activity, Invite, User, engine
+    from .db import Activity, Invite, Meta, User, engine
 
     _require_admin()
     with _S(engine) as s:
@@ -221,8 +244,34 @@ def users_list():
         now = dt.datetime.now().isoformat(timespec="seconds")
         invites = [i.model_dump() for i in s.exec(select(Invite).order_by(Invite.created_at.desc())).all()
                    if not i.used_by and i.expires_at > now]
-        return {"users": [{**_me(u.id), "created_at": u.created_at, "activities": counts.get(u.id, 0)} for u in users],
-                "invites": invites}
+        today = dt.date.today().isoformat()
+        used = {m.user_id: m.value.get("count", 0) for m in s.exec(select(Meta).where(Meta.key == "ai_usage").execution_options(all_users=True)).all()
+                if m.value.get("date") == today}
+        return {"users": [{**_me(u.id), "created_at": u.created_at, "activities": counts.get(u.id, 0),
+                           "ai_today": used.get(u.id, 0), "ai_limit": S.ai_limit(u.id), "ai_limit_custom": u.ai_daily_limit is not None}
+                          for u in users],
+                "invites": invites, "ai_default_limit": S.AI_DEFAULT_LIMIT}
+
+
+class UserLimitIn(BaseModel):
+    ai_daily_limit: int | None = None  # None = default
+
+
+@app.put("/api/users/{uid}/limits")
+def user_limits(uid: int, body: UserLimitIn):
+    from sqlmodel import Session as _S
+
+    from .db import User, engine
+
+    _require_admin()
+    with _S(engine) as s:
+        u = s.get(User, uid)
+        if not u:
+            raise HTTPException(404, "Usuario no existe")
+        u.ai_daily_limit = None if body.ai_daily_limit is None else max(0, min(body.ai_daily_limit, 1000))
+        s.add(u)
+        s.commit()
+    return {"ok": True, "ai_limit": S.ai_limit(uid)}
 
 
 class InviteIn(BaseModel):
@@ -622,6 +671,70 @@ def adapt_today(s: Session = DB):
     return S.adapt_today(s)
 
 
+@app.get("/api/onboarding")
+def onboarding(s: Session = DB):
+    return S.onboarding_state(s)
+
+
+@app.post("/api/onboarding/done")
+def onboarding_done(s: Session = DB):
+    return S.onboarding_done(s)
+
+
+@app.get("/api/replan")
+def replan_check(s: Session = DB):
+    return S.replan_check(s)
+
+
+class ReplanIn(BaseModel):
+    workout_id: int
+    accept: bool
+
+
+@app.post("/api/replan")
+def replan_apply(body: ReplanIn, s: Session = DB):
+    try:
+        return S.replan_apply(s, body.workout_id, body.accept)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+class BreakIn(BaseModel):
+    days: int = Field(ge=1, le=120)
+    reason: str = "other"  # illness | injury | travel | other
+
+
+@app.post("/api/replan/break")
+def replan_break(body: BreakIn, s: Session = DB):
+    return S.report_break(s, body.days, body.reason)
+
+
+@app.get("/api/readiness")
+def readiness_view(explain: bool = False, s: Session = DB):
+    return S.readiness_view(s, explain)
+
+
+class CheckinIn(BaseModel):
+    feel: int | None = Field(None, ge=1, le=5)
+    legs: int | None = Field(None, ge=1, le=5)
+    sick: bool = False
+    note: str | None = None
+
+
+@app.post("/api/readiness/checkin")
+def readiness_checkin(body: CheckinIn, s: Session = DB):
+    return S.save_checkin(s, body.feel, body.legs, body.sick, body.note)
+
+
+class AcceptIn(BaseModel):
+    accept: bool
+
+
+@app.post("/api/readiness/proposal")
+def readiness_proposal(body: AcceptIn, s: Session = DB):
+    return S.apply_readiness(s, body.accept)
+
+
 # ---------------------------------------------------------------- garmin
 
 
@@ -733,6 +846,8 @@ class ChatIn(BaseModel):
 
 @app.post("/api/chat")
 def chat(body: ChatIn, s: Session = DB):
+    if not S.ai_allowed(s, "chat"):
+        return {"reply": S.ai_limit_message(s), "tools": [], "error": True}
     return coach.chat(s, body.message)
 
 
@@ -748,7 +863,9 @@ def chat_stream(body: ChatIn):
     def events():
         with Session(engine) as s:
             try:
-                if coach.provider() == "anthropic":
+                if not S.ai_allowed(s, "chat"):
+                    gen = iter([{"type": "done", "reply": S.ai_limit_message(s), "tools": [], "error": True}])
+                elif coach.provider() == "anthropic":
                     gen = iter([{"type": "done", **coach.chat(s, body.message)}])
                 else:
                     gen = coach.chat_events(s, body.message)

@@ -1,84 +1,13 @@
 import { useState } from 'react'
-import { addDays, api, DAY_NAMES, type Weather, daysBetween, fmtDate, fmtTime, iso, PHASE_LABEL, useApi, workoutLevel, zoneVar, type Plan, type Race, type Readiness, type Workout } from '../api'
+import { addDays, api, DAY_NAMES, type Weather, daysBetween, fmtDate, fmtTime, iso, PHASE_LABEL, useApi, workoutLevel, zoneVar, type Plan, type Race, type Workout } from '../api'
 import ActivityAnalysisSheet from '../components/ActivityAnalysis'
 import StepProfile from '../components/StepProfile'
 import WorkoutDetail, { Steps, WorkoutMeta } from '../components/WorkoutDetail'
 import { Banner, Empty, Icon, Skeleton } from '../ui'
+import ReadinessCard from '../components/ReadinessCard'
+import { ReplanCard } from '../components/Replan'
 
-type WRow = { date: string; hrv_rmssd?: number; rest_hr?: number; sleep_score?: number; sleep_hours?: number; body_battery?: number; training_readiness?: number }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-const RLABEL = { green: 'Listo para entrenar', amber: 'Fatiga moderada', red: 'Recupera hoy', unknown: 'Sin datos suficientes' }
-const RICON = { green: 'check', amber: 'alert', red: 'x', unknown: 'heart' } as const
-
-function ReadinessCard({ onChanged }: { onChanged: () => void }) {
-  const { data, loading, reload } = useApi<{ rows: WRow[]; readiness: Readiness }>('/api/wellness?days=70')
-  const [msg, setMsg] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [more, setMore] = useState(false)
-  const run = async (fn: () => Promise<string>) => {
-    setBusy(true)
-    try { setMsg(await fn()); onChanged(); reload() } catch (e) { setMsg(`Error: ${(e as Error).message}`) } finally { setBusy(false) }
-  }
-  if (loading && !data) return <div className="card"><Skeleton h={56} w={56} style={{ borderRadius: '50%' }} /><Skeleton h={14} style={{ marginTop: 12 }} /><Skeleton h={14} w="60%" style={{ marginTop: 8 }} /></div>
-  const r = data?.readiness
-  const st = r?.status ?? 'unknown'
-  const last = [...(data?.rows ?? [])].reverse().find((x) => x.sleep_score || x.hrv_rmssd || x.body_battery)
-  const lo = r?.swc_low, hi = r?.swc_high, v = r?.hrv_7d
-  const min = lo && hi ? lo - (hi - lo) : 0, max = lo && hi ? hi + (hi - lo) : 1
-  const pos = (x: number) => `${Math.min(100, Math.max(0, ((x - min) / (max - min)) * 100))}%`
-  return (
-    <div className="card">
-      <div className="card-head"><span className="micro">Readiness</span><a className="small" href="#ajustes">Medir HRV</a></div>
-      <div className="row" style={{ gap: 14, flexWrap: 'nowrap' }}>
-        <div className={`ring ready-${st}`}><Icon name={RICON[st]} size={24} /></div>
-        <div className="grow">
-          <div style={{ fontWeight: 700, fontSize: 17 }} className={`ready-${st}`}>{RLABEL[st]}</div>
-          {v && <div className="small muted num">HRV 7 d {v} ms · normal {lo}–{hi}</div>}
-        </div>
-      </div>
-      {v && lo && hi && (
-        <div className="bullet" aria-hidden>
-          <div className="band" style={{ left: pos(lo), width: `calc(${pos(hi)} - ${pos(lo)})` }} />
-          <div className="mark" style={{ left: pos(v) }} />
-        </div>
-      )}
-      {!!r?.reasons.length && <ul className="small text-2" style={{ margin: '8px 0', paddingLeft: 18 }}>{r.reasons.map((x) => <li key={x}>{x}</li>)}</ul>}
-      {last && (
-        <div className="mini-stats" style={{ marginTop: 12 }}>
-          <div><span className="micro">Sueño</span><b>{last.sleep_score ?? '–'}</b></div>
-          <div><span className="micro">FC reposo</span><b>{last.rest_hr ?? '–'}</b></div>
-          <div><span className="micro">Readiness Garmin</span><b>{last.training_readiness ?? '–'}</b></div>
-          <div><span className="micro">Body Battery</span><b>{last.body_battery ?? '–'}</b></div>
-        </div>
-      )}
-      <div className="row" style={{ marginTop: 14 }}>
-        <button className="btn btn-sm" disabled={busy} onClick={() => run(async () => {
-          const x = await api.post<{ changes: { title: string; reason: string }[] }>('/api/adapt-today')
-          return x.changes.length ? x.changes.map((c) => `${c.title}: ${c.reason}`).join('\n') : 'Sin cambios necesarios hoy.'
-        })}><Icon name="zap" size={16} />Ajustar hoy</button>
-        <button className="btn btn-sm btn-ghost" aria-expanded={more} onClick={() => setMore(!more)}>¿No estás al 100%?<Icon name="chevronDown" size={16} /></button>
-      </div>
-      {more && (
-        <div style={{ marginTop: 10 }}>
-          <p className="small muted">Calidad → suave y −30 % de volumen durante unos días, o descanso activo.</p>
-          <div className="row">
-            {[3, 5, 7].map((d) => (
-              <button key={d} className="btn btn-sm" disabled={busy} onClick={() => run(async () => {
-                const x = await api.post<unknown[]>('/api/not-feeling-100', { days: d, mode: 'reduce' })
-                return `${x.length} entrenos ajustados en los próximos ${d} días.`
-              })}>Reducir {d} d</button>
-            ))}
-            <button className="btn btn-sm" disabled={busy} onClick={() => run(async () => {
-              const x = await api.post<unknown[]>('/api/not-feeling-100', { days: 3, mode: 'rest' })
-              return `${x.length} entrenos pasados a regenerativo.`
-            })}>Descanso 3 d</button>
-          </div>
-        </div>
-      )}
-      {msg && <div style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}><Banner tone={msg.startsWith('Error') ? 'bad' : 'info'}>{msg}</Banner></div>}
-    </div>
-  )
-}
 
 function WeatherChip({ date, w, onAdjusted }: { date: string; w: Workout; onAdjusted: () => void }) {
   const { data } = useApi<Weather>(`/api/weather?date=${date}`)
@@ -322,7 +251,10 @@ export default function TodayPage({ plan, reload, go }: { plan: Plan | null | un
                 <WeekStrip monday={monday} byDate={byDate} sel={selDay} onSel={setSel} />
               </div>
             </div>
-            <ReadinessCard onChanged={reload} />
+            <div className="stack">
+              <ReplanCard onChanged={reload} />
+              <ReadinessCard onChanged={reload} />
+            </div>
           </div>
         </>
       )}

@@ -52,11 +52,12 @@ export function LapsTable({ laps }: { laps: LapRow[] }) {
   )
 }
 
-export default function ActivityAnalysisSheet({ activityId, title, onClose, initial = 'route' }: { activityId: number; title: string; onClose: () => void; initial?: 'route' | 'plan' }) {
-  const [view, setView] = useState<'route' | 'plan'>(initial)
+export default function ActivityAnalysisSheet({ activityId, title, onClose, initial = 'route', laps = true }: { activityId: number; title: string; onClose: () => void; initial?: 'route' | 'plan'; laps?: boolean }) {
+  // lap-by-lap comparison needs Garmin's laps; uploaded files get map and charts only
+  const [view, setView] = useState<'route' | 'plan'>(laps ? initial : 'route')
   return (
     <Sheet title={title} onClose={onClose} labelledBy="an-title">
-      <div style={{ marginBottom: 12 }}><Segmented label="Vista" value={view} onChange={setView} options={[['route', 'Mapa y gráficas'], ['plan', 'Real vs plan']]} /></div>
+      {laps && <div style={{ marginBottom: 12 }}><Segmented label="Vista" value={view} onChange={setView} options={[['route', 'Mapa y gráficas'], ['plan', 'Real vs plan']]} /></div>}
       {view === 'route' ? <ActivityDetail activityId={activityId} /> : <PlanCompare activityId={activityId} />}
     </Sheet>
   )

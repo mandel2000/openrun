@@ -123,3 +123,23 @@ def test_strava_export_import_and_dedupe():
         rec = R.records([{**r.data, "id": r.id, "date": r.date, "sport": r.sport} for r in mine], dt.date(2026, 10, 28))
         assert rec["all"]["10k"]["date"] == "2019-05-12" and rec["all"]["10k"]["approx"]  # GPS-only -> approx
         assert "10k" not in rec["1y"]
+
+
+def test_uploaded_file_keeps_streams_for_map_and_charts():
+    from sqlmodel import Session
+
+    from app import services as S
+    from app.db import Activity, engine, init_db
+
+    init_db()
+    start = dt.datetime.combine(dt.date.today() - dt.timedelta(days=3), dt.time(8, 0), tzinfo=dt.timezone.utc)
+    g = H.parse_file("r.gpx", gpx(track_points(km=5, pace=300, start=start)))
+    st = g["_streams"]
+    assert {"t", "d", "lat", "lon", "hr", "speed"} <= set(st) and len(st["t"]) <= 900
+    assert abs(st["d"][-1] - g["distance_m"]) < 0.05 * g["distance_m"]
+    with Session(engine) as s:
+        S.import_history(s, [("r.gpx", gpx(track_points(km=5, pace=300, start=start, lat0=41.5)))])
+        act = s.exec(__import__("sqlmodel").select(Activity).where(Activity.date == start.date().isoformat())).all()[-1]
+        d = S.activity_detail(s, act.id)
+        assert d["has_streams"] and len(d["coords"]) > 100 and len(d["splits"]) == 5
+        assert "_streams" not in act.data

@@ -145,6 +145,15 @@ TOOLS: list[dict[str, Any]] = [
     {"name": "not_feeling_100", "description": "El atleta no está al 100%: reduce (o descanso activo) los próximos N días.",
      "input_schema": {"type": "object", "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 14},
                                                          "mode": {"type": "string", "enum": ["reduce", "rest"]}}, "required": ["days"]}},
+    {"name": "get_readiness", "description": "Readiness de hoy: nota 0-100 y sus partes (HRV, sueño, FC reposo, carga, sensaciones del check-in) y la propuesta para el entreno de hoy.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "get_missed_sessions", "description": "Entrenos de los últimos días no realizados y, para las sesiones clave, el hueco propuesto para recuperarlas esta semana.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "reschedule_missed", "description": "Recupera una sesión clave perdida en su hueco propuesto (accept=true) o la da por no realizada (accept=false).",
+     "input_schema": {"type": "object", "properties": {"id": {"type": "integer"}, "accept": {"type": "boolean"}}, "required": ["id", "accept"]}},
+    {"name": "report_break", "description": "El atleta ha estado parado N días (enfermedad, lesión, viaje): cierra los entrenos perdidos, ajusta ritmos si hace falta y suaviza la vuelta. Pide confirmación antes.",
+     "input_schema": {"type": "object", "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 120},
+                                                         "reason": {"type": "string", "enum": ["illness", "injury", "travel", "other"]}}, "required": ["days"]}},
     {"name": "push_to_garmin", "description": "Envía entrenos (ids) al calendario de Garmin Connect para sincronizar con el reloj.",
      "input_schema": {"type": "object", "properties": {"ids": {"type": "array", "items": {"type": "integer"}}}, "required": ["ids"]}},
 ]
@@ -226,6 +235,14 @@ def run_tool(s: Session, name: str, args: dict) -> Any:
         return {k: v for k, v in p.items() if k != "weeks"} | {"n_weeks": len(p["weeks"])}
     if name == "adapt_today_to_readiness":
         return S.adapt_today(s, today.isoformat())
+    if name == "get_readiness":
+        return S.readiness_view(s)
+    if name == "get_missed_sessions":
+        return S.replan_check(s)
+    if name == "reschedule_missed":
+        return S.replan_apply(s, int(args["id"]), bool(args["accept"]))
+    if name == "report_break":
+        return S.report_break(s, int(args["days"]), args.get("reason", "other"))
     if name == "not_feeling_100":
         return _strip_heavy(S.not_feeling_well(s, args["days"], args.get("mode", "reduce")))
     if name == "push_to_garmin":

@@ -5,11 +5,12 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
+import os
 from collections import defaultdict
 
 from sqlmodel import Session, select
 
-from .db import Activity, Athlete, Meta, Plan, PlannedWorkout, Race, Wellness
+from .db import Activity, Athlete, Meta, Plan, PlannedWorkout, Race, Wellness, engine
 from .integrations.garmin import garmin
 from .training import adapt, load, records as R
 from .training import workouts as W
@@ -335,8 +336,17 @@ def upsert_activity(s: Session, act: dict) -> Activity:
 def _match_planned(s: Session, act: Activity) -> None:
     if act.sport != "running":
         return
+    if s.exec(select(PlannedWorkout).where(PlannedWorkout.activity_id == act.id)).first():
+        return
     pw = s.exec(select(PlannedWorkout).where(PlannedWorkout.date == act.date, PlannedWorkout.status.in_(["planned", "modified"]))).all()
     pw = [p for p in pw if p.data.get("sport") == "running"]
+    if not pw and not s.exec(select(PlannedWorkout).where(PlannedWorkout.date == act.date, PlannedWorkout.status == "done")).first():
+        # nothing planned that day: a run done a day or two late still counts for the missed session
+        lo = (dt.date.fromisoformat(act.date) - dt.timedelta(days=2)).isoformat()
+        pw = [p for p in s.exec(select(PlannedWorkout).where(PlannedWorkout.date >= lo, PlannedWorkout.date < act.date,
+                                                             PlannedWorkout.status.in_(["planned", "modified"]))
+                                .order_by(PlannedWorkout.date.desc())).all()
+              if p.data.get("sport") == "running" and not p.activity_id]
     if pw:
         pw[0].status, pw[0].activity_id = "done", act.id
         s.add(pw[0])
@@ -413,7 +423,77 @@ def wellness_rows(s: Session, days: int = 90) -> list[dict]:
 
 
 def readiness_today(s: Session) -> dict:
-    return load.readiness(wellness_rows(s, 70)).to_dict()
+    try:
+        lt = training_load(s, 7)["today"]
+    except Exception:  # noqa: BLE001 - readiness must work without load data
+        lt = None
+    return load.readiness(wellness_rows(s, 70), load_today=lt).to_dict()
+
+
+def save_checkin(s: Session, feel: int | None, legs: int | None, sick: bool = False, note: str | None = None) -> dict:
+    """Daily 2-question check-in (1 = fatal ... 5 = genial). Stored as a 'self' wellness row."""
+    row = {"date": dt.date.today().isoformat(), "source": "self", "feel": feel, "legs": legs, "sick": bool(sick)}
+    if note:
+        row["note"] = note[:200]
+    upsert_wellness(s, row)
+    return readiness_view(s)
+
+
+READINESS_SYSTEM = """Eres el entrenador de running del atleta (OpenRun). En español, tono cercano, sin saludos. Con el JSON
+de su estado de hoy (nota de readiness 0-100 y sus partes, entreno previsto y la propuesta de la app) explica en 2-3 frases
+(máximo 60 palabras) por qué conviene la propuesta o por qué puede entrenar tal cual. Cita 1-2 datos concretos. Sin listas."""
+
+
+def readiness_view(s: Session, explain: bool = False) -> dict:
+    """Readiness + what it means for today's session: a proposal the athlete accepts or dismisses."""
+    today = dt.date.today().isoformat()
+    r = readiness_today(s)
+    a = get_athlete(s)
+    pws = [p for p in s.exec(select(PlannedWorkout).where(PlannedWorkout.date == today)).all()
+           if p.data.get("sport") == "running" and p.status in ("planned", "modified")]
+    pw = pws[0] if pws else None
+    proposal = None
+    dismissed = meta_get(s, "readiness_dismissed").get("date") == today
+    if pw and pw.status == "planned" and r["status"] in ("amber", "red") and not dismissed:
+        new, msg = adapt.adjust_for_readiness(pw.data, r["status"], a.vdot or 40)
+        if new is not pw.data:
+            proposal = {"workout_id": pw.id, "from": pw.data.get("title"), "to": new.get("title"),
+                        "to_km": new.get("distance_km"), "reason": msg}
+    out = {"readiness": r, "workout": workout_dict(pw) if pw else None, "proposal": proposal,
+           "checkin": next(({k: w.get(k) for k in ("feel", "legs", "sick")} for w in wellness_rows(s, 1)
+                            if w["date"] == today and (w.get("feel") or w.get("legs") or w.get("sick"))), None)}
+    cache = meta_get(s, "readiness_explain")
+    key = f"{today}:{r.get('score')}:{r['status']}:{bool(proposal)}"
+    out["explanation"] = cache.get("text") if cache.get("key") == key else None
+    if explain and not out["explanation"]:
+        import json
+
+        from .ai import coach
+        facts = {"readiness": {k: r.get(k) for k in ("status", "score", "components", "reasons")},
+                 "entreno_hoy": pw.data.get("title") if pw else None, "propuesta": proposal}
+        text = coach.complete(READINESS_SYSTEM, json.dumps(facts, ensure_ascii=False, default=str), 300) if ai_allowed(s, "readiness") else None
+        text = text or _readiness_fallback(r, proposal, pw)
+        meta_set(s, "readiness_explain", {"key": key, "text": text})
+        out["explanation"] = text
+    return out
+
+
+def _readiness_fallback(r: dict, proposal: dict | None, pw: PlannedWorkout | None) -> str:
+    comps = sorted(r.get("components") or [], key=lambda c: c["score"])
+    weak = ", ".join(f"{c['label'].lower()} {c['value']}" for c in comps[:2] if c["score"] < 60)
+    if proposal:
+        return f"Hoy vienes con {weak or 'algo de fatiga'}. Mejor «{proposal['to']}» que «{proposal['from']}»: mantienes el estímulo sin cavar más hondo y recuperas la calidad otro día."
+    if pw and r["status"] == "green":
+        return f"Todo en rango (nota {r.get('score')}/100): adelante con «{pw.data.get('title')}»."
+    return "Escucha al cuerpo: si en el calentamiento las piernas no responden, quédate en suave."
+
+
+def apply_readiness(s: Session, accept: bool) -> dict:
+    if not accept:
+        meta_set(s, "readiness_dismissed", {"date": dt.date.today().isoformat()})
+        return readiness_view(s)
+    adapt_today(s)
+    return readiness_view(s)
 
 
 def training_load(s: Session, days: int = 90) -> dict:
@@ -513,6 +593,141 @@ def not_feeling_well(s: Session, days: int, mode: str = "reduce") -> list[dict]:
     if on_watch:
         push_to_garmin(s, on_watch)
     return [workout_dict(p) for p in pws]
+
+
+# ---------------------------------------------------------------- missed sessions & breaks
+
+from .training import replan as RPL  # noqa: E402
+
+
+def _rows(pws: list[PlannedWorkout]) -> list[dict]:
+    return [{"id": p.id, "date": p.date, "status": p.status, "data": p.data, "activity_id": p.activity_id} for p in pws]
+
+
+def replan_check(s: Session) -> dict:
+    """Missed sessions of the last days and what to do with them (proposals, nothing is changed)."""
+    today = dt.date.today()
+    pws = s.exec(select(PlannedWorkout).where(PlannedWorkout.date >= (today - dt.timedelta(days=6)).isoformat(),
+                                              PlannedWorkout.date <= (today + dt.timedelta(days=7)).isoformat())).all()
+    rows = _rows(pws)
+    upcoming = [r for r in rows if r["date"] >= today.isoformat()]
+    out = []
+    for m in RPL.missed(rows, today):
+        item = {"id": m["id"], "date": m["date"], "title": m["data"].get("title"), "key": RPL.is_key(m["data"]), "slot": None}
+        if item["key"]:
+            sl = RPL.slot_for(m, upcoming, today)
+            if sl:
+                rep = sl["replaces"]
+                item["slot"] = {"date": sl["date"], "replaces_id": rep["id"] if rep else None,
+                                "replaces_title": rep["data"].get("title") if rep else None}
+        out.append(item)
+    last_run = s.exec(select(Activity).where(Activity.sport == "running").order_by(Activity.date.desc())).first()
+    gap = (today - dt.date.fromisoformat(last_run.date)).days if last_run else None
+    return {"missed": out, "days_since_run": gap,
+            "suggest_break": bool(gap and gap >= 4 and sum(1 for r in rows if r["date"] < today.isoformat() and r["status"] != "done"
+                                                            and r["data"].get("sport") == "running") >= 2)}
+
+
+def replan_apply(s: Session, workout_id: int, accept: bool) -> dict:
+    """accept: move the missed key session to its proposed day (replacing the easy run there);
+    otherwise mark it as not done."""
+    pw = s.get(PlannedWorkout, workout_id)
+    if not pw or pw.status not in ("planned", "modified"):
+        raise ValueError("Ese entreno ya no está pendiente")
+    item = next((m for m in replan_check(s)["missed"] if m["id"] == workout_id), None)
+    touched = [pw]
+    if accept and item and item["slot"]:
+        sl = item["slot"]
+        old = pw.date
+        pw.date, pw.data = sl["date"], {**pw.data, "date": sl["date"]}
+        pw.status, pw.note = "modified", f"Recuperada del {old[8:]}/{old[5:7]}"
+        if sl["replaces_id"]:
+            rep = s.get(PlannedWorkout, sl["replaces_id"])
+            rep.status, rep.note = "skipped", f"Sustituido por «{pw.data.get('title')}» (recuperada)"
+            s.add(rep)
+            touched.append(rep)
+        result = f"«{pw.data.get('title')}» pasa al {sl['date'][8:]}/{sl['date'][5:7]}."
+    else:
+        pw.status, pw.note = "skipped", "No realizado"
+        result = f"«{pw.data.get('title')}» marcado como no realizado."
+    s.add(pw)
+    s.commit()
+    _resync_garmin(s, touched)
+    return {"message": result, **replan_check(s)}
+
+
+def auto_skip_missed(s: Session) -> list[str]:
+    """Daily: easy sessions missed before yesterday and key sessions with no slot left become 'skipped'
+    (the plan stays honest and the weekly numbers right). Returns the titles of key sessions that
+    still have a proposal, for the morning notification."""
+    today = dt.date.today()
+    chk = replan_check(s)
+    pending = []
+    for m in chk["missed"]:
+        old = (today - dt.date.fromisoformat(m["date"])).days
+        if (not m["key"] and old >= 2) or (m["key"] and not m["slot"] and old >= 2):
+            pw = s.get(PlannedWorkout, m["id"])
+            pw.status, pw.note = "skipped", "No realizado"
+            s.add(pw)
+        elif m["key"] and m["slot"]:
+            pending.append(m)
+    s.commit()
+    return pending
+
+
+def _soften_range(s: Session, start: dt.date, days: int, mode: str, pct: int, note: str, vdot: float) -> list[PlannedWorkout]:
+    """mode 'easy': every run becomes easy (quality -> easy, long -> shorter long); 'reduce': only volume -pct %."""
+    paces = training_paces(vdot)
+    out = []
+    for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.date >= start.isoformat(),
+                                                  PlannedWorkout.date < (start + dt.timedelta(days=days)).isoformat(),
+                                                  PlannedWorkout.status.in_(["planned", "modified"]))).all():
+        d = pw.data
+        if d.get("sport") != "running" or d.get("type") == "race":
+            continue
+        km = (d.get("distance_km") or 6) * (1 - pct / 100)
+        if mode == "easy" or d.get("intensity") == "high":
+            w = W.long_run(paces, km) if d.get("type") == "long" else W.easy_run(paces, max(3.0, km))
+        elif d.get("type") == "long":
+            w = W.long_run(paces, km)
+        elif d.get("intensity") == "moderate":
+            w = W.easy_with_strides(paces, max(3.0, km), 4)
+        else:
+            w = W.easy_run(paces, max(3.0, km))
+        w.date, w.phase = pw.date, d.get("phase", "")
+        pw.data, pw.status, pw.note = {**w.to_dict(), "_orig": d.get("_orig") or d}, "modified", note
+        s.add(pw)
+        out.append(pw)
+    s.commit()
+    return out
+
+
+def report_break(s: Session, days_off: int, reason: str = "other") -> dict:
+    """'I've been off N days': close the gap in the plan and ease back in (see training/replan.py)."""
+    days_off = max(1, min(int(days_off), 120))
+    today = dt.date.today()
+    p = RPL.break_protocol(days_off, reason)
+    label = {"illness": "enfermedad", "injury": "lesión", "travel": "viaje"}.get(reason, "pausa")
+    for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.date >= (today - dt.timedelta(days=days_off)).isoformat(),
+                                                  PlannedWorkout.date < today.isoformat(),
+                                                  PlannedWorkout.status.in_(["planned", "modified"]))).all():
+        pw.status, pw.note = "skipped", f"No realizado ({label})"
+        s.add(pw)
+    s.commit()
+    a = get_athlete(s)
+    vdot = a.vdot or 40.0
+    if p["vdot_factor"] < 1 and a.vdot:
+        vdot = round(a.vdot * p["vdot_factor"], 1)
+        recalibrate_paces(s, vdot, f"vuelta tras {days_off} días de {label}")
+    note = f"Vuelta tras {label} ({days_off} d)"
+    touched = _soften_range(s, today, p["easy_days"], "easy", 30 if days_off > 7 else 20, note, vdot)
+    if p["reduce_days"] > p["easy_days"]:
+        touched += _soften_range(s, today + dt.timedelta(days=p["easy_days"]), p["reduce_days"] - p["easy_days"],
+                                 "reduce", p["reduce_pct"], note, vdot)
+    _resync_garmin(s, touched)
+    log = meta_get(s, "breaks").get("items", [])
+    meta_set(s, "breaks", {"items": (log + [{"date": today.isoformat(), "days": days_off, "reason": reason}])[-20:]})
+    return {**p, "changed": len(touched), "vdot": vdot}
 
 
 def recalibrate_paces(s: Session, new_vdot: float, source: str) -> dict:
@@ -719,8 +934,10 @@ def _is_duplicate(index: list[tuple[dt.date, float, float]], a: dict) -> bool:
 
 
 def import_history(s: Session, files: list[tuple[str, object]], progress=None) -> dict:
+    from .db import ActivityStream
     from .integrations.history_import import activities_from_upload
 
+    keep_streams_from = (dt.date.today() - dt.timedelta(days=365)).isoformat()
     index = [(dt.date.fromisoformat(r.date), r.data.get("distance_m") or 0, r.data.get("duration_s") or 0)
              for r in s.exec(select(Activity).where(Activity.sport == "running")).all()]
     known = {r.external_id for r in s.exec(select(Activity)).all()}
@@ -736,7 +953,11 @@ def import_history(s: Session, files: list[tuple[str, object]], progress=None) -
             if a["external_id"] in known or _is_duplicate(index, a):
                 stats["duplicates"] += 1
                 continue
-            upsert_activity(s, a)
+            streams = a.pop("_streams", None)
+            row = upsert_activity(s, a)
+            if streams and a["date"] >= keep_streams_from:  # old history: summary only (keeps the DB small)
+                s.add(ActivityStream(activity_id=row.id, data=streams))
+                s.commit()
             known.add(a["external_id"])
             index.append((dt.date.fromisoformat(a["date"]), a.get("distance_m") or 0, a.get("duration_s") or 0))
             stats["imported"] += 1
@@ -780,6 +1001,70 @@ def start_import_job(files: list[tuple[str, str]], cleanup: list[str]) -> str:
 
     threading.Thread(target=run, daemon=True).start()
     return job_id
+
+
+# ---------------------------------------------------------------- onboarding
+
+
+def onboarding_state(s: Session) -> dict:
+    """What a new user still has to set up; suggestions for the plan form from their history."""
+    today = dt.date.today()
+    runs = s.exec(select(Activity).where(Activity.sport == "running",
+                                         Activity.date >= (today - dt.timedelta(days=42)).isoformat())).all()
+    km4 = sum((r.data.get("distance_m") or 0) for r in runs if r.date >= (today - dt.timedelta(days=28)).isoformat()) / 1000
+    a = get_athlete(s)
+    done = bool(meta_get(s, "onboarding").get("done"))
+    return {"done": done, "needed": not done and active_plan(s) is None,
+            "activities": len(s.exec(select(Activity)).all()), "garmin": bool(garmin.status().get("connected")),
+            "profile": bool(a.age and a.sex), "weekly_km": round(km4 / 4) if runs else None,
+            "longest_km": round(max((r.data.get("distance_m") or 0) for r in runs) / 1000) if runs else None,
+            "vdot": a.vdot}
+
+
+def onboarding_done(s: Session) -> dict:
+    meta_set(s, "onboarding", {"done": True, "at": dt.datetime.now().isoformat(timespec="seconds")})
+    return onboarding_state(s)
+
+
+# ---------------------------------------------------------------- AI usage limits
+
+AI_DEFAULT_LIMIT = int(os.getenv("OPENRUN_AI_DAILY_LIMIT", "40"))
+
+
+def ai_limit(uid: int) -> int | None:
+    """Requests per day for this user; None = unlimited (admins unless an explicit limit is set)."""
+    from .db import User
+    with Session(engine) as s2:
+        u = s2.get(User, uid)
+    if not u:
+        return 0
+    if u.ai_daily_limit is not None:
+        return u.ai_daily_limit
+    return None if u.is_admin else AI_DEFAULT_LIMIT
+
+
+def ai_usage(s: Session) -> dict:
+    from .tenancy import current_user_id
+    u = meta_get(s, "ai_usage")
+    today = dt.date.today().isoformat()
+    count = u.get("count", 0) if u.get("date") == today else 0
+    return {"date": today, "count": count, "limit": ai_limit(current_user_id())}
+
+
+def ai_allowed(s: Session, kind: str = "chat") -> bool:
+    """Count one AI request for the current user; False when today's limit is reached."""
+    u = ai_usage(s)
+    if u["limit"] is not None and u["count"] >= u["limit"]:
+        return False
+    cur = meta_get(s, "ai_usage")
+    by = cur.get("by_kind", {}) if cur.get("date") == u["date"] else {}
+    by[kind] = by.get(kind, 0) + 1
+    meta_set(s, "ai_usage", {"date": u["date"], "count": u["count"] + 1, "by_kind": by})
+    return True
+
+
+def ai_limit_message(s: Session) -> str:
+    return f"Has llegado al límite de {ai_usage(s)['limit']} peticiones diarias al coach IA. Se renueva mañana; mientras, el plan y los ajustes automáticos siguen funcionando."
 
 
 # ---------------------------------------------------------------- settings
@@ -971,6 +1256,7 @@ def daily_routine(s: Session, force: bool = False) -> dict:
     if connected:
         step("sync", lambda: {k: v for k, v in sync_garmin(s, 3).items() if k != "metrics"})
     step("análisis", lambda: {"analizadas": analyze_recent(s)})
+    step("entrenos perdidos", lambda: {"pendientes": [m["title"] for m in auto_skip_missed(s)]})
     step("ritmos", lambda: (lambda r: {"aplicado": r["applied"], "pendiente": r["pending"]})(pace_insights(s)))
     if dt.date.today().weekday() == 0:
         step("resumen semanal", lambda: (lambda r: {"ia": r["ai"]})(weekly_review(s)))
@@ -1031,6 +1317,10 @@ def morning_notifications(s: Session, log: dict, connected: bool) -> None:
     msg = today_message(s)
     if msg:
         notify(s, "morning", msg[0], msg[1], "/#hoy", "today")
+    lost = next((x for x in log["steps"] if x["step"] == "entrenos perdidos" and x["ok"]), None)
+    pend = (lost or {}).get("result", {}).get("pendientes") or []
+    if pend:
+        notify(s, "morning", "¿Recuperamos la sesión?", f"No vi «{pend[0]}». Tengo un hueco para recolocarla esta semana: revísalo en Hoy.", "/#hoy", "replan")
     if dt.date.today().weekday() == 0:
         rev = meta_get(s, "weekly_reviews").get((_monday(dt.date.today()) - dt.timedelta(days=7)).isoformat())
         if rev:
@@ -1414,7 +1704,7 @@ def weekly_review(s: Session, week_start: str | None = None, regenerate: bool = 
     text = None
     if ai:
         from .ai import coach
-        text = coach.complete(REVIEW_SYSTEM, json.dumps(facts, ensure_ascii=False, default=str))
+        text = None if not ai_allowed(s, "weekly") else coach.complete(REVIEW_SYSTEM, json.dumps(facts, ensure_ascii=False, default=str))
     review = {"week_start": key, "facts": facts, "comment": text or _fallback_comment(facts), "ai": bool(text),
               "created_at": dt.datetime.now().isoformat(timespec="seconds")}
     store[key] = review

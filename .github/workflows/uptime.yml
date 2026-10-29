@@ -1,0 +1,36 @@
+name: Uptime
+
+# Checks the production server every hour (database + background scheduler via /api/health?deep=1).
+# A failed run makes GitHub email the repository owner. Optional phone alert: create a repository
+# secret NTFY_TOPIC with a long random name and subscribe to it in the ntfy app (ntfy.sh).
+# Repository variable OPENRUN_URL overrides the address.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Health check
+        env:
+          URL: ${{ vars.OPENRUN_URL || 'https://openrun.example.com' }}
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o body.json -w '%{http_code}' --max-time 20 "$URL/api/health?deep=1" || echo 000)
+            if [ "$code" = "200" ]; then cat body.json; exit 0; fi
+            echo "attempt $i: HTTP $code $(cat body.json 2>/dev/null)"
+            sleep 30
+          done
+          echo "status=$code" >> "$GITHUB_ENV"
+          exit 1
+      - name: Phone alert (ntfy)
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          [ -z "$NTFY_TOPIC" ] && exit 0
+          curl -s -H "Title: OpenRun caído" -H "Priority: high" -H "Tags: warning" \
+            -d "La comprobación de salud falla (HTTP ${status:-?}). Revisa Coolify." "https://ntfy.sh/$NTFY_TOPIC"

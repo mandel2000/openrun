@@ -91,6 +91,51 @@ def _gps_stream(points: list[tuple[float, float, float]]) -> tuple[list[float], 
 # ---------------------------------------------------------------- file parsers
 
 
+# ---------------------------------------------------------------- streams for maps & charts
+
+STREAM_ROUND = {"lat": 5, "lon": 5, "d": 1, "t": 1, "speed": 3, "ele": 1, "hr": 0, "cad": 0, "power": 0}
+
+
+def make_streams(cols: dict[str, list], max_points: int = 900) -> dict:
+    """Same shape as Garmin's streams (see integrations/garmin.streams_from_details): parallel lists
+    t (s), d (m), hr, speed (m/s), ele, cad (steps/min), lat, lon, power; evenly downsampled."""
+    t = cols.get("t") or []
+    if len(t) < 2:
+        return {}
+    n = len(t)
+    if not any(cols.get("speed") or []) and cols.get("d"):  # 5-sample window: 1 s GPS deltas are too noisy
+        d, k = cols["d"], 5
+        cols["speed"] = [(d[i] - d[max(0, i - k)]) / (t[i] - t[max(0, i - k)])
+                         if i and d[i] is not None and d[max(0, i - k)] is not None and t[i] > t[max(0, i - k)] else None
+                         for i in range(n)]
+    out = {k: v for k, v in cols.items() if len(v) == n and any(x not in (None, 0) for x in v)}
+    if n > max_points:
+        keep = [round(j * (n - 1) / (max_points - 1)) for j in range(max_points)]
+        out = {k: [v[j] for j in keep] for k, v in out.items()}
+    return {k: [None if x is None else round(x, STREAM_ROUND.get(k, 1)) for x in v] for k, v in out.items()}
+
+
+def gps_streams(rows: list[tuple]) -> dict:
+    """rows: (t, lat, lon, ele, hr, cad) from GPX/TCX. Distance from smoothed positions (no point dropped,
+    so every series stays aligned)."""
+    if len(rows) < 2:
+        return {}
+    k = 2
+    cols: dict[str, list] = {"t": [], "d": [], "lat": [], "lon": [], "ele": [], "hr": [], "cad": []}
+    dist, prev = 0.0, None
+    for i, r in enumerate(rows):
+        win = rows[max(0, i - k): i + k + 1]
+        p = (sum(w[1] for w in win) / len(win), sum(w[2] for w in win) / len(win))
+        if prev is not None:
+            step = _haversine(prev, p)
+            if r[0] > rows[i - 1][0] and step / (r[0] - rows[i - 1][0]) <= MAX_SPEED:
+                dist += step
+        prev = p
+        for key, v in zip(("t", "d", "lat", "lon", "ele", "hr", "cad"), (r[0], dist, r[1], r[2], r[3], r[4], r[5])):
+            cols[key].append(v)
+    return make_streams(cols)
+
+
 def _local(ts: dt.datetime) -> dt.datetime:
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=dt.timezone.utc)
@@ -99,7 +144,7 @@ def _local(ts: dt.datetime) -> dt.datetime:
 
 def _summary(start_utc: dt.datetime, times: list[float], dists: list[float], hrs: list[int], sport: str,
              moving_s: float | None = None, total_m: float | None = None, ascent: float | None = None,
-             gps_only: bool = False) -> dict:
+             gps_only: bool = False, streams: dict | None = None) -> dict:
     start_local = _local(start_utc)
     distance = total_m if total_m else (dists[-1] - dists[0] if dists else 0)
     duration = moving_s if moving_s else (times[-1] - times[0] if times else 0)
@@ -108,6 +153,7 @@ def _summary(start_utc: dt.datetime, times: list[float], dists: list[float], hrs
         "sport": sport, "distance_m": round(distance, 1), "duration_s": round(duration, 1),
         "avg_hr": round(sum(hrs) / len(hrs)) if hrs else None, "max_hr": max(hrs) if hrs else None,
         "elevation_gain": ascent, "best_efforts": best_efforts(times, dists), "gps_only": gps_only,
+        **({"_streams": streams} if streams else {}),
     }
 
 
@@ -115,6 +161,8 @@ def parse_fit(data: bytes) -> dict | None:
     import fitdecode
 
     times, dists, hrs = [], [], []
+    cols: dict[str, list] = {k: [] for k in ("t", "d", "hr", "speed", "ele", "cad", "lat", "lon", "power")}
+    semi = 180 / 2 ** 31
     session: dict = {}
     t0: dt.datetime | None = None
     with fitdecode.FitReader(io.BytesIO(data), check_crc=fitdecode.CrcCheck.DISABLED) as fit:
@@ -122,9 +170,8 @@ def parse_fit(data: bytes) -> dict | None:
             if not isinstance(frame, fitdecode.FitDataMessage):
                 continue
             if frame.name == "record":
-                ts = frame.get_value("timestamp", fallback=None)
-                d = frame.get_value("distance", fallback=None)
-                hr = frame.get_value("heart_rate", fallback=None)
+                g = lambda k: frame.get_value(k, fallback=None)  # noqa: E731
+                ts, d, hr = g("timestamp"), g("distance"), g("heart_rate")
                 if hr:
                     hrs.append(int(hr))
                 if ts is None or d is None:
@@ -135,6 +182,12 @@ def parse_fit(data: bytes) -> dict | None:
                     continue
                 times.append(sec)
                 dists.append(float(d))
+                lat, lon, cad = g("position_lat"), g("position_long"), g("cadence")
+                for k, v in (("t", sec), ("d", float(d)), ("hr", hr), ("speed", g("enhanced_speed") or g("speed")),
+                             ("ele", g("enhanced_altitude") if g("enhanced_altitude") is not None else g("altitude")),
+                             ("cad", cad * 2 if cad else None), ("power", g("power")),
+                             ("lat", lat * semi if lat is not None else None), ("lon", lon * semi if lon is not None else None)):
+                    cols[k].append(v)
             elif frame.name == "session" and not session:
                 session = {f.name: f.value for f in frame.fields}
     if not times and not session:
@@ -145,7 +198,7 @@ def parse_fit(data: bytes) -> dict | None:
         return None
     return _summary(start, times, dists, hrs, "running" if "run" in sport else sport,
                     moving_s=session.get("total_timer_time"), total_m=session.get("total_distance"),
-                    ascent=session.get("total_ascent"))
+                    ascent=session.get("total_ascent"), streams=make_streams(cols))
 
 
 def _strip_ns(root: ET.Element) -> None:
@@ -161,7 +214,7 @@ def _parse_iso(s: str) -> dt.datetime:
 def parse_gpx(data: bytes) -> dict | None:
     root = ET.fromstring(data)
     _strip_ns(root)
-    pts, hrs = [], []
+    pts, hrs, rows = [], [], []
     t0 = None
     for p in root.iter("trkpt"):
         tm = p.find("time")
@@ -169,15 +222,22 @@ def parse_gpx(data: bytes) -> dict | None:
             continue
         ts = _parse_iso(tm.text)
         t0 = t0 or ts
-        pts.append(((ts - t0).total_seconds(), float(p.get("lat")), float(p.get("lon"))))
+        sec, lat, lon = (ts - t0).total_seconds(), float(p.get("lat")), float(p.get("lon"))
+        pts.append((sec, lat, lon))
         hr = p.find(".//hr")
-        if hr is not None and hr.text:
-            hrs.append(int(float(hr.text)))
+        hrv = int(float(hr.text)) if hr is not None and hr.text else None
+        if hrv:
+            hrs.append(hrv)
+        ele, cad = p.findtext("ele"), p.findtext(".//cad")
+        rows.append((sec, lat, lon, float(ele) if ele else None, hrv, int(float(cad)) * 2 if cad else None))
     if len(pts) < 2 or t0 is None:
         return None
     typ = (root.findtext(".//trk/type") or "running").lower()
     times, dists = _gps_stream(pts)
-    return _summary(t0, times, dists, hrs, "running" if RUN_TYPES.search(typ) or typ in ("9", "running") else typ, gps_only=True)
+    out = _summary(t0, times, dists, hrs, "running" if RUN_TYPES.search(typ) or typ in ("9", "running") else typ, gps_only=True,
+                   streams=gps_streams(rows))
+    name = (root.findtext(".//trk/name") or root.findtext("metadata/name") or "").strip()
+    return {**out, "name": name[:80]} if name else out
 
 
 def parse_tcx(data: bytes) -> dict | None:
@@ -185,7 +245,7 @@ def parse_tcx(data: bytes) -> dict | None:
     _strip_ns(root)
     act = root.find(".//Activity")
     sport = (act.get("Sport") if act is not None else "Running") or "Running"
-    pts, times, dists, hrs = [], [], [], []
+    pts, times, dists, hrs, rows = [], [], [], [], []
     t0 = None
     for tp in root.iter("Trackpoint"):
         tm = tp.findtext("Time")
@@ -197,6 +257,11 @@ def parse_tcx(data: bytes) -> dict | None:
         hr = tp.findtext("HeartRateBpm/Value")
         if hr:
             hrs.append(int(float(hr)))
+        la, lo = tp.findtext("Position/LatitudeDegrees"), tp.findtext("Position/LongitudeDegrees")
+        if la and lo:
+            alt, cad = tp.findtext("AltitudeMeters"), tp.findtext(".//RunCadence") or tp.findtext("Cadence")
+            rows.append((sec, float(la), float(lo), float(alt) if alt else None, int(float(hr)) if hr else None,
+                         int(float(cad)) * 2 if cad else None))
         d = tp.findtext("DistanceMeters")
         if d is not None:
             if dists and (float(d) < dists[-1] or sec <= times[-1]):
@@ -215,7 +280,7 @@ def parse_tcx(data: bytes) -> dict | None:
     total_m = sum(float(x.text) for x in root.iter("Lap") for x in [x.find("DistanceMeters")] if x is not None and x.text) or None
     moving = sum(float(x.text) for x in root.iter("Lap") for x in [x.find("TotalTimeSeconds")] if x is not None and x.text) or None
     return _summary(t0, times, dists, hrs, "running" if sport.lower().startswith("run") else sport.lower(),
-                    moving_s=moving, total_m=total_m, gps_only=gps_only)
+                    moving_s=moving, total_m=total_m, gps_only=gps_only, streams=gps_streams(rows))
 
 
 def parse_file(name: str, data: bytes) -> dict | None:
@@ -332,7 +397,7 @@ def activities_from_upload(name: str, source, progress=None) -> Iterator[dict]:
         if progress:
             progress(1, 1)
         if a:
-            yield {**a, "name": name.rsplit("/", 1)[-1].split(".")[0], "source": "import",
+            yield {**a, "name": a.get("name") or name.rsplit("/", 1)[-1].split(".")[0], "source": "import",
                    "external_id": "file:" + hashlib.sha1(data).hexdigest()[:16]}
         return
     members = dict(iter_archive(source))

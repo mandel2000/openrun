@@ -35,6 +35,7 @@ class User(SQLModel, table=True):
     password_hash: str = ""
     is_admin: bool = False
     created_at: str = ""
+    ai_daily_limit: int | None = None  # AI requests per day; None = OPENRUN_AI_DAILY_LIMIT (admins: unlimited)
 
 
 class Invite(SQLModel, table=True):

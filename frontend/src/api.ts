@@ -76,6 +76,8 @@ export type Readiness = {
   hrv_baseline: number | null
   swc_low: number | null
   swc_high: number | null
+  score?: number | null
+  components?: { key: string; label: string; score: number; value: string }[] | null
 }
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {

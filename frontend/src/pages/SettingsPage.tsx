@@ -18,7 +18,7 @@ function ConnHead({ icon, title, status, tone = 'good' }: { icon: IconName; titl
   )
 }
 
-function GarminCard({ onChange }: { onChange: () => void }) {
+export function GarminCard({ onChange }: { onChange: () => void }) {
   const [st, setSt] = useState<GStatus | null>(null)
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
@@ -215,7 +215,7 @@ function ImportCard() {
 type ImportJob = { id: string; state: 'running' | 'done' | 'error'; file: number; files: number; done: number; total: number; error: string | null
   stats: { imported?: number; duplicates?: number; with_efforts?: number; oldest?: string | null; newest?: string | null } }
 
-function HistoryImportCard() {
+export function HistoryImportCard() {
   const [job, setJob] = useState<ImportJob | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -593,6 +593,7 @@ function NotificationsCard() {
 }
 
 function AccountCard({ me, onMe }: { me: Me; onMe: () => void }) {
+  const acc = useApi<{ ai?: { count: number; limit: number | null } }>('/api/account')
   const [name, setName] = useState(me.name)
   const [cur, setCur] = useState('')
   const [pw, setPw] = useState('')
@@ -605,6 +606,9 @@ function AccountCard({ me, onMe }: { me: Me; onMe: () => void }) {
     <div className="card stack">
       <ConnHead icon="user" title="Tu cuenta" status={me.is_admin ? 'Administrador' : null} />
       <p className="small text-2" style={{ margin: 0 }}>Usuario <b>{me.username}</b>. Tus datos, tu plan, tu Garmin y tu chat con el coach son solo tuyos.</p>
+      {acc.data?.ai && (
+        <div className="small text-2">Coach IA hoy: <b className="num">{acc.data.ai.count}</b>{acc.data.ai.limit != null ? <> de {acc.data.ai.limit} peticiones (se renueva cada día)</> : ' peticiones (sin límite)'}</div>
+      )}
       <div className="row" style={{ alignItems: 'flex-end' }}>
         <label className="field grow">Nombre<input value={name} onChange={(e) => setName(e.target.value)} /></label>
         <button className="btn btn-sm" disabled={!name.trim() || name === me.name} onClick={() => save({ name }, 'Nombre guardado')}>Guardar</button>
@@ -627,10 +631,22 @@ function AccountCard({ me, onMe }: { me: Me; onMe: () => void }) {
 }
 
 type Invite = { code: string; note: string | null; expires_at: string }
-type UserRow = Me & { created_at: string; activities: number }
+type UserRow = Me & { created_at: string; activities: number; ai_today: number; ai_limit: number | null; ai_limit_custom: boolean }
+
+function AiLimit({ u, def, onSaved }: { u: UserRow; def: number; onSaved: () => void }) {
+  const [v, setV] = useState(u.ai_limit_custom ? String(u.ai_limit ?? '') : '')
+  const save = () => api.put(`/api/users/${u.id}/limits`, { ai_daily_limit: v.trim() === '' ? null : +v }).then(onSaved)
+  return (
+    <div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+      <span className="num small" title="Peticiones al coach IA hoy">{u.ai_today}/{u.ai_limit ?? '∞'}</span>
+      <input aria-label={`Límite diario de IA de ${u.username}`} className="input-xs" inputMode="numeric" placeholder={u.is_admin ? '∞' : String(def)}
+        value={v} onChange={(e) => setV(e.target.value.replace(/\D/g, ''))} onBlur={save} onKeyDown={(e) => { if (e.key === 'Enter') save() }} />
+    </div>
+  )
+}
 
 function UsersCard({ me }: { me: Me }) {
-  const { data, reload } = useApi<{ users: UserRow[]; invites: Invite[] }>('/api/users')
+  const { data, reload } = useApi<{ users: UserRow[]; invites: Invite[]; ai_default_limit: number }>('/api/users')
   const [note, setNote] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const link = (c: string) => `${window.location.origin}/#invitacion=${c}`
@@ -656,13 +672,14 @@ function UsersCard({ me }: { me: Me }) {
       ))}
       <div className="table-wrap">
         <table className="table">
-          <thead><tr><th>Usuario</th><th className="hide-sm">Alta</th><th>Actividades</th><th /></tr></thead>
+          <thead><tr><th>Usuario</th><th className="hide-sm">Alta</th><th className="hide-sm">Actividades</th><th>IA hoy / límite</th><th /></tr></thead>
           <tbody>
             {data.users.map((u) => (
               <tr key={u.id}>
                 <td><b>{u.name || u.username}</b><div className="small muted">{u.username}{u.is_admin ? ' · admin' : ''}</div></td>
                 <td className="hide-sm">{u.created_at ? fmtDate(u.created_at.slice(0, 10)) : '—'}</td>
-                <td>{u.activities}</td>
+                <td className="hide-sm">{u.activities}</td>
+                <td><AiLimit u={u} def={data.ai_default_limit} onSaved={reload} /></td>
                 <td>{u.id !== me.id && (
                   <button className="btn btn-ghost btn-icon btn-sm" aria-label={`Borrar ${u.username}`} onClick={async () => {
                     if (!confirm(`¿Borrar la cuenta de ${u.username} y TODOS sus datos? No se puede deshacer.`)) return
@@ -674,6 +691,7 @@ function UsersCard({ me }: { me: Me }) {
           </tbody>
         </table>
       </div>
+      <p className="small muted" style={{ margin: 0 }}>Límite de IA: peticiones diarias al coach (chat, resumen semanal, explicaciones). Vacío = por defecto ({data.ai_default_limit}/día; administradores sin límite). Protege la cuota gratuita del proveedor.</p>
       {err && <Banner tone="bad">{err}</Banner>}
     </div>
   )

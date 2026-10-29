@@ -6,6 +6,10 @@
   (Impellizzeri et al. 2020) — we use it only as a soft guard rail.
 - HRV-guided readiness (Kiviniemi 2007; Plews et al. 2013; Javaloyes 2019): 7-day rolling
   mean of ln(RMSSD) compared to the 60-day baseline +/- 0.5 SD (smallest worthwhile change).
+- Composite readiness score 0-100: HRV (ln RMSSD z-score), resting HR vs baseline, last night's
+  sleep, training load (TSB/ACWR) and a 2-question subjective check-in. Subjective wellness reacts
+  to load at least as well as objective markers (Saw, Main & Gastin 2016, systematic review), so it
+  is weighted next to the physiological ones; missing parts are skipped and weights renormalized.
 - VO2max/VDOT estimate from steady runs with HR (Swain 1997: %HRR ~= %VO2R).
 """
 
@@ -56,13 +60,29 @@ class Readiness:
     hrv_baseline: float | None = None
     swc_low: float | None = None
     swc_high: float | None = None
+    score: int | None = None
+    components: list[dict] | None = None
 
     def to_dict(self) -> dict:
         return self.__dict__
 
 
-def readiness(wellness: list[dict], today: dt.date | None = None) -> Readiness:
-    """wellness rows: {date, hrv_rmssd, rest_hr, sleep_score}."""
+WEIGHTS = {"hrv": 0.35, "sleep": 0.2, "rhr": 0.15, "load": 0.15, "feel": 0.15}
+GARMIN_HRV = {"BALANCED": 75, "UNBALANCED": 50, "LOW": 35, "POOR": 25}
+RANK = {"unknown": 0, "green": 1, "amber": 2, "red": 3}
+
+
+def _clip(x: float) -> int:
+    return int(round(max(0.0, min(100.0, x))))
+
+
+def score_status(score: int) -> str:
+    return "green" if score >= 65 else "amber" if score >= 45 else "red"
+
+
+def readiness(wellness: list[dict], today: dt.date | None = None, load_today: dict | None = None) -> Readiness:
+    """wellness rows: {date, hrv_rmssd, rest_hr, sleep_score, sleep_hours, hrv_status, feel, legs};
+    load_today: {tsb, acwr} of today (optional)."""
     today = today or dt.date.today()
     rows = sorted((w for w in wellness if w.get("date")), key=lambda w: w["date"])
     hrv = [(w["date"], math.log(w["hrv_rmssd"])) for w in rows if w.get("hrv_rmssd")]
@@ -102,7 +122,60 @@ def readiness(wellness: list[dict], today: dt.date | None = None) -> Readiness:
         reasons.append("Sueño pobre anoche.")
         status = "amber" if status in ("green", "unknown") else status
     out.status = status
+    _score(out, rows, today, load_today, base, recent)
     return out
+
+
+def _score(out: Readiness, rows: list[dict], today: dt.date, load_today: dict | None,
+           base: list[float], recent: list[float]) -> None:
+    """Fill out.score/components and tighten out.status with the composite (never loosens an HRV red)."""
+    comps: list[dict] = []
+    d0, d1 = today.isoformat(), (today - dt.timedelta(days=1)).isoformat()
+    fresh = [w for w in rows if w["date"] in (d0, d1)]
+    last = lambda k: next((w[k] for w in reversed(fresh) if w.get(k) is not None), None)  # noqa: E731
+
+    if len(base) >= 14 and recent:
+        mu, sd = statistics.mean(base), max(statistics.pstdev(base), 0.03)
+        z = 0.5 * (statistics.mean(recent) - mu) / sd + 0.5 * (recent[-1] - mu) / sd
+        comps.append({"key": "hrv", "label": "HRV", "score": _clip(70 + 20 * z), "value": f"{math.exp(recent[-1]):.0f} ms"})
+    elif last("hrv_status") in GARMIN_HRV:
+        comps.append({"key": "hrv", "label": "HRV", "score": GARMIN_HRV[last("hrv_status")], "value": str(last("hrv_status")).lower()})
+    if last("sleep_score") is not None:
+        comps.append({"key": "sleep", "label": "Sueño", "score": _clip(last("sleep_score")), "value": f"{last('sleep_score'):.0f}/100"})
+    elif last("sleep_hours"):
+        h = last("sleep_hours")
+        comps.append({"key": "sleep", "label": "Sueño", "score": _clip(25 * (h - 4)), "value": f"{h:.1f} h"})
+    rhr_base = [w["rest_hr"] for w in rows if w.get("rest_hr") and w["date"] >= (today - dt.timedelta(days=60)).isoformat()]
+    if last("rest_hr") and len(rhr_base) >= 7:
+        delta = last("rest_hr") - statistics.mean(rhr_base)
+        comps.append({"key": "rhr", "label": "FC reposo", "score": _clip(75 - 8 * delta), "value": f"{last('rest_hr'):.0f} ppm" + (f" ({round(delta):+d})" if round(delta) else "")})
+    if load_today and load_today.get("tsb") is not None:
+        tsb, acwr = load_today["tsb"], load_today.get("acwr")
+        sc = 80 if tsb >= -5 else 75 + 2 * (tsb + 5)
+        if acwr and acwr > 1.5:
+            sc -= 15
+        comps.append({"key": "load", "label": "Carga", "score": _clip(sc), "value": f"forma {round(tsb):+d}" + (f" · ACWR {acwr:.2f}" if acwr else "")})
+    feel = [w for w in rows if w["date"] == d0 and (w.get("feel") or w.get("legs"))]
+    if feel:
+        f = feel[-1]
+        scale = {1: 15, 2: 35, 3: 60, 4: 80, 5: 95}
+        vals = [scale[int(f[k])] for k in ("feel", "legs") if f.get(k) and int(f[k]) in scale]
+        if vals:
+            comps.append({"key": "feel", "label": "Sensaciones", "score": _clip(sum(vals) / len(vals)), "value": "check-in de hoy"})
+        if f.get("sick"):
+            out.reasons.append("Has marcado que estás enfermo: hoy descanso o muy suave (regla del cuello).")
+            out.status = "red"
+    out.components = comps
+    if not comps or (len(comps) == 1 and comps[0]["key"] == "load"):
+        return
+    wsum = sum(WEIGHTS[c["key"]] for c in comps)
+    out.score = _clip(sum(WEIGHTS[c["key"]] * c["score"] for c in comps) / wsum)
+    st = score_status(out.score)
+    if RANK[st] > RANK[out.status] or out.status == "unknown":
+        if out.status != "unknown" and st != out.status:
+            weak = min(comps, key=lambda c: c["score"])
+            out.reasons.append(f"Nota global {out.score}/100: lo que más baja es {weak['label'].lower()} ({weak['value']}).")
+        out.status = st
 
 
 def estimate_vdot_from_run(distance_m: float, duration_s: float, avg_hr: float, rest_hr: float, max_hr: float) -> float | None:

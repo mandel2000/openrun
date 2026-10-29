@@ -6,6 +6,7 @@ import ProgressPage from './pages/ProgressPage'
 import RacesPage from './pages/RacesPage'
 import SettingsPage from './pages/SettingsPage'
 import TodayPage from './pages/TodayPage'
+import Onboarding, { type OnbState } from './components/Onboarding'
 import { Banner, Icon, type IconName } from './ui'
 
 export type Tab = 'hoy' | 'plan' | 'carreras' | 'progreso' | 'coach' | 'ajustes'
@@ -120,10 +121,12 @@ export default function App() {
   const [tick, setTick] = useState(0) // bumps after sync so pages refetch
   const [needPin, setNeedPin] = useState(() => !!inviteFromHash())
   const [me, setMe] = useState<Me | null>(null)
+  const [onb, setOnb] = useState<OnbState | null>(null)
   const loadMe = useCallback(() => {
     api.get<{ authed: boolean; user: Me | null }>('/api/auth').then((r) => { setMe(r.user); if (!r.authed) setNeedPin(true) }).catch(() => {})
   }, [])
   useEffect(() => { loadMe() }, [loadMe])
+  useEffect(() => { if (me) api.get<OnbState>('/api/onboarding').then(setOnb).catch(() => {}) }, [me])
   useEffect(() => {
     const on = () => setNeedPin(true)
     window.addEventListener('openrun:auth', on)
@@ -172,7 +175,9 @@ export default function App() {
         </header>
         <main className="main" key={tick}>
           {err && !needPin && <Banner tone="bad">No se puede conectar con el servidor de OpenRun: {err}</Banner>}
-          {tab === 'hoy' && <TodayPage plan={plan} reload={reload} go={go} />}
+          {tab === 'hoy' && (onb?.needed && plan === null
+            ? <Onboarding name={me?.name || ''} onFinish={() => { setOnb({ ...onb, needed: false, done: true }); reload() }} />
+            : <TodayPage plan={plan} reload={reload} go={go} />)}
           {tab === 'plan' && <PlanPage plan={plan} reload={reload} />}
           {tab === 'carreras' && <RacesPage plan={plan ?? null} reload={reload} />}
           {tab === 'progreso' && <ProgressPage />}
