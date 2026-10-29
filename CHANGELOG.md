@@ -4,14 +4,23 @@ All notable changes to OpenRun are documented here. The format follows [Keep a C
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-29
+
 ### Added
 - English and Spanish: the whole app (interface, workout titles and descriptions, notifications, analysis, race strategy and the AI coach's answers) follows each user's language, chosen in *Settings › Appearance and language* or taken from the browser. `OPENRUN_LANG` sets the default.
-- Ko-fi donations: *Support OpenRun* in Settings and the sidebar, the GitHub Sponsor button and a section in the README.
+- Ko-fi donations: *Support OpenRun* in Settings, the GitHub Sponsor button and a section in the README.
 - CI checks that every interface and server string has a Spanish translation.
 - Demo mode (`OPENRUN_DEMO=1`): *Try the demo* on the sign-in screen opens a shared account with a generated half-marathon plan, ~10 months of runs with maps and charts, post-run analysis, wellness data and races; Garmin, the AI coach and account changes are off and the data is rebuilt daily.
 
 ### Changed
 - Code, AI prompts and tool descriptions are in English; the daily routine log uses English step names.
+
+### Fixed
+- The sign-in prompt follows the browser language.
+- Race strategy: the elevation axis fits the course (profiles no longer look flat) and the course chip is translated.
+
+### Docs
+- Screenshots and a link to the live demo in the README.
 
 ## [0.1.0] - 2026-10-29
 
@@ -31,5 +40,6 @@ First public release.
 - Installable web app with push notifications; drag and drop to move sessions.
 - Self-hosting: Docker image for amd64/arm64, Docker Compose, `.env` configuration, deep health check, daily database snapshots, uptime workflow with optional ntfy alerts.
 
-[Unreleased]: https://github.com/mandel2000/openrun/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mandel2000/openrun/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mandel2000/openrun/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mandel2000/openrun/releases/tag/v0.1.0

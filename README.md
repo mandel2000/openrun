@@ -6,6 +6,25 @@
 
 **An open-source, self-hosted running coach.** Evidence-based training plans, Garmin sync (data in, structured workouts out to your watch), HRV-guided readiness and an AI coach that works with your real data. A free alternative to subscription apps such as Runna.
 
+**[▶ Try the live demo](https://openrun.manudelgadosa.es)** — click *Try the demo*: sample data, no account needed (Garmin and the AI coach are off there).
+
+<p align="center">
+  <img src="docs/images/today.png" alt="Today: workout of the day, readiness score with a proposal to ease off, missed-session replanning" width="72%">
+  <img src="docs/images/mobile-today.png" alt="Today on a phone" width="24%">
+</p>
+
+<details>
+<summary>More screenshots</summary>
+
+| | |
+|---|---|
+| ![Plan: phases, weekly volume and every session](docs/images/plan.png) | ![Activity: map, pace and heart rate](docs/images/activity.jpg) |
+| **Plan**: periodised phases, weekly volume, drag sessions between days | **Activities**: map, pace/HR/elevation, splits and actual vs plan |
+| ![Race strategy: pace per km on the course profile](docs/images/race-strategy.png) | ![Race predictions from several models](docs/images/predictions.png) |
+| **Race strategy**: even-effort pace per km over the course | **Predictions**: VDOT, Riegel, watch and heart-rate models |
+
+</details>
+
 [Leer en español](README.es.md) · [Self-hosting](docs/self-hosting.md) · [MCP (Claude Desktop, Gemini CLI)](docs/mcp.md) · [The science](docs/science.md) · [Contributing](CONTRIBUTING.md)
 
 > Available in English and Spanish (each user picks it in *Settings*). More languages are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md#translations).

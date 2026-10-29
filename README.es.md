@@ -8,6 +8,25 @@ En español e inglés (cada usuario lo elige en *Ajustes*).
 
 **Entrenador de running open source que instalas tú.** Planes basados en evidencia, sincronización con Garmin (datos y entrenos estructurados al reloj), readiness guiada por HRV y un coach IA que trabaja con tus datos reales. Una alternativa gratuita a apps de suscripción como Runna.
 
+**[▶ Prueba la demo](https://openrun.manudelgadosa.es)**: pulsa *Probar la demo*, con datos de ejemplo y sin cuenta (allí Garmin y el coach IA están desactivados).
+
+<p align="center">
+  <img src="docs/images/today.png" alt="Hoy: entreno del día, readiness con propuesta de suavizar y recolocación de sesiones perdidas" width="72%">
+  <img src="docs/images/mobile-today.png" alt="Hoy en el móvil" width="24%">
+</p>
+
+<details>
+<summary>Más capturas (interfaz en inglés; también está en español)</summary>
+
+| | |
+|---|---|
+| ![Plan](docs/images/plan.png) | ![Actividad](docs/images/activity.jpg) |
+| **Plan**: fases, volumen semanal y sesiones que se arrastran entre días | **Actividades**: mapa, ritmo/FC/altitud, parciales y real vs plan |
+| ![Estrategia de carrera](docs/images/race-strategy.png) | ![Predicciones](docs/images/predictions.png) |
+| **Estrategia de carrera**: ritmo km a km a esfuerzo constante sobre el perfil | **Predicciones**: VDOT, Riegel, reloj y FC |
+
+</details>
+
 [Read in English](README.md) · [Instalar en un servidor](docs/es/servidor.md) · [Arranque automático y móvil](docs/es/arranque-y-movil.md) · [La ciencia](docs/es/ciencia.md) · [Contribuir](CONTRIBUTING.md)
 
 ## Funciones
