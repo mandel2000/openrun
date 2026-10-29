@@ -3,7 +3,7 @@
 # Usage: scripts/install-autostart.sh            (local only)
 #        OPENRUN_PIN=<pin> scripts/install-autostart.sh --lan   (also on your wifi)
 # Remove: launchctl unload ~/Library/LaunchAgents/com.openrun.server.plist && rm that file
-# Full guide: docs/AUTOSTART_Y_MOVIL.md
+# Full guide: docs/self-hosting.md (English) or docs/es/arranque-y-movil.md (Spanish)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLIST="$HOME/Library/LaunchAgents/com.openrun.server.plist"

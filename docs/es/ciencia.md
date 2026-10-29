@@ -95,3 +95,31 @@ Nota: un reportaje del WSJ (febrero 2026) citado por the5krunner recogía fisiot
 - **Veredicto** (solo sesiones de calidad): «más fácil» si las series van de media ≥ 2 % más rápidas sin FC por encima de LTHR+2 % (en umbral/maratón; en I/R la FC va retrasada y no se usa); «más dura» si la mitad de las series van ≥ 3 % más lentas o la FC supera LTHR+5 % yendo a ritmo.
 - **Ajuste de VDOT**: ±0,5 cuando 2 de las 3 últimas sesiones (21 días) coinciden; máximo una vez por semana y nunca en los 10 días previos a la carrera objetivo. Conservador para que un día bueno (o uno frío) no mueva todos los ritmos. Es la misma idea que *Pace Insights* de Runna, con reglas explícitas.
 - **Calor**: el rendimiento cae al aumentar el estrés térmico (Ely et al. 2007; El Helou et al. 2012, óptimo ~4–10 °C; Mantzios et al. 2022). Se usa la regla de entrenadores T + punto de rocío (°F) (Hadley): ≤ 100 sin ajuste, 101–110 +0,5 %, … , 171–180 +11 %, > 180 no hacer calidad al aire libre. Se mantiene el esfuerzo (y la adaptación buscada), no el ritmo. Se deshace solo si la previsión baja.
+
+## 7. Readiness 0–100
+
+- Partes: HRV (35 %, z-score de hoy y de la media de 7 días frente a la línea base; estado de HRV de Garmin si aún no hay base), sueño de anoche (20 %), FC en reposo frente a su media de 60 días (15 %), carga (15 %: forma/TSB y ACWR > 1,5) y un check-in de dos preguntas (15 %: sensación general y piernas, 1–5).
+- El bienestar subjetivo responde a la carga al menos tan bien como los marcadores objetivos (Saw, Main & Gastin 2016, revisión sistemática): por eso pesa junto a los fisiológicos.
+- Las partes que faltan se omiten y los pesos se reparten; sin datos, no hay nota. ≥ 65 verde, 45–64 ámbar, < 45 rojo. La nota solo puede endurecer el estado por HRV, nunca relajarlo.
+- "Estoy enfermo/a" en el check-in: descanso o muy suave hoy ("regla del cuello", Eichner 1993).
+
+## 8. Reajuste del plan
+
+- **Rodajes suaves perdidos**: se dejan pasar; recuperarlos amontona fatiga en los días siguientes.
+- **Sesión clave perdida** (calidad o tirada larga): se propone en el primer día de los 4 siguientes (3 en tiradas largas, y como mucho 6 días después de la perdida) con rodaje suave o libre y sin día duro antes ni después; sustituye a ese rodaje. Si no hay hueco, se deja pasar: una sesión perdida no cuesta nada medible y juntar dos días duros sí (principio duro/suave; Seiler 2010).
+- Una carrera hecha uno o dos días tarde, en un día sin nada planificado, cuenta para la sesión perdida.
+- **Vuelta tras un parón**: menos de una semana apenas desentrena; 2–4 semanas cuestan ~4–7 % de VO₂máx; más de 8 semanas, mucho más (Mujika & Padilla 2000; Coyle 1984). Siguiendo a Daniels: ≤ 5 días sin cambio de VDOT; 6–28 días hasta −7 %; 29–56 días hasta −14 %; más, −15 % y conviene un plan nuevo. Primero días solo suaves (tras enfermedad, tantos como días enfermo; tras lesión, dos más) y luego volumen reducido (−20–40 %) el resto de una o dos semanas. Con fiebre o síntomas en el pecho, nada de correr hasta 24–48 h sin síntomas (Eichner 1993; Nieman).
+
+## 9. Fuerza y movilidad
+
+- Fuerza pesada (≥ 80 % 1RM) y pliometría 2×/semana mejoran la economía de carrera un 2–8 % sin perjudicar el VO₂máx (Blagrove et al. 2018; Balsalobre-Fernández et al. 2016; Støren et al. 2008).
+- Capacidad del sóleo (soporta ~6–8 veces el peso corporal por zancada): elevaciones de gemelo con rodilla flexionada y carga (Dorn et al. 2012). Fuerza de abductores y control a una pierna se relacionan con el riesgo de lesión (Willy & Davis 2011). El Copenhagen reduce lesiones de aductores (Harøy 2019).
+- El mismo día que la calidad y después de ella; volumen de mantenimiento en el pico y nada en la semana de carrera (Beattie 2014).
+- Sin estiramientos estáticos antes de correr (no previenen lesiones y pueden restar potencia); calentamiento dinámico sí (Behm 2016). Movilidad corta y suave después.
+
+## 10. Estrategia de carrera
+
+- Esfuerzo constante, no ritmo constante: en recorridos con desnivel lo más rápido es mantener la potencia metabólica (Minetti et al. 2002; Townshend et al. 2010).
+- Los costes de laboratorio de Minetti exageran el efecto a ritmo de carrera (modelos de ritmo ajustado por pendiente como el GAP de Strava de 2017 penalizan menos la subida) y el ahorro en bajada no se aprovecha entero: se toma el 80 % del coste en subida y el 50 % del ahorro en bajada, con pendientes limitadas a −12…+15 %.
+- Primer o segundo km algo prudentes (Abbiss & Laursen 2008); el total se mantiene en el objetivo.
+- Hidratos: 30–60 g/h en esfuerzos de 1–2,5 h y enjuague o gel antes de 75 min (Jeukendrup 2014; ACSM 2016); carga de 7–10 g/kg/día 24–36 h antes en carreras de más de 90 min (Burke 2011).
