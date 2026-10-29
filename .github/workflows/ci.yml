@@ -1,6 +1,6 @@
 name: CI
 
-# Every push and pull request: backend tests + frontend type-check and build.
+# Every push to main and every pull request: lint, backend tests, frontend type-check and build.
 on:
   push:
     branches: [main]
@@ -25,7 +25,10 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
-      - run: python -m pytest -q
+      - name: Lint (ruff)
+        run: ruff check .
+      - name: Tests
+        run: python -m pytest -q
 
   frontend:
     runs-on: ubuntu-latest
@@ -41,4 +44,21 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - run: npm run build
+      - name: Lint (eslint)
+        run: npm run lint
+      - name: Type-check and build
+        run: npm run build
+
+  docker:
+    # the image must keep building (release.yml publishes it from tags)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

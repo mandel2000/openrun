@@ -1,6 +1,6 @@
 # OpenRun: single container (FastAPI + built React UI). Data lives in the /data volume.
 
-FROM node:22.11-alpine AS web
+FROM node:22.20-alpine AS web
 WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -8,6 +8,10 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.13-slim
+LABEL org.opencontainers.image.title="OpenRun" \
+      org.opencontainers.image.description="Open-source, evidence-based running coach: plans, Garmin, HRV readiness and an AI coach" \
+      org.opencontainers.image.source="https://github.com/mandel2000/openrun" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     TZ=Europe/Madrid \
     OPENRUN_DATA=/data OPENRUN_DB=/data/openrun.db OPENRUN_GARMIN_TOKENS=/data/garmin \

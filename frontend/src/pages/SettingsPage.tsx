@@ -6,7 +6,30 @@ import { Banner, Icon, Segmented, type IconName } from '../ui'
 type Athlete = { name: string; sex: string; age: number | null; max_hr: number | null; rest_hr: number | null; lthr: number | null; vdot: number | null; vdot_source: string | null; hr_zones?: { zone: number; low: number; high: number }[] }
 type GStatus = { connected: boolean; name?: string; needs_mfa?: boolean; error?: string; last_sync?: string | null }
 type CoachInfo = { provider: string; model: string; configured: boolean
-  mcp: { remote: false; command: string; args: string[]; cwd: string } | { remote: true; url: string; token_set: boolean } }
+  mcp: { remote: false; command: string; args: string[]; cwd: string } | { remote: true; url: string; image: string } }
+
+// Personal API token for the MCP server: each user's Claude Desktop sees only their own data.
+function McpToken({ onToken }: { onToken: (t: string | null) => void }) {
+  const acc = useApi<{ has_token?: boolean }>('/api/account')
+  const [tok, setTok] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const gen = async () => {
+    if (acc.data?.has_token && !confirm('Se generará un token nuevo y el anterior dejará de funcionar. ¿Seguir?')) return
+    setBusy(true)
+    try { const r = await api.post<{ token: string }>('/api/account/token'); setTok(r.token); onToken(r.token); acc.reload() } finally { setBusy(false) }
+  }
+  return (
+    <div className="stack" style={{ gap: 8, margin: '10px 0' }}>
+      {tok
+        ? <Banner tone="ok">Tu token personal (cópialo ahora: no se vuelve a mostrar). Ya está puesto en la configuración de abajo.</Banner>
+        : <div className="small text-2">{acc.data?.has_token ? 'Ya tienes un token personal. Si lo perdiste, genera otro.' : 'Primero genera tu token personal: da acceso solo a tus datos.'}</div>}
+      <div className="row">
+        <button className="btn btn-sm btn-primary" disabled={busy} onClick={gen}>{acc.data?.has_token ? 'Generar token nuevo' : 'Generar token'}</button>
+        {acc.data?.has_token && <button className="btn btn-sm btn-ghost" disabled={busy} onClick={() => api.del('/api/account/token').then(() => { setTok(null); onToken(null); acc.reload() })}>Revocar</button>}
+      </div>
+    </div>
+  )
+}
 
 function ConnHead({ icon, title, status, tone = 'good' }: { icon: IconName; title: string; status: string | null; tone?: 'good' | 'warn' }) {
   return (
@@ -355,12 +378,18 @@ function CopyBlock({ text }: { text: string }) {
 function CoachCard() {
   const { data } = useApi<CoachInfo>('/api/coach/info')
   const [tab, setTab] = useState<'mcp' | 'nvidia' | 'gemini' | 'ollama' | 'api' | null>(null)
+  const [token, setToken] = useState<string | null>(null)
+  const [how, setHow] = useState<'docker' | 'clone'>('docker')
   if (!data) return null
   const shown = tab ?? (['nvidia', 'gemini', 'ollama'].includes(data.provider) ? data.provider as 'nvidia' | 'gemini' | 'ollama' : data.provider === 'anthropic' ? 'api' : 'nvidia')
-  const server = data.mcp.remote
-    ? { command: '/Users/<tu-usuario>/OpenRun/backend/.venv/bin/python', args: ['-m', 'app.mcp_server'],
-        env: { PYTHONPATH: '/Users/<tu-usuario>/OpenRun/backend', OPENRUN_URL: data.mcp.url, OPENRUN_API_TOKEN: '<OPENRUN_API_TOKEN del servidor>' } }
-    : { command: data.mcp.command, args: data.mcp.args, env: { PYTHONPATH: data.mcp.cwd } }
+  const tk = token ?? '<tu token personal>'
+  const server = !data.mcp.remote
+    ? { command: data.mcp.command, args: data.mcp.args, env: { PYTHONPATH: data.mcp.cwd } }
+    : how === 'docker'
+      ? { command: 'docker', args: ['run', '-i', '--rm', '-e', 'OPENRUN_URL', '-e', 'OPENRUN_API_TOKEN', data.mcp.image, 'python', '-m', 'app.mcp_server'],
+          env: { OPENRUN_URL: data.mcp.url, OPENRUN_API_TOKEN: tk } }
+      : { command: '<ruta al repo>/backend/.venv/bin/python', args: ['-m', 'app.mcp_server'],
+          env: { PYTHONPATH: '<ruta al repo>/backend', OPENRUN_URL: data.mcp.url, OPENRUN_API_TOKEN: tk } }
   const claudeCfg = JSON.stringify({ mcpServers: { openrun: server } }, null, 2)
   return (
     <div className="card">
@@ -372,7 +401,14 @@ function CoachCard() {
         {shown === 'mcp' && (
           <>
             <p><b>Sin coste extra con Claude (Free/Pro/Max):</b> conecta OpenRun como servidor MCP en <b>Claude Desktop</b> y chatea allí; Claude usará tus datos y creará entrenos que aparecen aquí. Ajustes de Claude Desktop › Desarrollador › Editar config y añade:</p>
-            {data.mcp.remote && <p className="muted">OpenRun está en un servidor: el MCP se ejecuta en tu ordenador (desde un clon del repo) y habla con el servidor usando el token de API.{!data.mcp.token_set && ' El servidor aún no tiene OPENRUN_API_TOKEN configurado.'}</p>}
+            {data.mcp.remote && (
+              <>
+                <p className="muted">OpenRun está en un servidor: el MCP se ejecuta en tu ordenador y habla con el servidor con tu token personal.</p>
+                <McpToken onToken={setToken} />
+                <Segmented label="Cómo ejecutar el MCP" value={how} onChange={setHow} options={[['docker', 'Con Docker (sin instalar nada más)'], ['clone', 'Con el repo clonado']]} />
+                <div style={{ height: 10 }} />
+              </>
+            )}
             <CopyBlock text={claudeCfg} />
             <p className="muted">Reinicia Claude Desktop. También funciona con <b>Gemini CLI</b> (gratis con cuenta Google) en <code>~/.gemini/settings.json</code> con el mismo bloque <code>mcpServers</code>. Las suscripciones de ChatGPT/Claude/Gemini no dan acceso a la API para apps propias: por eso se usa MCP.</p>
           </>

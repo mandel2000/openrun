@@ -20,7 +20,7 @@ import math
 import re
 import xml.etree.ElementTree as ET
 import zipfile
-from typing import Callable, Iterator
+from collections.abc import Callable, Iterator
 
 EFFORT_DISTANCES = (1000, 1609, 5000, 10000, 21097, 42195)
 MAX_FILE_BYTES = 64 * 1024 * 1024  # per decompressed member; guards against zip bombs
@@ -138,7 +138,7 @@ def gps_streams(rows: list[tuple]) -> dict:
 
 def _local(ts: dt.datetime) -> dt.datetime:
     if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=dt.timezone.utc)
+        ts = ts.replace(tzinfo=dt.UTC)
     return ts.astimezone().replace(tzinfo=None)
 
 
@@ -170,7 +170,7 @@ def parse_fit(data: bytes) -> dict | None:
             if not isinstance(frame, fitdecode.FitDataMessage):
                 continue
             if frame.name == "record":
-                g = lambda k: frame.get_value(k, fallback=None)  # noqa: E731
+                g = lambda k, f=frame: f.get_value(k, fallback=None)
                 ts, d, hr = g("timestamp"), g("distance"), g("heart_rate")
                 if hr:
                     hrs.append(int(hr))
@@ -310,7 +310,7 @@ def parse_strava_date(s: str) -> dt.datetime | None:
     """'Jan 5, 2023, 7:12:33 AM' (UTC) or '5 ene 2023, 7:12:33' / ISO."""
     s = s.strip()
     try:
-        return dt.datetime.fromisoformat(s.replace("Z", "")).replace(tzinfo=dt.timezone.utc)
+        return dt.datetime.fromisoformat(s.replace("Z", "")).replace(tzinfo=dt.UTC)
     except ValueError:
         pass
     m = re.match(r"([A-Za-zé]+)\.? (\d{1,2}), (\d{4}),? (\d{1,2}):(\d{2}):(\d{2})\s*([AP]M)?", s) or \
@@ -326,7 +326,7 @@ def parse_strava_date(s: str) -> dt.datetime | None:
     if not month:
         return None
     h = int(g[3]) % 12 + (12 if g[6] == "PM" else 0) if g[6] else int(g[3])
-    return dt.datetime(int(g[2]), month, int(day), h, int(g[4]), int(g[5]), tzinfo=dt.timezone.utc)
+    return dt.datetime(int(g[2]), month, int(day), h, int(g[4]), int(g[5]), tzinfo=dt.UTC)
 
 
 def parse_strava_csv(text: str) -> list[dict]:
@@ -344,7 +344,7 @@ def parse_strava_csv(text: str) -> list[dict]:
         if len(r) < len(head) // 2:
             continue
 
-        def get(col: str, which: dict = first) -> str:
+        def get(col: str, which: dict = first, r: list[str] = r) -> str:
             i = which.get(col)
             return r[i].strip() if i is not None and i < len(r) else ""
 

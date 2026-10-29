@@ -1,108 +1,106 @@
 # 🏃 OpenRun
 
-Alternativa open source y local a Runna: planes de running basados en evidencia, sincronización con Garmin (datos + envío de entrenos al reloj), Amazfit Helio Strap (FC/HRV) y un coach IA que crea entrenos con tus datos reales.
+[![CI](https://github.com/mandel2000/openrun/actions/workflows/ci.yml/badge.svg)](https://github.com/mandel2000/openrun/actions/workflows/ci.yml)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
-- **Planes** 5K / 10K / medio / maratón / base: periodización, ritmos VDOT (Daniels), 80/20, progresión ≤10 % con descargas, taper, fuerza.
-- **Garmin Forerunner 265**: descarga actividades, HRV, sueño y FC reposo; envía entrenos estructurados (con objetivos de ritmo) al calendario → reloj.
-- **Helio Strap**: sensor de FC del 265 en carrera, medición de HRV matinal por Bluetooth desde el navegador e importación del export de Zepp.
-- **Readiness 0–100**: HRV, sueño, FC en reposo, carga (forma/ACWR) y un check-in diario de dos toques (sensación y piernas). Si llegas fatigado propone suavizar el entreno de hoy (aceptas o mantienes) y el coach explica por qué. Botón "No me encuentro al 100 %".
-- **Reajuste del plan**: una sesión clave perdida se propone en el siguiente hueco sin juntar días duros (las suaves se dejan pasar); una carrera hecha uno o dos días tarde cuenta para la sesión perdida; "He estado parado N días" (enfermedad, lesión, viaje) cierra lo perdido, recalcula ritmos si hace falta y hace la vuelta progresiva.
-- **Análisis post-entreno**: cada serie real (vueltas de Garmin) frente a lo planificado; si 2 de las 3 últimas sesiones de calidad salen más fáciles o más duras, ajusta el VDOT ±0,5 automáticamente (como *Pace Insights*).
-- **Ajuste por calor**: previsión de Open-Meteo a tu hora de entreno → ritmos más lentos según temperatura + punto de rocío.
-- **Rutina diaria automática** (06:30 por defecto): sync Garmin → análisis → ritmos → calor → readiness → próximos 7 días al reloj (solo lo que cambió).
-- **Varios usuarios**: cada persona con su cuenta (por invitación), su plan, su Garmin, su coach y sus datos, aislados. Bienvenida guiada (perfil → Garmin o archivos → objetivo y plan con su nivel real) y límite diario de peticiones al coach IA por usuario.
-- **Sin Garmin**: sube carreras en .fit / .gpx / .tcx de cualquier reloj o el export de Strava; tienen mapa, gráficas, parciales y cuentan para el plan.
-- **App en el móvil** (PWA instalable) con **notificaciones push** propias: entreno del día, análisis de cada carrera al sincronizar y resumen semanal.
-- **Arrastrar y soltar** entrenos entre días en el plan (ratón o pulsación larga en el móvil): intercambia con lo que hubiera, reprograma el reloj y avisa si quedan dos días duros seguidos.
-- **Estrategia de carrera**: ritmo km a km a esfuerzo constante sobre el perfil real (GPX/TCX/KML o enlace; altitud del terreno si falta), salida prudente, calor previsto el día de la carrera, geles e hidratos, mapa, y entreno de carrera en el reloj con un paso por km. Perfil aproximado de la Behobia incluido.
-- **Actividades**: mapa, ritmo/FC/altitud sincronizados, parciales por km y dinámica de carrera (cadencia, zancada, contacto, oscilación, potencia).
-- **Fuerza y movilidad** estructuradas: ejercicios con series, repeticiones, descanso y técnica (lista para marcar en el gimnasio), calentamiento dinámico y movilidad post-carrera.
-- **Resumen semanal** cada lunes: cumplimiento, km, carga y foco de la semana, con comentario del coach IA.
-- **Récords** 1K / milla / 5K / 10K / media / maratón: histórico, 12 meses, 6 meses y 30 días (mejores tramos de Garmin).
-- **Importar histórico** antiguo: export completo de Strava o Garmin (.zip) o archivos .fit / .gpx / .tcx sueltos, con mejores tramos calculados y sin duplicar lo que ya está en Garmin.
-- **Predicciones** de carrera: VDOT (Daniels) de tus mejores esfuerzos, Riegel, predictor de Garmin y FC; consenso y tendencia. Sugiere recalibrar ritmos (como *Pace Insights*).
-- **Carreras** de la preparación desde el calendario de [Orycron Sport](https://www.orycronsport.com) o a mano: A (objetivo), B (mini-taper + recuperación), C (entreno). El plan se ajusta solo y el reloj se resincroniza.
-- **Coach IA**: lee plan, actividades, HRV, carga, récords y carreras; crea/mueve/ajusta entrenos y los envía a Garmin. Los ritmos los calcula el servidor desde tu VDOT, nunca el modelo. Funciona con tu suscripción de Claude (MCP), Gemini gratis, Ollama local o API de pago.
+**An open-source, self-hosted running coach.** Evidence-based training plans, Garmin sync (data in, structured workouts out to your watch), HRV-guided readiness and an AI coach that works with your real data. A free alternative to subscription apps such as Runna.
 
-La justificación científica de cada decisión está en [docs/RESEARCH.md](docs/RESEARCH.md).
+[Leer en español](README.es.md) · [Self-hosting](docs/self-hosting.md) · [MCP (Claude Desktop, Gemini CLI)](docs/mcp.md) · [The science](docs/science.md) · [Contributing](CONTRIBUTING.md)
 
-## Arranque
+> The app's interface is in Spanish for now. Translations are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Requisitos: Python ≥ 3.12, Node ≥ 20.
+## Features
+
+- **Training plans** for 5K, 10K, half, marathon and general fitness: periodisation (base → build → specific → taper), Daniels VDOT paces, ~80/20 intensity, ≤ 10 % weekly progression with recovery weeks, strength and mobility.
+- **Garmin** (tested with a Forerunner 265): pulls activities, HRV, sleep and resting HR; pushes structured workouts with pace targets to the Garmin Connect calendar, which syncs to the watch.
+- **No Garmin? No problem**: upload `.fit`, `.gpx` or `.tcx` files from any watch or app, or your whole Strava export. Uploaded runs get maps, charts and splits and count for the plan.
+- **Readiness 0–100** from HRV, sleep, resting HR, training load (form/ACWR) and a two-tap daily check-in. When you are tired it proposes a softer version of today's session; you accept or keep the plan, and the coach explains why.
+- **The plan adapts**: missed key sessions get a proposed slot later in the week (never next to another hard day), a run done a day late still counts, and "I've been off N days" (illness, injury, travel) eases you back and re-paces when needed.
+- **Post-run analysis**: every interval against its target; when sessions consistently come out easier or harder, paces are recalibrated (like *Pace Insights*).
+- **Heat adjustment**: forecast temperature and dew point at your usual training hour slow the pace targets.
+- **Race strategy**: per-km pacing at even effort on the real course profile (GPX/TCX/KML or link), forecast heat on race day, fuelling plan, and a race workout on your watch.
+- **Activities**: map, synced pace/HR/elevation charts, km splits and running dynamics.
+- **Records and predictions** (1K to marathon), training load (TRIMP, CTL/ATL), weekly review with an AI comment.
+- **AI coach** inside the app (NVIDIA or Gemini free tiers, Ollama locally, or Anthropic/OpenAI/Groq/OpenRouter APIs) or from **Claude Desktop / Gemini CLI via MCP** using your own subscription. Paces are always computed by the server from your VDOT, never by the model.
+- **Multi-user** with invitation links: each person has their own plan, Garmin account, coach, data and personal MCP token. Per-user daily AI limits.
+- **Installable web app (PWA)** with its own push notifications: today's session, post-run analysis, missed sessions, weekly review.
+- Bluetooth heart-rate straps (e.g. Amazfit Helio Strap) for a morning HRV measurement from the browser; Zepp data import.
+
+The reasoning and references behind each training rule are in [docs/science.md](docs/science.md).
+
+## Quick start
+
+### Docker (recommended)
+
+```bash
+git clone https://github.com/mandel2000/openrun.git && cd openrun
+cp .env.example .env          # set OPENRUN_PASSWORD (12+ characters) and, optionally, an AI provider key
+docker compose up -d
+```
+
+Open http://localhost:8000 and sign in as `admin` with that password. Data lives in the `openrun-data` volume.
+
+### On your computer, without Docker
+
+Requirements: Python ≥ 3.12 and Node ≥ 20.
 
 ```bash
 ./run.sh
 ```
 
-Abre http://localhost:8000. Todos los datos se guardan en `~/.openrun/` (SQLite + tokens de Garmin).
+Open http://localhost:8000 (requests from the same machine need no password). Data is stored in `~/.openrun/`. To keep it running and reach it from your phone, see [docs/self-hosting.md](docs/self-hosting.md#on-your-own-computer).
 
-Para el coach IA necesitas una API key de Anthropic (pago por uso, sin suscripción):
+### On a server
 
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-```
+Behind a reverse proxy with HTTPS (Caddy, Traefik, Coolify, …), multi-user, with notifications and your own domain: [docs/self-hosting.md](docs/self-hosting.md).
 
-Modelo por defecto `claude-opus-5-5` con esfuerzo `medium`. Para gastar menos: `export OPENRUN_MODEL=claude-haiku-5-5` (mucho más barato) u `OPENRUN_EFFORT=low`.
+## First steps
 
-### Coach sin coste extra
+1. **Sign in.** New users see a short setup: profile, data source (Garmin or files) and goal.
+2. **Settings › Garmin**: log in (MFA supported) and sync your history. Or upload files in **Progress › Activities**.
+3. **Plan**: goal, race date, days per week and a recent race time → *Generate plan*.
+4. **Today**: the session of the day, the readiness check-in and any plan adjustments. Send the week to your watch.
+5. **Settings › Notifications** on your phone (on iPhone, add the app to the Home Screen first).
 
-| Opción | Cómo | Coste |
+## AI coach options
+
+| Option | How | Cost |
 |---|---|---|
-| **Tu suscripción de Claude** (Free/Pro/Max) | OpenRun como servidor MCP en Claude Desktop (config lista para copiar en *Ajustes › Coach IA*): `python -m app.mcp_server` | 0 € extra |
-| **Gemini CLI** | Mismo bloque `mcpServers` en `~/.gemini/settings.json` | Gratis con cuenta Google |
-| **NVIDIA** (chat dentro de la app) | `OPENRUN_PROVIDER=nvidia NVIDIA_API_KEY=nvapi-…` (modelo por defecto `minimaxai/minimax-m3.1-flash`) | Gratis con cuenta NVIDIA Developer, ~40 peticiones/min, condiciones de prueba |
-| **Gemini API** (chat dentro de la app) | `OPENRUN_PROVIDER=gemini GEMINI_API_KEY=…` | Plan gratuito con límites; Google puede usar los datos |
-| **Ollama** (local) | `ollama pull qwen3:8b` + `OPENRUN_PROVIDER=ollama` | Gratis, privado; peor calidad |
-| Otras | `OPENRUN_PROVIDER=groq|openrouter|openai` + su key; `OPENRUN_MODEL` para cambiar modelo | Según proveedor |
+| **Your Claude subscription** (Free/Pro/Max) | OpenRun as an MCP server in Claude Desktop ([docs/mcp.md](docs/mcp.md)) | No extra cost |
+| **Gemini CLI** | Same MCP config in `~/.gemini/settings.json` | Free with a Google account |
+| **NVIDIA** (in-app chat) | `OPENRUN_PROVIDER=nvidia`, `NVIDIA_API_KEY=nvapi-…` | Free NVIDIA Developer account, ~40 req/min, trial terms |
+| **Gemini API** (in-app chat) | `OPENRUN_PROVIDER=gemini`, `GEMINI_API_KEY=…` | Free tier with limits; Google may use the data |
+| **Ollama** (local) | `ollama pull qwen3:8b`, `OPENRUN_PROVIDER=ollama` | Free and private; weaker reasoning |
+| **Paid APIs** | `ANTHROPIC_API_KEY`, or `OPENRUN_PROVIDER=openai\|groq\|openrouter` with its key | Pay per use |
 
-Las suscripciones de consumo (Claude, ChatGPT, Gemini) no incluyen acceso API para apps propias; MCP es la forma soportada de usarlas con tus datos.
+Consumer subscriptions (Claude, ChatGPT, Gemini) do not include API access for third-party apps; MCP is the supported way to use them with your own data. All settings: [docs/configuration.md](docs/configuration.md).
 
-### Desarrollo
+## Documentation
 
-```bash
-cd backend && .venv/bin/uvicorn app.main:app --reload       # API en :8000
-cd frontend && npm run dev                                   # UI en :5173 (proxy a /api)
-cd backend && .venv/bin/python -m pytest                     # tests
-```
+| | |
+|---|---|
+| [Self-hosting](docs/self-hosting.md) | Local, Docker, server, phone, domain, notifications, monitoring, upgrades |
+| [Configuration](docs/configuration.md) | Every environment variable |
+| [MCP](docs/mcp.md) | Use the coach from Claude Desktop or Gemini CLI |
+| [Integrations](docs/integrations.md) | Garmin, files and Strava, heart-rate straps, weather, race calendar |
+| [Architecture](docs/architecture.md) | How the code is organised |
+| [The science](docs/science.md) | What the plans are based on |
+| [Español](docs/es/) | Guías en español |
 
-### Automático y en el móvil
+## Limitations
 
-```bash
-scripts/install-autostart.sh                              # arranca OpenRun al iniciar sesión (rutina diaria)
-OPENRUN_PIN=<pin> scripts/install-autostart.sh --lan      # además, accesible desde el móvil en la misma wifi
-```
+- Garmin's API is unofficial (via [python-garminconnect](https://github.com/cyberjunky/python-garminconnect)); it can break if Garmin changes its login or endpoints.
+- Web Bluetooth (HRV measurement in the browser) works in Chrome and Edge, not Safari or Firefox.
+- The interface is in Spanish.
 
-En el móvil abre `http://<IP-del-Mac>:8000` (la ves en *Ajustes › OpenRun en el móvil*), entra con tu usuario (`admin` y el PIN la primera vez) y añádela a la pantalla de inicio. Fuera de casa, Tailscale; no abras puertos en el router.
+**Not medical advice.** If you feel pain or unusual symptoms, stop and see a professional.
 
-Guía completa (comprobar estado, reiniciar, cambiar el PIN, desinstalar, seguridad y problemas frecuentes): [docs/AUTOSTART_Y_MOVIL.md](docs/AUTOSTART_Y_MOVIL.md). Para tenerlo en un servidor 24 h con HTTPS: [docs/DESPLIEGUE_VPS.md](docs/DESPLIEGUE_VPS.md).
+## Contributing
 
-## Primeros pasos
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, branch workflow and commit conventions, and [SECURITY.md](SECURITY.md) to report vulnerabilities privately.
 
-1. **Ajustes** → login de Garmin (soporta MFA) y *Sincronizar histórico completo*. Rellena FC máx/reposo.
-2. **Ajustes › Importar histórico** → sube el export de Strava para tener récords de años anteriores.
-3. **Progreso** → récords y predicciones; si te sugiere recalibrar, acepta.
-4. **Plan** → objetivo, fecha, días, marca reciente → *Generar plan*.
-5. **Carreras** → añade las de tu preparación (A/B/C).
-6. *Enviar Sx al reloj* y sincroniza el 265 (Entrenamiento › Calendario).
-7. Helio Strap: en la app Zepp activa *compartir FC*; en el 265, *Sensores y accesorios › Añadir › FC*. Por la mañana, *Ajustes › Conectar banda › Medir HRV*.
+## License
 
-## Estructura
+[GNU Affero General Public License v3.0](LICENSE). You can use, modify and self-host OpenRun freely; if you run a modified version as a service for others, you must share your changes under the same license.
 
-```
-backend/app/training/   vdot.py (Daniels), plan.py (generador), workouts.py (biblioteca de sesiones),
-                        load.py (TRIMP, CTL/ATL, HRV readiness, RMSSD), adapt.py (ajustes)
-                        records.py (PRs, predicciones)
-backend/app/integrations/ garmin.py (python-garminconnect), zepp.py (CSV/zip), orycron.py (calendario),
-                          history_import.py (Strava/FIT/GPX/TCX)
-backend/app/ai/coach.py   coach multi-proveedor + herramientas
-backend/app/mcp_server.py servidor MCP (Claude Desktop, Gemini CLI)
-frontend/src/             React (Hoy, Plan, Carreras, Progreso, Coach, Ajustes)
-```
-
-## Limitaciones
-
-- La API de Garmin no es oficial; puede romperse si Garmin cambia el login/endpoints.
-- Web Bluetooth solo en Chrome/Edge (no Safari/Firefox).
-- Pendiente: ajuste por calor, exportar entrenos .FIT por USB, app móvil.
-
-No es consejo médico: ante dolor o síntomas, para y consulta a un profesional.
+Built on [python-garminconnect](https://github.com/cyberjunky/python-garminconnect), [FastAPI](https://fastapi.tiangolo.com), [React](https://react.dev), [Open-Meteo](https://open-meteo.com), [OpenStreetMap](https://www.openstreetmap.org) and [Leaflet](https://leafletjs.com).

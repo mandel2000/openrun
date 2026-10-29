@@ -4,7 +4,14 @@ En un servidor OpenRun está encendido 24 h (la rutina diaria se ejecuta aunque 
 
 ## Imagen
 
-`Dockerfile` (un contenedor: API + web compilada) y `docker-compose.yml`. Los datos viven en el volumen `/data`:
+Imagen publicada `ghcr.io/mandel2000/openrun` (amd64 y arm64) o construida desde el `Dockerfile` (un contenedor: API + web compilada). Con Docker Compose:
+
+```bash
+cp .env.example .env    # pon al menos OPENRUN_PASSWORD (12+ caracteres)
+docker compose up -d    # http://localhost:8000; delante, un proxy con HTTPS (Caddy, Traefik, Coolify…)
+```
+
+Los datos viven en el volumen `/data`:
 
 | Ruta | Contenido |
 |---|---|
@@ -25,7 +32,7 @@ El contenedor corre sin root (uid 1000), con `TZ=Europe/Madrid` y healthcheck en
 | `OPENRUN_ADMIN_USER` | No | Usuario de la cuenta de administrador (por defecto `admin`). La cuenta se crea en el primer arranque y se queda con los datos que hubiera |
 | `OPENRUN_OPEN_SIGNUP` | No | `1` permite registrarse sin invitación. Por defecto `0`: solo con enlace de invitación |
 | `OPENRUN_VAPID_SUB` | No | Contacto para los servicios de notificaciones push (`mailto:…`). Las claves VAPID se generan solas en `/data/vapid.pem` |
-| `OPENRUN_API_TOKEN` | Para el MCP | Token para que el coach de Claude Desktop hable con el servidor (≥ 32 caracteres) |
+| `OPENRUN_API_TOKEN` | No | Token de todo el servidor que actúa como administrador (≥ 32 caracteres). Cada usuario puede crear su token personal para el MCP en *Ajustes › Coach* |
 | `OPENRUN_PUBLIC_URL` | Recomendada | `https://run.tudominio.com` (se muestra en *Ajustes* y en la config del MCP) |
 | `ANTHROPIC_API_KEY` / `OPENRUN_PROVIDER` / `GEMINI_API_KEY` / `NVIDIA_API_KEY` / `OPENRUN_MODEL` | No | Coach IA dentro de la app (`OPENRUN_PROVIDER=nvidia` para el plan gratuito de NVIDIA) |
 | `OPENRUN_MODEL_FALLBACKS` / `OPENRUN_REASONING_EFFORT` | No | Modelos de respaldo (separados por comas) y nivel de razonamiento; con NVIDIA por defecto `openai/gpt-oss-20b` y `low` (primera palabra en ~5 s en vez de 15–70 s) |
@@ -49,7 +56,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(40))"   # API token
 - El administrador puede borrar cuentas (con todos sus datos).
 - El coach IA (y su API key) es común: cada usuario habla con él sobre sus propios datos. Con NVIDIA gratis el límite es de ~40 peticiones por minuto entre todos. Cada usuario tiene un máximo diario de peticiones (chat, resumen semanal, explicaciones de readiness): `OPENRUN_AI_DAILY_LIMIT`, editable por usuario en *Ajustes › Usuarios*.
 - Un usuario nuevo ve una bienvenida guiada en *Hoy* hasta que crea su plan o la salta.
-- El API token del MCP actúa como el administrador.
+- Cada usuario genera su propio token para el MCP en *Ajustes › Coach › Fuera de la app (MCP)*: solo da acceso a sus datos y se puede regenerar o revocar. `OPENRUN_API_TOKEN` actúa como el administrador.
 
 ## Notificaciones
 
@@ -70,7 +77,7 @@ Avisos: entreno del día tras la rutina de la mañana, análisis de cada carrera
 ## Monitorización
 
 - `GET /api/health` responde siempre (lo usa el healthcheck del contenedor). `GET /api/health?deep=1` comprueba además la base de datos, que el planificador interno siga ejecutándose y que la última copia de seguridad no haya fallado; si algo va mal responde 503 con la lista de problemas.
-- GitHub Actions (`.github/workflows/uptime.yml`) llama a `?deep=1` cada hora. Si falla 3 veces seguidas, la ejecución falla y GitHub manda un email al dueño del repositorio. Para recibirlo también en el móvil: instala la app **ntfy**, suscríbete a un tema con un nombre largo y aleatorio y guárdalo como *secret* `NTFY_TOPIC` del repositorio. La dirección se cambia con la variable `OPENRUN_URL` del repositorio.
+- GitHub Actions (`.github/workflows/uptime.yml`) llama a `?deep=1` cada hora. En tu fork, guarda tu dirección como *secret* `OPENRUN_URL` del repositorio (así no sale en los logs públicos); sin él no hace nada. Si falla 3 veces seguidas, la ejecución falla y GitHub manda un email al dueño del repositorio. Para recibirlo también en el móvil: instala la app **ntfy**, suscríbete a un tema con un nombre largo y aleatorio y guárdalo como *secret* `NTFY_TOPIC`.
 - Si falla la copia de seguridad diaria, los administradores reciben una notificación push.
 - `.github/workflows/ci.yml` pasa los tests del backend y compila el frontend en cada push.
 
@@ -97,15 +104,17 @@ SQLite en el volumen es suficiente para un solo atleta: cero mantenimiento, sin 
 
 ## Coach en Claude Desktop (MCP) contra el servidor
 
-El MCP se ejecuta en tu ordenador (desde un clon del repo) y llama a la API del servidor:
+El MCP se ejecuta en tu ordenador y llama a la API del servidor con tu token personal (*Ajustes › Coach › Fuera de la app (MCP)* › *Generar token*; esa pantalla te da la configuración lista para copiar). Con Docker no hace falta instalar nada más:
 
 ```json
 { "mcpServers": { "openrun": {
-  "command": "/Users/<tu-usuario>/OpenRun/backend/.venv/bin/python",
-  "args": ["-m", "app.mcp_server"],
-  "env": { "PYTHONPATH": "/Users/<tu-usuario>/OpenRun/backend",
-           "OPENRUN_URL": "https://run.tudominio.com", "OPENRUN_API_TOKEN": "<token>" } } } }
+  "command": "docker",
+  "args": ["run", "-i", "--rm", "-e", "OPENRUN_URL", "-e", "OPENRUN_API_TOKEN",
+           "ghcr.io/mandel2000/openrun:latest", "python", "-m", "app.mcp_server"],
+  "env": { "OPENRUN_URL": "https://run.tudominio.com", "OPENRUN_API_TOKEN": "or_…" } } } }
 ```
+
+Otras opciones (desde un clon del repo, Gemini CLI, herramientas disponibles): [docs/mcp.md](../mcp.md).
 
 ## Coolify
 

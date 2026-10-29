@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest an idea or an improvement to the training logic
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How could OpenRun help? Mock-ups welcome.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: For changes to training rules, the studies, books or coaching methods that support them.
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd like to work on this myself

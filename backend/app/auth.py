@@ -183,14 +183,63 @@ def session_user(token: str) -> int | None:
     return uid if 0 <= time.time() - iat <= SESSION_DAYS * 86400 else None
 
 
+TOKEN_PREFIX = "or_"
+
+
+def token_hash(token: str) -> str:
+    # tokens are 32 random bytes: a fast hash is enough (nothing to brute-force)
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _session():
+    from sqlmodel import Session
+
+    from .db import engine
+    return Session(engine)
+
+
+def new_personal_token(uid: int) -> str:
+    """Create (or replace) the user's personal API token; returned once, only its hash is stored."""
+    from .db import User
+    token = TOKEN_PREFIX + secrets.token_urlsafe(32)
+    with _session() as s:
+        u = s.get(User, uid)
+        u.api_token_hash = token_hash(token)
+        s.add(u)
+        s.commit()
+    return token
+
+
+def revoke_personal_token(uid: int) -> None:
+    from .db import User
+    with _session() as s:
+        u = s.get(User, uid)
+        u.api_token_hash = None
+        s.add(u)
+        s.commit()
+
+
+def token_user(token: str) -> int | None:
+    if API_TOKEN and hmac.compare_digest(token, API_TOKEN):
+        return 1  # server-wide token from the environment acts as the admin
+    if not token.startswith(TOKEN_PREFIX):
+        return None
+    from sqlmodel import select
+
+    from .db import User
+    with _session() as s:
+        u = s.exec(select(User).where(User.api_token_hash == token_hash(token))).first()
+    return u.id if u else None
+
+
 def request_user(request: Request) -> int | None:
-    """User id of the request: session cookie, API token (admin) or this machine (admin)."""
+    """User id of the request: session cookie, API token (personal or the admin's) or this machine (admin)."""
     uid = session_user(request.cookies.get(COOKIE, ""))
     if uid:
         return uid
     bearer = request.headers.get("authorization", "")
-    if API_TOKEN and bearer.lower().startswith("bearer ") and hmac.compare_digest(bearer[7:].strip(), API_TOKEN):
-        return 1
+    if bearer.lower().startswith("bearer ") and (uid := token_user(bearer[7:].strip())):
+        return uid
     if is_local(request):
         return 1
     return None

@@ -1,22 +1,21 @@
-# Coolify (Docker Compose build pack) or `docker compose up -d` on any server behind a TLS proxy.
-# Secrets come from the environment (Coolify env vars), never from this file.
+# Self-hosting with Docker Compose:
+#   cp .env.example .env   # set at least OPENRUN_PASSWORD
+#   docker compose up -d   # http://localhost:8000 (put a TLS reverse proxy in front on a server)
+# Uses the published image; `docker compose build` builds it from this repository instead.
 services:
   openrun:
+    image: ghcr.io/mandel2000/openrun:${OPENRUN_VERSION:-latest}
     build: .
     restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
     environment:
-      OPENRUN_PASSWORD: ${OPENRUN_PASSWORD:?Define OPENRUN_PASSWORD (12+ caracteres)}
-      OPENRUN_API_TOKEN: ${OPENRUN_API_TOKEN:-}
-      OPENRUN_PUBLIC_URL: ${OPENRUN_PUBLIC_URL:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OPENRUN_PROVIDER: ${OPENRUN_PROVIDER:-anthropic}
-      OPENRUN_MODEL: ${OPENRUN_MODEL:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      OPENRUN_PASSWORD: ${OPENRUN_PASSWORD:?Set OPENRUN_PASSWORD (12+ characters) in .env}
+    ports:
+      - "${OPENRUN_PORT:-8000}:8000"
     volumes:
       - openrun-data:/data
-    expose:
-      - "8000"
     deploy:
       resources:
         limits:

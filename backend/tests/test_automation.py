@@ -210,8 +210,34 @@ def test_public_server_mode(monkeypatch):
         auth.check_config()
 
 
-def test_multi_user_isolation(monkeypatch):
+def test_personal_api_tokens(monkeypatch):
+    """Each user gets their own MCP token: it sees only their data and can be revoked."""
     auth = _fresh_users(monkeypatch, "admin password 1")
+    monkeypatch.setattr(auth, "TRUST_LOCAL", False)
+    admin = TestClient(main.app)
+    admin.post("/api/auth", json={"username": "admin", "password": "admin password 1"})
+    admin.put("/api/athlete", json={"name": "Admin"})
+    inv = admin.post("/api/users/invites", json={}).json()
+    friend = TestClient(main.app)
+    friend.post("/api/auth/register", json={"code": inv["code"], "username": "bea", "password": "bea password 1"})
+    friend.put("/api/athlete", json={"name": "Bea"})
+    assert friend.get("/api/account").json()["has_token"] is False
+    tok = friend.post("/api/account/token").json()["token"]
+    assert tok.startswith("or_") and friend.get("/api/account").json()["has_token"]
+    mcp = TestClient(main.app)
+    h = {"Authorization": f"Bearer {tok}"}
+    assert mcp.get("/api/athlete", headers=h).json()["name"] == "Bea"
+    assert mcp.post("/api/tools/get_athlete_profile", json={"args": {}}, headers=h).json()["result"]["name"] == "Bea"
+    assert mcp.get("/api/athlete", headers={"Authorization": "Bearer or_wrong"}).status_code == 401
+    new = friend.post("/api/account/token").json()["token"]  # regenerating invalidates the old one
+    assert mcp.get("/api/athlete", headers=h).status_code == 401
+    friend.delete("/api/account/token")
+    assert mcp.get("/api/athlete", headers={"Authorization": f"Bearer {new}"}).status_code == 401
+    admin.delete(f"/api/users/{friend.get('/api/account').json()['id']}")  # ids are reused: leave no data behind
+
+
+def test_multi_user_isolation(monkeypatch):
+    _fresh_users(monkeypatch, "admin password 1")
     admin = TestClient(main.app)
     assert admin.post("/api/auth", json={"username": "admin", "password": "admin password 1"}).status_code == 200
     admin.put("/api/athlete", json={"name": "Alex", "vdot": 47})

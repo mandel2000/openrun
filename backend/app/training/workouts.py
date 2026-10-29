@@ -36,7 +36,7 @@ class Step:
     hr_low: int | None = None
     hr_high: int | None = None
     repeat: int = 1
-    steps: list["Step"] = field(default_factory=list)
+    steps: list[Step] = field(default_factory=list)
     note: str = ""
 
     def to_dict(self) -> dict:
@@ -49,7 +49,7 @@ class Step:
         return d
 
     @staticmethod
-    def from_dict(d: dict) -> "Step":
+    def from_dict(d: dict) -> Step:
         d = dict(d)
         children = [Step.from_dict(s) for s in d.pop("steps", [])]
         known = {k: v for k, v in d.items() if k in Step.__dataclass_fields__}
@@ -88,7 +88,7 @@ class Workout:
         }
 
     @staticmethod
-    def from_dict(d: dict) -> "Workout":
+    def from_dict(d: dict) -> Workout:
         w = Workout(
             type=d["type"],
             title=d["title"],

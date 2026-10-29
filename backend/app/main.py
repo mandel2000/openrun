@@ -4,7 +4,6 @@ import datetime as dt
 import os
 import re
 import threading
-import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -202,7 +201,21 @@ class AccountIn(BaseModel):
 
 @app.get("/api/account")
 def account_get(s: Session = DB):
-    return {**_me(tenancy.current_user_id()), "ai": S.ai_usage(s)}
+    from .db import User
+    has_token = bool(s.get(User, tenancy.current_user_id()).api_token_hash)
+    return {**_me(tenancy.current_user_id()), "ai": S.ai_usage(s), "has_token": has_token}
+
+
+@app.post("/api/account/token")
+def account_token_new():
+    """Personal API token for the MCP server (Claude Desktop, Gemini CLI…). Shown once."""
+    return {"token": auth.new_personal_token(tenancy.current_user_id())}
+
+
+@app.delete("/api/account/token")
+def account_token_revoke():
+    auth.revoke_personal_token(tenancy.current_user_id())
+    return {"ok": True}
 
 
 @app.put("/api/account")
@@ -231,7 +244,8 @@ def account_put(body: AccountIn, request: Request):
 
 @app.get("/api/users")
 def users_list():
-    from sqlmodel import Session as _S, select
+    from sqlmodel import Session as _S
+    from sqlmodel import select
 
     from .db import Activity, Invite, Meta, User, engine
 
@@ -696,7 +710,7 @@ def replan_apply(body: ReplanIn, s: Session = DB):
     try:
         return S.replan_apply(s, body.workout_id, body.accept)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from e
 
 
 class BreakIn(BaseModel):
@@ -900,8 +914,9 @@ def coach_info():
     backend = Path(__file__).resolve().parents[1]
     public_url = os.getenv("OPENRUN_PUBLIC_URL", "")
     # Ready-to-paste MCP config for Claude Desktop / Gemini CLI. On a server, the MCP process runs on
-    # the user's computer (from a local clone) and talks to this server with the API token.
-    mcp = ({"remote": True, "url": public_url, "token_set": bool(auth.API_TOKEN)} if public_url
+    # the user's computer (the published Docker image or a local clone) and talks to this server
+    # with the user's personal API token.
+    mcp = ({"remote": True, "url": public_url, "image": os.getenv("OPENRUN_IMAGE", "ghcr.io/mandel2000/openrun:latest")} if public_url
            else {"remote": False, "command": sys.executable, "args": ["-m", "app.mcp_server"], "cwd": str(backend)})
     return {**coach.provider_info(), "mcp": mcp}
 

@@ -8,7 +8,7 @@ os.environ["OPENRUN_SCHEDULER"] = "0"
 from sqlmodel import Session  # noqa: E402
 
 from app import services as S  # noqa: E402
-from app.db import Activity, PlannedWorkout, User, engine, init_db  # noqa: E402
+from app.db import PlannedWorkout, User, engine, init_db  # noqa: E402
 from app.tenancy import as_user  # noqa: E402
 from app.training import load, replan  # noqa: E402
 
