@@ -8,6 +8,10 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.13-slim
+LABEL org.opencontainers.image.title="OpenRun" \
+      org.opencontainers.image.description="Open-source, evidence-based running coach: plans, Garmin, HRV readiness and an AI coach" \
+      org.opencontainers.image.source="https://github.com/mandel2000/openrun" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     TZ=Europe/Madrid \
     OPENRUN_DATA=/data OPENRUN_DB=/data/openrun.db OPENRUN_GARMIN_TOKENS=/data/garmin \

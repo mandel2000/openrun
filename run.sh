@@ -3,6 +3,7 @@
 #   OPENRUN_HOST=0.0.0.0 OPENRUN_PIN=<pin> ./run.sh   -> also reachable from your phone on the same wifi
 set -euo pipefail
 cd "$(dirname "$0")"
+if [ -f .env ]; then set -a; . ./.env; set +a; fi  # settings from .env (see .env.example)
 PY=${PYTHON:-python3}
 HOST=${OPENRUN_HOST:-127.0.0.1}
 if [ "$HOST" != "127.0.0.1" ] && [ "$HOST" != "localhost" ] && [ -z "${OPENRUN_PIN:-}" ]; then
