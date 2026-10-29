@@ -119,7 +119,8 @@ def _seed(s: Session, today: dt.date, rng: random.Random) -> None:
                       "days_per_week": 4, "long_run_day": 6, "current_weekly_km": 32, "longest_recent_run_km": 15,
                       "level": "intermediate", "recent_race_distance": "10k", "recent_race_time": "47:30",
                       "goal_time": "1:42:00", "name": _("Half marathon in {weeks} weeks", weeks=14)})
-    S.add_race(s, _("City Half Marathon"), race_day.isoformat(), 21097.5, "A", goal_time_s=6120)
+    goal = S.add_race(s, _("City Half Marathon"), race_day.isoformat(), 21097.5, "A", goal_time_s=6120)
+    S.set_race_course(s, goal["id"], "city-half.gpx", _course_gpx())
     tune = race_day - dt.timedelta(weeks=4)
     S.add_race(s, _("Autumn 10K"), tune.isoformat(), 10000, "B", goal_time_s=2760)
     past = start - dt.timedelta(weeks=8, days=1)
@@ -224,6 +225,20 @@ def _leaf_steps(steps: list[dict]):
 
     number(steps)
     yield from expand(steps)
+
+
+def _course_gpx(total: float = 21097.5) -> bytes:
+    """A rolling city half-marathon course (two climbs) as GPX, so the race strategy has a profile."""
+    pts, lat, lon = [], CENTER[0] - 0.03, CENTER[1] - 0.04
+    for i in range(int(total // 100) + 1):
+        d = min(i * 100.0, total)
+        heading = 1.2 * math.pi * d / total + 0.5 * math.sin(2 * math.pi * d / 4000)  # a wide arc across town
+        ele = 640 + 28 * math.sin(2 * math.pi * d / 9000) + 9 * math.sin(2 * math.pi * d / 2600)
+        pts.append(f'<trkpt lat="{lat:.6f}" lon="{lon:.6f}"><ele>{ele:.1f}</ele></trkpt>')
+        lat += 100 * math.cos(heading) / 111320
+        lon += 100 * math.sin(heading) / (111320 * math.cos(math.radians(lat)))
+    return ('<?xml version="1.0"?><gpx version="1.1" creator="OpenRun demo"><trk><trkseg>'
+            + "".join(pts) + "</trkseg></trk></gpx>").encode()
 
 
 def _position(d: float) -> tuple[float, float, float]:

@@ -694,4 +694,5 @@ export const es: Record<string, string> = {
   'Off in the demo': 'Desactivado en la demo',
   'In your own install, sign in with your Garmin account to sync runs, sleep and HRV and send workouts to your watch.': 'En tu propia instalación, inicia sesión con tu cuenta de Garmin para sincronizar carreras, sueño y HRV y enviar entrenos a tu reloj.',
   'The AI coach is off in the demo. In your own install it reads your data and changes your plan; it can run on a free provider, locally with Ollama, or from Claude Desktop via MCP.': 'El coach IA está desactivado en la demo. En tu propia instalación lee tus datos y cambia tu plan; puede usar un proveedor gratuito, Ollama en local o Claude Desktop por MCP.',
+  'Course +{pct}% vs flat': 'Recorrido +{pct} % vs llano',
 }

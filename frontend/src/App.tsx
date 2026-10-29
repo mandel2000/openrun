@@ -7,7 +7,7 @@ import RacesPage from './pages/RacesPage'
 import SettingsPage from './pages/SettingsPage'
 import TodayPage from './pages/TodayPage'
 import Onboarding, { type OnbState } from './components/Onboarding'
-import { DONATE_URL, REPO_URL } from './project'
+import { REPO_URL } from './project'
 import { Banner, Icon, type IconName } from './ui'
 import { getLang, LANGS, setLang, t, type Lang } from './i18n'
 
@@ -186,7 +186,6 @@ export default function App() {
         ))}
         <div className="sidebar-foot small muted">
           {me ? <a href="#ajustes" style={{ color: 'inherit' }}>{me.name || me.username}</a> : 'OpenRun'} · <a href={REPO_URL} target="_blank" rel="noreferrer" style={{ color: 'inherit' }}>open source</a>
-          <div style={{ marginTop: 6 }}><a href={DONATE_URL} target="_blank" rel="noreferrer" style={{ color: 'inherit' }}>♥ {t('Support OpenRun')}</a></div>
         </div>
       </nav>
       <div className="content">
