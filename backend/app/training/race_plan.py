@@ -224,7 +224,7 @@ def pace_plan(profile: list[list[float]], target_s: float, notes: dict | None = 
         segs.append((d0, d1, L, g, effort_factor(g) * (1 + START_EASE.get(km, 0.0))))
     k = target_s / sum(L * w for _, _, L, _, w in segs)
     kms: dict[int, dict] = {}
-    for d0, d1, L, g, w in segs:
+    for d0, _d1, L, g, w in segs:
         km = int((d0 + 1e-6) // 1000)
         r = kms.setdefault(km, {"km": km + 1, "from_m": km * 1000, "to_m": min((km + 1) * 1000, distance), "time": 0.0,
                                 "up": 0.0, "down": 0.0, "max_grade": 0.0})

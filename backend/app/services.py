@@ -12,7 +12,8 @@ from sqlmodel import Session, select
 
 from .db import Activity, Athlete, Meta, Plan, PlannedWorkout, Race, Wellness, engine
 from .integrations.garmin import garmin
-from .training import adapt, load, records as R
+from .training import adapt, load
+from .training import records as R
 from .training import workouts as W
 from .training.plan import PlanRequest, generate_plan, resolve_vdot
 from .training.vdot import RACE_DISTANCES_M, fmt_time, parse_time, race_predictions, training_paces, vdot_from_race
@@ -974,7 +975,6 @@ def start_import_job(files: list[tuple[str, str]], cleanup: list[str]) -> str:
     import uuid
 
     from .db import engine
-
     from .tenancy import as_user, current_user_id
 
     uid = current_user_id()
@@ -1385,7 +1385,7 @@ def delete_user(uid: int) -> None:
     """Remove an account and every row it owns (admin action)."""
     from sqlalchemy import delete
 
-    from .db import ChatMessage, PushSubscription, User, engine
+    from .db import PushSubscription, User, engine
     from .tenancy import TENANT_MODELS
 
     with Session(engine) as s:

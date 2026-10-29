@@ -4,7 +4,6 @@ import datetime as dt
 import os
 import re
 import threading
-import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -245,7 +244,8 @@ def account_put(body: AccountIn, request: Request):
 
 @app.get("/api/users")
 def users_list():
-    from sqlmodel import Session as _S, select
+    from sqlmodel import Session as _S
+    from sqlmodel import select
 
     from .db import Activity, Invite, Meta, User, engine
 
@@ -710,7 +710,7 @@ def replan_apply(body: ReplanIn, s: Session = DB):
     try:
         return S.replan_apply(s, body.workout_id, body.accept)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from e
 
 
 class BreakIn(BaseModel):

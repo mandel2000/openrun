@@ -1,7 +1,6 @@
 import datetime as dt
 import gzip
 import io
-import math
 import os
 import tempfile
 import zipfile
@@ -42,7 +41,7 @@ def test_best_efforts_rejects_impossible_gps():
     assert "1000" not in H.best_efforts(times, dists)
 
 
-def track_points(km=6.0, pace=300, start=dt.datetime(2019, 5, 12, 8, 0, tzinfo=dt.timezone.utc), lat0=40.96, lon0=-5.66):
+def track_points(km=6.0, pace=300, start=dt.datetime(2019, 5, 12, 8, 0, tzinfo=dt.UTC), lat0=40.96, lon0=-5.66):
     """Points along a meridian line every 5 s (≈ GPS rate)."""
     pts, t, d = [], 0, 0.0
     while d <= km * 1000:
@@ -82,13 +81,13 @@ def test_parse_gpx_and_tcx():
 
 
 def test_strava_dates():
-    assert H.parse_strava_date("Jan 5, 2023, 7:12:33 PM") == dt.datetime(2023, 1, 5, 19, 12, 33, tzinfo=dt.timezone.utc)
-    assert H.parse_strava_date("5 ene 2023, 7:12:33") == dt.datetime(2023, 1, 5, 7, 12, 33, tzinfo=dt.timezone.utc)
+    assert H.parse_strava_date("Jan 5, 2023, 7:12:33 PM") == dt.datetime(2023, 1, 5, 19, 12, 33, tzinfo=dt.UTC)
+    assert H.parse_strava_date("5 ene 2023, 7:12:33") == dt.datetime(2023, 1, 5, 7, 12, 33, tzinfo=dt.UTC)
     assert H.parse_strava_date("2021-03-04 06:00:00").year == 2021
 
 
 def strava_zip():
-    pts = track_points(km=10.5, pace=280, start=dt.datetime(2019, 5, 12, 8, 0, tzinfo=dt.timezone.utc))
+    pts = track_points(km=10.5, pace=280, start=dt.datetime(2019, 5, 12, 8, 0, tzinfo=dt.UTC))
     head = ["Activity ID", "Activity Date", "Activity Name", "Activity Type", "Elapsed Time", "Distance", "Filename",
             "Elapsed Time", "Moving Time", "Distance", "Average Heart Rate"]
     rows = [
@@ -132,7 +131,7 @@ def test_uploaded_file_keeps_streams_for_map_and_charts():
     from app.db import Activity, engine, init_db
 
     init_db()
-    start = dt.datetime.combine(dt.date.today() - dt.timedelta(days=3), dt.time(8, 0), tzinfo=dt.timezone.utc)
+    start = dt.datetime.combine(dt.date.today() - dt.timedelta(days=3), dt.time(8, 0), tzinfo=dt.UTC)
     g = H.parse_file("r.gpx", gpx(track_points(km=5, pace=300, start=start)))
     st = g["_streams"]
     assert {"t", "d", "lat", "lon", "hr", "speed"} <= set(st) and len(st["t"]) <= 900

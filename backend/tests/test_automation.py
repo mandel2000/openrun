@@ -237,7 +237,7 @@ def test_personal_api_tokens(monkeypatch):
 
 
 def test_multi_user_isolation(monkeypatch):
-    auth = _fresh_users(monkeypatch, "admin password 1")
+    _fresh_users(monkeypatch, "admin password 1")
     admin = TestClient(main.app)
     assert admin.post("/api/auth", json={"username": "admin", "password": "admin password 1"}).status_code == 200
     admin.put("/api/athlete", json={"name": "Alex", "vdot": 47})
