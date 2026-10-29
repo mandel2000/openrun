@@ -36,6 +36,7 @@ class User(SQLModel, table=True):
     is_admin: bool = False
     created_at: str = ""
     ai_daily_limit: int | None = None  # AI requests per day; None = OPENRUN_AI_DAILY_LIMIT (admins: unlimited)
+    api_token_hash: str | None = Field(default=None, index=True)  # personal token (MCP), sha256
 
 
 class Invite(SQLModel, table=True):

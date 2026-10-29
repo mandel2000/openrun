@@ -202,7 +202,21 @@ class AccountIn(BaseModel):
 
 @app.get("/api/account")
 def account_get(s: Session = DB):
-    return {**_me(tenancy.current_user_id()), "ai": S.ai_usage(s)}
+    from .db import User
+    has_token = bool(s.get(User, tenancy.current_user_id()).api_token_hash)
+    return {**_me(tenancy.current_user_id()), "ai": S.ai_usage(s), "has_token": has_token}
+
+
+@app.post("/api/account/token")
+def account_token_new():
+    """Personal API token for the MCP server (Claude Desktop, Gemini CLI…). Shown once."""
+    return {"token": auth.new_personal_token(tenancy.current_user_id())}
+
+
+@app.delete("/api/account/token")
+def account_token_revoke():
+    auth.revoke_personal_token(tenancy.current_user_id())
+    return {"ok": True}
 
 
 @app.put("/api/account")
@@ -900,8 +914,9 @@ def coach_info():
     backend = Path(__file__).resolve().parents[1]
     public_url = os.getenv("OPENRUN_PUBLIC_URL", "")
     # Ready-to-paste MCP config for Claude Desktop / Gemini CLI. On a server, the MCP process runs on
-    # the user's computer (from a local clone) and talks to this server with the API token.
-    mcp = ({"remote": True, "url": public_url, "token_set": bool(auth.API_TOKEN)} if public_url
+    # the user's computer (the published Docker image or a local clone) and talks to this server
+    # with the user's personal API token.
+    mcp = ({"remote": True, "url": public_url, "image": os.getenv("OPENRUN_IMAGE", "ghcr.io/mandel2000/openrun:latest")} if public_url
            else {"remote": False, "command": sys.executable, "args": ["-m", "app.mcp_server"], "cwd": str(backend)})
     return {**coach.provider_info(), "mcp": mcp}
 
