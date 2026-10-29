@@ -67,11 +67,12 @@ export default function ActivityAnalysisSheet({ activityId, title, onClose, init
 function PlanCompare({ activityId }: { activityId: number }) {
   const [a, setA] = useState<Analysis | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const url = `/api/activities/${activityId}/analysis`
   const load = (refresh = false) => {
     setErr(null)
-    api.get<Analysis>(`/api/activities/${activityId}/analysis${refresh ? '?refresh=true' : ''}`).then(setA).catch((e) => setErr(e.message))
+    api.get<Analysis>(url + (refresh ? '?refresh=true' : '')).then(setA).catch((e) => setErr(e.message))
   }
-  useEffect(() => { load() }, [activityId])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { api.get<Analysis>(url).then(setA).catch((e) => setErr(e.message)) }, [url])
   return (
     <>
       {err ? <Banner tone="bad">{err}</Banner> : !a ? <><Skeleton h={28} /><Skeleton h={180} style={{ marginTop: 12 }} /></> : (

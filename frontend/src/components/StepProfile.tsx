@@ -50,7 +50,7 @@ export default function StepProfile({ steps, height = 72, legend = true, onHover
   const total = segs.reduce((a, s) => a + s.sec, 0)
   if (!total) return null
   const W = 1000, gap = segs.length > 40 ? 0.6 : 1.5
-  let x = 0
+  const starts = segs.map((_s, i) => segs.slice(0, i).reduce((a, s) => a + (s.sec / total) * W, 0))
   const totalMin = Math.round(total / 60)
   const label = t('Workout profile: {n} minutes. ', { n: totalMin }) + zoneMinutes(segs).map(([l, m]) => `Z${l} ${Math.round(m)} min`).join(', ')
   return (
@@ -58,9 +58,9 @@ export default function StepProfile({ steps, height = 72, legend = true, onHover
       <svg className="profile" viewBox={`0 0 ${W} 100`} preserveAspectRatio="none" style={{ height }} role="img" aria-label={label}
         onMouseLeave={() => { setTip(null); onHover?.(null) }}>
         {segs.map((s, i) => {
-          const w = (s.sec / total) * W
+          const w = (s.sec / total) * W, x = starts[i]
           const h = HEIGHT[s.level] * 100
-          const r = (
+          return (
             <rect key={i} x={x + gap / 2} y={100 - h} width={Math.max(w - gap, 0.8)} height={h} rx={2}
               fill={zoneVar(s.level)} opacity={s.kind === 'warmup' || s.kind === 'cooldown' ? 0.7 : 1}
               onMouseEnter={() => {
@@ -68,8 +68,6 @@ export default function StepProfile({ steps, height = 72, legend = true, onHover
                 onHover?.(s.path)
               }} />
           )
-          x += w
-          return r
         })}
       </svg>
       {tip && <div className="tooltip" style={{ left: `${tip.x}%`, top: 0 }}>{tip.text}</div>}

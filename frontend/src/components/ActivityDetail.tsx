@@ -37,7 +37,7 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
   const [d, setD] = useState<Detail | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [hover, setHover] = useState<number | null>(null)
-  const c = useMemo(tokens, [])
+  const c = useMemo(() => tokens(), [])
   useEffect(() => {
     api.get<Detail>(`/api/activities/${activityId}/detail`).then(setD).catch((e) => setErr((e as Error).message))
   }, [activityId])
@@ -72,7 +72,7 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
           <Suspense fallback={<Skeleton h={240} />}>
             <RouteMap coords={d.coords} height={240} highlight={coordIdx}
               marks={loop(d.coords) ? [{ at: d.coords[0], label: t('Start and finish'), kind: 'start' }]
-                : [{ at: d.coords[0], label: 'Salida', kind: 'start' }, { at: d.coords[d.coords.length - 1], label: 'Llegada', kind: 'finish' }]} />
+                : [{ at: d.coords[0], label: t('Start point'), kind: 'start' }, { at: d.coords[d.coords.length - 1], label: t('Finish'), kind: 'finish' }]} />
           </Suspense>
         </div>
       )}
@@ -89,7 +89,7 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
           <LineChart data={rows} {...common}>
             {xAxis}
             <YAxis stroke={c.muted} fontSize={11} tickLine={false} axisLine={false} width={44} reversed domain={['dataMin - 10', 'dataMax + 10']} tickFormatter={(v) => fmtPace(v)} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${fmtPace(+v)}/km`, t('Pace')]} labelFormatter={(l) => `km ${l}`} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${fmtPace(Number(v))}/km`, t('Pace')]} labelFormatter={(l) => `km ${l}`} />
             <Line dataKey="pace" stroke={c.accent} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
           </LineChart>
         </ResponsiveContainer>
@@ -114,7 +114,7 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
             <AreaChart data={rows} {...common}>
               {xAxis}
               <YAxis stroke={c.muted} fontSize={11} tickLine={false} axisLine={false} width={44} domain={['dataMin - 5', 'dataMax + 5']} tickFormatter={(v) => `${Math.round(v)}`} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${Math.round(+v)} m`, t('Elevation')]} labelFormatter={(l) => `km ${l}`} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${Math.round(Number(v))} m`, t('Elevation')]} labelFormatter={(l) => `km ${l}`} />
               <Area dataKey="ele" stroke={c.ele} fill={c.ele} fillOpacity={0.2} strokeWidth={1.5} isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>

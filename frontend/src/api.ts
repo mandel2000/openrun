@@ -159,12 +159,17 @@ export function useApi<T>(url: string | null) {
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(!!url)
   const [error, setError] = useState<string | null>(null)
-  const reload = useCallback(() => {
+  const [nonce, setNonce] = useState(0)
+  useEffect(() => {
     if (!url) return
-    setLoading(true)
-    api.get<T>(url).then((d) => { setData(d); setError(null) }).catch((e) => setError(e.message)).finally(() => setLoading(false))
-  }, [url])
-  useEffect(reload, [reload])
+    let live = true
+    api.get<T>(url)
+      .then((d) => { if (live) { setData(d); setError(null) } })
+      .catch((e) => { if (live) setError(e.message) })
+      .finally(() => { if (live) setLoading(false) })
+    return () => { live = false }
+  }, [url, nonce])
+  const reload = useCallback(() => { setLoading(true); setNonce((n) => n + 1) }, [])
   return { data, loading, error, reload, setData }
 }
 
