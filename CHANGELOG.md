@@ -6,6 +6,7 @@ All notable changes to OpenRun are documented here. The format follows [Keep a C
 
 ### Added
 - English and Spanish: the whole app (interface, workout titles and descriptions, notifications, analysis, race strategy and the AI coach's answers) follows each user's language, chosen in *Settings › Appearance and language* or taken from the browser. `OPENRUN_LANG` sets the default.
+- Ko-fi donations: *Support OpenRun* in Settings and the sidebar, the GitHub Sponsor button and a section in the README.
 - CI checks that every interface and server string has a Spanish translation.
 
 ### Changed

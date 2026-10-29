@@ -685,4 +685,8 @@ export const es: Record<string, string> = {
   'Saved as the race-day workout. Connect Garmin to send it to the watch.': 'Guardado como entreno del día de carrera. Conecta Garmin para enviarlo al reloj.',
   'Race strategy': 'Estrategia de carrera',
   'Language': 'Idioma',
+  'Support OpenRun': 'Apoya OpenRun',
+  'OpenRun is free and open source, made in spare time. If it helps your training, you can buy the developer a coffee: it pays for the time and keeps the project going.': 'OpenRun es gratis y open source, hecho en ratos libres. Si te ayuda a entrenar, puedes invitar a un café a quien lo desarrolla: paga ese tiempo y mantiene vivo el proyecto.',
+  'Buy me a coffee': 'Invítame a un café',
+  'Code, ideas and bugs on GitHub': 'Código, ideas y fallos en GitHub',
 }

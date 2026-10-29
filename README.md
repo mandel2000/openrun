@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/mandel2000/openrun/actions/workflows/ci.yml/badge.svg)](https://github.com/mandel2000/openrun/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![Ko-fi](https://img.shields.io/badge/support-Ko--fi-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/manueldelgado54792)
 
 **An open-source, self-hosted running coach.** Evidence-based training plans, Garmin sync (data in, structured workouts out to your watch), HRV-guided readiness and an AI coach that works with your real data. A free alternative to subscription apps such as Runna.
 
@@ -97,6 +98,10 @@ Consumer subscriptions (Claude, ChatGPT, Gemini) do not include API access for t
 ## Contributing
 
 Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, branch workflow and commit conventions, and [SECURITY.md](SECURITY.md) to report vulnerabilities privately.
+
+## Support the project
+
+OpenRun is free and built in spare time. If it helps your training, you can [buy me a coffee on Ko-fi](https://ko-fi.com/manueldelgado54792) ♥. Stars, bug reports and pull requests help too.
 
 ## License
 

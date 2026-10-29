@@ -1,6 +1,6 @@
 # Contributing to OpenRun
 
-Thanks for helping! Bug reports, training-science corrections, translations and code are all welcome.
+Thanks for helping! Bug reports, training-science corrections, translations and code are all welcome. You can also support the project on [Ko-fi](https://ko-fi.com/manueldelgado54792).
 
 ## Before you start
 

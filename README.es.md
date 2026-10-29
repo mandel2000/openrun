@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/mandel2000/openrun/actions/workflows/ci.yml/badge.svg)](https://github.com/mandel2000/openrun/actions/workflows/ci.yml)
 [![Licencia: AGPL-3.0](https://img.shields.io/badge/licencia-AGPL--3.0-blue.svg)](LICENSE)
+[![Ko-fi](https://img.shields.io/badge/apoya-Ko--fi-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/manueldelgado54792)
 
 En español e inglés (cada usuario lo elige en *Ajustes*).
 
@@ -92,6 +93,10 @@ Las suscripciones de consumo (Claude, ChatGPT, Gemini) no incluyen acceso a la A
 ## Contribuir
 
 Issues y pull requests bienvenidos: lee [CONTRIBUTING.md](CONTRIBUTING.md) (entorno de desarrollo, flujo de ramas y formato de commits) y [SECURITY.md](SECURITY.md) para avisar de vulnerabilidades en privado.
+
+## Apoya el proyecto
+
+OpenRun es gratis y se hace en ratos libres. Si te ayuda a entrenar, puedes [invitarme a un café en Ko-fi](https://ko-fi.com/manueldelgado54792) ♥. Las estrellas, los avisos de fallos y las pull requests también ayudan.
 
 ## Licencia
 
