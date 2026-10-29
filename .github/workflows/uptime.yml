@@ -20,7 +20,7 @@ jobs:
         run: |
           for i in 1 2 3; do
             code=$(curl -s -o body.json -w '%{http_code}' --max-time 20 "$URL/api/health?deep=1" || echo 000)
-            if [ "$code" = "200" ]; then cat body.json; exit 0; fi
+            if [ "$code" = "200" ] && grep -q '"ok":true' body.json; then cat body.json; exit 0; fi
             echo "attempt $i: HTTP $code $(cat body.json 2>/dev/null)"
             sleep 30
           done
