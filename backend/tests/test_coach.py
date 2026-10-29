@@ -176,3 +176,9 @@ def test_context_snapshot_is_compact_json():
         snap = _json.loads(coach.context_snapshot(s))
         assert "hoy" in snap and "atleta" in snap
         assert len(coach.context_snapshot(s)) < 12000
+
+
+def test_tool_names_are_unique():
+    from app.ai import coach
+    names = [t["name"] for t in coach.TOOLS]
+    assert len(names) == len(set(names))
