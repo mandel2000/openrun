@@ -1,6 +1,7 @@
 # OpenRun: single container (FastAPI + built React UI). Data lives in the /data volume.
 
-FROM node:22.20-alpine AS web
+# The web build is plain JS/CSS: build it natively once, not under arm64 emulation
+FROM --platform=$BUILDPLATFORM node:22.20-alpine AS web
 WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
