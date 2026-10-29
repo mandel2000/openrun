@@ -153,7 +153,12 @@ function VolumeChart({ plan, onPick }: { plan: Plan; onPick: (i: number) => void
   return (
     <ResponsiveContainer width="100%" height={150}>
       <BarChart data={data} margin={{ top: 8, right: 4, left: -12, bottom: 0 }} barGap={-14}
-        onClick={(e) => { const p = (e as { activePayload?: { payload: { index: number } }[] })?.activePayload?.[0]?.payload; if (p) onPick(p.index) }}>
+        onClick={(e) => {
+          // Recharts 3 reports the bar's index (activeTooltipIndex); 2.x passed the payload
+          const ev = e as { activeTooltipIndex?: number | string | null; activePayload?: { payload: { index: number } }[] } | null
+          const i = ev?.activePayload?.[0]?.payload.index ?? (ev?.activeTooltipIndex != null ? data[+ev.activeTooltipIndex]?.index : undefined)
+          if (i) onPick(i)
+        }}>
         <XAxis dataKey="name" stroke={c.muted} fontSize={12} tickLine={false} axisLine={false} />
         <YAxis stroke={c.muted} fontSize={12} tickLine={false} axisLine={false} width={40} unit=" km" />
         <Tooltip cursor={{ fill: c.border, opacity: 0.4 }} contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)' }}

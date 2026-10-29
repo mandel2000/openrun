@@ -106,7 +106,7 @@ export default function RaceStrategy({ race, onBack }: { race: Race; onBack: () 
     if (!coords || !st) return []
     const n = coords.length - 1
     const total = st.course.distance_m
-    const ms: Mark[] = [{ at: coords[0], label: 'Salida', kind: 'start' }, { at: coords[n], label: 'Meta', kind: 'finish' }]
+    const ms: Mark[] = [{ at: coords[0], label: t('Start point'), kind: 'start' }, { at: coords[n], label: t('Finish'), kind: 'finish' }]
     for (let k = 5000; k < total; k += 5000) ms.push({ at: coords[Math.round((k / total) * n)], label: `${k / 1000}`, kind: 'km' })
     return ms
   }, [coords, st])
@@ -167,7 +167,7 @@ export default function RaceStrategy({ race, onBack }: { race: Race; onBack: () 
             <XAxis dataKey="km" type="number" domain={[0, 'dataMax']} stroke={c.muted} fontSize={12} tickLine={false} axisLine={false} unit=" km" tickCount={6} />
             <YAxis stroke={c.muted} fontSize={12} tickLine={false} axisLine={false} width={48} tickFormatter={(v) => `${Math.round(v)} m`}
               domain={[(min: number) => Math.max(0, Math.floor((min - 15) / 10) * 10), (max: number) => Math.ceil((max + 10) / 10) * 10]} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v} m`, 'Altitud']} labelFormatter={(l) => `km ${l}`} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v} m`, t('Elevation')]} labelFormatter={(l) => `km ${l}`} />
             <Area dataKey="ele" stroke={c.accent} strokeWidth={2} fill="url(#eleFill)" isAnimationActive={false} />
           </AreaChart>
         </ResponsiveContainer>

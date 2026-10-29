@@ -35,6 +35,7 @@ def test_demo_login_data_and_limits(monkeypatch):
     assert c.get("/api/records").json()["records"]["all"].get("5k")
     assert c.get("/api/races").json()
     assert c.get("/api/readiness").json()["readiness"]["score"] is not None
+    assert all(r.get("rest_hr") and r.get("hrv_rmssd") for r in c.get("/api/wellness?days=30").json()["rows"])
 
     # what the demo can't do
     assert c.post("/api/garmin/login", json={"email": "x@example.com", "password": "x"}).status_code == 403

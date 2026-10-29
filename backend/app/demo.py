@@ -194,7 +194,9 @@ def _wellness(s: Session, today: dt.date, rng: random.Random) -> None:
         dip = 6 if 1 <= i <= 5 else 0
         S.upsert_wellness(s, {
             "date": d.isoformat(), "source": "garmin",
-            "hrv_rmssd": round(60.5 if i == 0 else rng.gauss(62, 4) - dip, 1),  # today: low-normal, the week: low "rest_hr": round(rng.gauss(50, 1.2) + (2 if dip else 0)),
+            # today low-normal, the days before low: readiness proposes easing off
+            "hrv_rmssd": round(60.5 if i == 0 else rng.gauss(62, 4) - dip, 1),
+            "rest_hr": round(rng.gauss(50, 1.2) + (2 if dip else 0)),
             "sleep_score": round(min(97, max(45, rng.gauss(80, 7) - (12 if i == 0 else 0)))),
             "sleep_hours": round(min(9.2, max(5, rng.gauss(7.4, 0.6))), 1),
             "body_battery": round(min(100, max(20, rng.gauss(78, 9) - 2 * dip))),
