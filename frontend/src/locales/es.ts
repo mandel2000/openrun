@@ -689,4 +689,9 @@ export const es: Record<string, string> = {
   'OpenRun is free and open source, made in spare time. If it helps your training, you can buy the developer a coffee: it pays for the time and keeps the project going.': 'OpenRun es gratis y open source, hecho en ratos libres. Si te ayuda a entrenar, puedes invitar a un café a quien lo desarrolla: paga ese tiempo y mantiene vivo el proyecto.',
   'Buy me a coffee': 'Invítame a un café',
   'Code, ideas and bugs on GitHub': 'Código, ideas y fallos en GitHub',
+  'Try the demo': 'Probar la demo',
+  'Demo account with sample data. Garmin, the AI coach and account changes are off; anything you change is reset every day.': 'Cuenta de demostración con datos de ejemplo. Garmin, el coach IA y los cambios de cuenta están desactivados; lo que cambies se restablece cada día.',
+  'Off in the demo': 'Desactivado en la demo',
+  'In your own install, sign in with your Garmin account to sync runs, sleep and HRV and send workouts to your watch.': 'En tu propia instalación, inicia sesión con tu cuenta de Garmin para sincronizar carreras, sueño y HRV y enviar entrenos a tu reloj.',
+  'The AI coach is off in the demo. In your own install it reads your data and changes your plan; it can run on a free provider, locally with Ollama, or from Claude Desktop via MCP.': 'El coach IA está desactivado en la demo. En tu propia instalación lee tus datos y cambia tu plan; puede usar un proveedor gratuito, Ollama en local o Claude Desktop por MCP.',
 }

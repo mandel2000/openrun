@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from . import auth, i18n, scheduler, tenancy
+from . import auth, demo, i18n, scheduler, tenancy
 from . import services as S
 from .ai import coach
 from .db import get_session, init_db
@@ -57,6 +57,10 @@ async def access_control(request: Request, call_next):
     ltok = i18n.set_request_lang(i18n.parse_accept_language(request.headers.get("accept-language")))
     if path.startswith("/api/") and not public and uid is None:
         resp = JSONResponse({"detail": _("Please sign in")}, status_code=401, headers=SECURITY_HEADERS)
+        i18n.reset_request_lang(ltok)
+        return resp
+    if uid is not None and demo.blocked(request.method, path) and demo.is_demo(uid):
+        resp = JSONResponse({"detail": _("Not available in the demo")}, status_code=403, headers=SECURITY_HEADERS)
         i18n.reset_request_lang(ltok)
         return resp
     tok = tenancy.set_user(uid)
@@ -102,7 +106,7 @@ def health(deep: bool = False):
 
 def _me(uid: int | None) -> dict | None:
     u = auth.get_user(uid) if uid else None
-    return {"id": u.id, "username": u.username, "name": u.name, "is_admin": u.is_admin, "lang": u.lang} if u else None
+    return {"id": u.id, "username": u.username, "name": u.name, "is_admin": u.is_admin, "lang": u.lang, "is_demo": bool(u.is_demo)} if u else None
 
 
 class LoginIn(BaseModel):
@@ -121,7 +125,17 @@ def _with_session(user, request: Request, body: dict) -> JSONResponse:
 @app.get("/api/auth")
 def auth_status(request: Request):
     uid = auth.request_user(request)
-    return {"authed": uid is not None, "local": auth.is_local(request), "user": _me(uid), "open_signup": auth.OPEN_SIGNUP}
+    return {"authed": uid is not None, "local": auth.is_local(request), "user": _me(uid), "open_signup": auth.OPEN_SIGNUP,
+            "demo": demo.enabled()}
+
+
+@app.post("/api/auth/demo")
+def auth_demo(request: Request):
+    """Sign in to the shared demo account (only when OPENRUN_DEMO=1)."""
+    if not demo.enabled():
+        raise HTTPException(404)
+    user = demo.demo_user()
+    return _with_session(user, request, {"authed": True, "user": _me(user.id)})
 
 
 @app.post("/api/auth")
@@ -234,6 +248,8 @@ def account_put(body: AccountIn, request: Request):
     uid = tenancy.current_user_id()
     with _S(engine) as s:
         u = s.get(User, uid)
+        if u.is_demo and (body.name is not None or body.new_password):
+            raise HTTPException(403, _("Not available in the demo"))
         if body.name is not None:
             u.name = body.name.strip()[:60] or u.username
         if body.lang is not None:
@@ -930,7 +946,7 @@ def coach_info():
     # with the user's personal API token.
     mcp = ({"remote": True, "url": public_url, "image": os.getenv("OPENRUN_IMAGE", "ghcr.io/mandel2000/openrun:latest")} if public_url
            else {"remote": False, "command": sys.executable, "args": ["-m", "app.mcp_server"], "cwd": str(backend)})
-    return {**coach.provider_info(), "mcp": mcp}
+    return {**coach.provider_info(), "mcp": mcp, "demo": demo.is_demo(tenancy.current_user_id())}
 
 
 class ToolIn(BaseModel):

@@ -13,6 +13,7 @@ OpenRun is configured with environment variables. Copy [`.env.example`](../.env.
 | `OPENRUN_API_TOKEN` | – | Server-wide bearer token (32+ characters) that acts as the admin. Optional: every user can create a personal token in *Settings › Coach*. |
 | `OPENRUN_TRUST_LOCAL` | `1` (`0` in the image) | Trust requests from the same machine without a password. Must be `0` behind a reverse proxy. |
 | `OPENRUN_TRUST_PROXY` | `0` (`1` in the image) | Read the client IP and scheme from `X-Forwarded-*` headers. Only behind a proxy you control. |
+| `OPENRUN_DEMO` | `0` | `1` adds a *Try the demo* button to the sign-in screen: a shared `demo` account with a generated plan, ~10 months of runs, wellness data and races. Garmin, the AI coach, uploads and account changes are off for it, and its data is rebuilt every day. |
 | `OPENRUN_LANG` | `en` | Default language (`en` or `es`) for users who haven't chosen one in *Settings* and whose browser language isn't supported. Accounts created before i18n are set to Spanish. |
 | `OPENRUN_SECRET` | generated | Key that signs sessions. By default a random key is stored in `<data>/secret.key`. |
 

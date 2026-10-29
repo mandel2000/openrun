@@ -1055,7 +1055,12 @@ def ai_usage(s: Session) -> dict:
 
 
 def ai_allowed(s: Session, kind: str = "chat") -> bool:
-    """Count one AI request for the current user; False when today's limit is reached."""
+    """Count one AI request for the current user; False when today's limit is reached (always in the demo)."""
+    from . import demo
+    from .tenancy import current_user_id
+
+    if demo.is_demo(current_user_id()):
+        return False
     u = ai_usage(s)
     if u["limit"] is not None and u["count"] >= u["limit"]:
         return False
@@ -1115,7 +1120,7 @@ from .training import heat as HEAT  # noqa: E402
 
 
 def analyze_activity(s: Session, act: Activity, laps_raw: list[dict] | None = None) -> dict | None:
-    if act.sport != "running" or not act.external_id.startswith("garmin:"):
+    if act.sport != "running" or (laps_raw is None and not act.external_id.startswith("garmin:")):
         return None
     if laps_raw is None:
         laps_raw = garmin.fetch_laps(act.external_id)

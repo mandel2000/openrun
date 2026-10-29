@@ -310,7 +310,7 @@ function ActivitiesView() {
           })}
         </div>
       )}
-      {open && <ActivityAnalysisSheet activityId={open.id} title={open.name} laps={!!open.external_id?.startsWith('garmin:')} onClose={() => setOpen(null)} />}
+      {open && <ActivityAnalysisSheet activityId={open.id} title={open.name} laps={!!open.analysis || !!open.external_id?.startsWith('garmin:')} onClose={() => setOpen(null)} />}
     </div>
   )
 }

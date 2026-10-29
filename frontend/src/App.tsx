@@ -53,7 +53,7 @@ function SyncChip({ st, onSynced }: { st: GStatus | null; onSynced: () => void }
   )
 }
 
-export type Me = { id: number; username: string; name: string; is_admin: boolean; lang?: Lang | null }
+export type Me = { id: number; username: string; name: string; is_admin: boolean; lang?: Lang | null; is_demo?: boolean }
 
 const inviteFromHash = () => {
   const m = window.location.hash.match(/^#invitacion=([\w-]+)/)
@@ -73,6 +73,8 @@ function AuthScreen({ onOk }: { onOk: () => void }) {
     api.get<{ ok: boolean; note?: string }>(`/api/auth/invite/${code}`).then(setInvite).catch((e) => setErr((e as Error).message))
   }, [code])
   const register = !!code
+  const [demo, setDemo] = useState(false)
+  useEffect(() => { api.get<{ demo?: boolean }>('/api/auth').then((r) => setDemo(!!r.demo)).catch(() => {}) }, [])
   return (
     <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 16 }}>
       <form className="card stack" style={{ width: 'min(380px, 100%)', textAlign: 'center' }} onSubmit={async (e) => {
@@ -110,6 +112,12 @@ function AuthScreen({ onOk }: { onOk: () => void }) {
         {register
           ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setCode(null); window.location.hash = '' }}>{t('I already have an account')}</button>
           : <p className="small muted" style={{ margin: 0 }}>{t('No account? Ask whoever runs this app for an invitation.')}</p>}
+        {!register && demo && (
+          <button type="button" className="btn btn-block" disabled={busy} onClick={async () => {
+            setBusy(true)
+            try { await api.post('/api/auth/demo'); onOk() } catch (x) { setErr((x as Error).message) } finally { setBusy(false) }
+          }}><Icon name="sparkles" />{t('Try the demo')}</button>
+        )}
         <div className="row small" style={{ justifyContent: 'center', gap: 4 }}>
           {LANGS.map(([code, label]) => (
             <button key={code} type="button" className="btn btn-ghost btn-sm" aria-pressed={code === getLang()} onClick={() => setLang(code)}>{label}</button>
@@ -185,11 +193,12 @@ export default function App() {
         <header className="topbar">
           <h1>{TITLES[tab]}</h1>
           <div className="row">
-            <SyncChip st={gst} onSynced={synced} />
+            {!me?.is_demo && <SyncChip st={gst} onSynced={synced} />}
             <a href="#ajustes" className="btn btn-ghost btn-icon mobile-only" aria-label={t('Settings')}><Icon name="user" /></a>
           </div>
         </header>
         <main className="main" key={tick}>
+          {me?.is_demo && <Banner tone="info">{t('Demo account with sample data. Garmin, the AI coach and account changes are off; anything you change is reset every day.')}</Banner>}
           {err && !needPin && <Banner tone="bad">{t('Cannot reach the OpenRun server: {err}', { err })}</Banner>}
           {tab === 'hoy' && (onb?.needed && plan === null
             ? <Onboarding name={me?.name || ''} onFinish={() => { setOnb({ ...onb, needed: false, done: true }); reload() }} />
