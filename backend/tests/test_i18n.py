@@ -70,3 +70,13 @@ def test_every_server_string_has_a_spanish_entry():
                     and n.args and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str)):
                 used.add(n.args[0].value)
     assert sorted(u for u in used if u not in ES) == []
+
+
+def test_sign_in_message_follows_browser_language():
+    from fastapi.testclient import TestClient
+
+    from app import main
+
+    c = TestClient(main.app, client=("203.0.113.5", 5000))
+    assert c.get("/api/athlete", headers={"Accept-Language": "es-ES"}).json()["detail"] == "Inicia sesión"
+    assert c.get("/api/athlete", headers={"Accept-Language": "en"}).json()["detail"] == "Please sign in"

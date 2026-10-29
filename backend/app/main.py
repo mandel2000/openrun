@@ -54,10 +54,12 @@ async def access_control(request: Request, call_next):
     path = request.url.path
     public = path in ("/api/health",) or path.startswith("/api/auth")
     uid = auth.request_user(request) if path.startswith("/api/") else None
-    if path.startswith("/api/") and not public and uid is None:
-        return JSONResponse({"detail": _("Please sign in")}, status_code=401, headers=SECURITY_HEADERS)
-    tok = tenancy.set_user(uid)
     ltok = i18n.set_request_lang(i18n.parse_accept_language(request.headers.get("accept-language")))
+    if path.startswith("/api/") and not public and uid is None:
+        resp = JSONResponse({"detail": _("Please sign in")}, status_code=401, headers=SECURITY_HEADERS)
+        i18n.reset_request_lang(ltok)
+        return resp
+    tok = tenancy.set_user(uid)
     try:
         resp = await call_next(request)
     finally:
