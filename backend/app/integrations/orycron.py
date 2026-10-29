@@ -12,6 +12,8 @@ import time
 
 import httpx
 
+from ..i18n import _
+
 BASE = "https://www.orycronsport.com"
 UA = "OpenRun/0.1 (personal training app; +https://github.com/)"
 MONTHS = {m: i + 1 for i, m in enumerate(
@@ -95,5 +97,5 @@ def upcoming(include_non_running: bool = False) -> list[dict]:
 def event(eid: str) -> dict:
     eid = eid.split(":")[-1]
     if not eid.isdigit():
-        raise ValueError("id de competición no válido")
+        raise ValueError(_("invalid race id"))
     return {"external_id": f"orycron:{eid}", "url": f"{BASE}/competiciones/{eid}", **parse_event(_get(f"/competiciones/{eid}"))}

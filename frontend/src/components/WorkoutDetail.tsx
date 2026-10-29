@@ -3,11 +3,12 @@ import { api, fmtDate, fmtDur, fmtPace, PHASE_LABEL, STATUS_LABEL, workoutLevel,
 import { ExerciseList, RoutineBlock } from './Exercises'
 import { Banner, Icon, Sheet } from '../ui'
 import StepProfile, { KIND } from './StepProfile'
+import { t } from '../i18n'
 
 function dur(s: Step) {
   if (s.duration_type === 'distance') return s.duration_value >= 1000 ? `${+(s.duration_value / 1000).toFixed(2)} km` : `${s.duration_value} m`
   if (s.duration_type === 'time') return s.duration_value >= 60 ? `${+(s.duration_value / 60).toFixed(1)}′` : `${s.duration_value}″`
-  return 'hasta pulsar vuelta'
+  return t('until lap button')
 }
 
 export function Steps({ steps, hl, prefix = '' }: { steps: Step[]; hl?: string | null; prefix?: string }) {
@@ -18,7 +19,7 @@ export function Steps({ steps, hl, prefix = '' }: { steps: Step[]; hl?: string |
         if (s.kind === 'repeat')
           return (
             <li key={i} className="rep">
-              <strong>{s.repeat}× repeticiones</strong>
+              <strong>{s.repeat}× {t('repeats')}</strong>
               <Steps steps={s.steps ?? []} hl={hl} prefix={`${path}.`} />
             </li>
           )
@@ -41,7 +42,7 @@ export function Steps({ steps, hl, prefix = '' }: { steps: Step[]; hl?: string |
 export function WorkoutMeta({ w }: { w: Workout }) {
   return (
     <span className="num">
-      {w.sport === 'running' ? `${w.distance_km} km · ${fmtDur(w.duration_min)}` : `${fmtDur(w.duration_min || 45)} · fuerza`}
+      {w.sport === 'running' ? `${w.distance_km} km · ${fmtDur(w.duration_min)}` : `${fmtDur(w.duration_min || 45)} · ${t('strength')}`}
     </span>
   )
 }
@@ -76,8 +77,8 @@ export default function WorkoutDetail({ w, onClose, onChange }: { w: Workout; on
         <span className="chip"><WorkoutMeta w={w} /></span>
         {w.phase && <span className="chip">{PHASE_LABEL[w.phase] ?? w.phase}</span>}
         <span className={`chip ${w.status === 'done' ? 'chip-good' : w.status === 'skipped' ? 'chip-bad' : w.status === 'modified' ? 'chip-warn' : ''}`}>{STATUS_LABEL[w.status] ?? w.status}</span>
-        {w.extra && <span className="chip chip-outline">Opcional</span>}
-        {w.garmin_workout_id && <span className="chip chip-good"><Icon name="watch" size={14} />En Garmin</span>}
+        {w.extra && <span className="chip chip-outline">{t('Optional')}</span>}
+        {w.garmin_workout_id && <span className="chip chip-good"><Icon name="watch" size={14} />{t('On Garmin')}</span>}
       </div>
       {w.sport === 'running' && <StepProfile steps={w.steps} onHover={setHl} />}
       <p style={{ marginTop: 12 }} className="text-2">{w.description}</p>
@@ -93,34 +94,34 @@ export default function WorkoutDetail({ w, onClose, onChange }: { w: Workout; on
           <button className="btn btn-primary" disabled={busy} onClick={() => act(() => api.post('/api/garmin/push', { ids: [w.id] }).then((r) => {
             const res = (r as { ok: boolean; error?: string }[])[0]
             if (!res.ok) throw new Error(res.error)
-          }), 'Enviado a Garmin Connect. Sincroniza el reloj.')}>
-            <Icon name="watch" />{w.garmin_workout_id ? 'Reenviar al reloj' : 'Enviar al reloj'}
+          }), t('Sent to Garmin Connect. Sync your watch.'))}>
+            <Icon name="watch" />{w.garmin_workout_id ? t('Resend to watch') : t('Send to watch')}
           </button>
         )}
         {w.sport === 'strength' && (
-          <button className={`btn ${w.status === 'done' ? '' : 'btn-primary'}`} disabled={busy} onClick={() => act(() => api.post(`/api/workouts/${w.id}/done`), w.status === 'done' ? 'Desmarcada' : '¡Sesión hecha!')}>
-            <Icon name="check" />{w.status === 'done' ? 'Desmarcar' : 'Marcar como hecha'}
+          <button className={`btn ${w.status === 'done' ? '' : 'btn-primary'}`} disabled={busy} onClick={() => act(() => api.post(`/api/workouts/${w.id}/done`), w.status === 'done' ? t('Unmarked') : t('Session done!'))}>
+            <Icon name="check" />{w.status === 'done' ? t('Unmark') : t('Mark as done')}
           </button>
         )}
-        <button className="btn" disabled={busy || w.status === 'skipped'} onClick={() => act(() => api.post(`/api/workouts/${w.id}/skip`), 'Marcado como no realizado')}>
-          <Icon name="skip" />Saltar
+        <button className="btn" disabled={busy || w.status === 'skipped'} onClick={() => act(() => api.post(`/api/workouts/${w.id}/skip`), t('Marked as skipped'))}>
+          <Icon name="skip" />{t('Skip')}
         </button>
       </div>
       <div className="row" style={{ marginTop: 12 }}>
-        <label className="field grow" style={{ maxWidth: 220 }}>Mover a
+        <label className="field grow" style={{ maxWidth: 220 }}>{t('Move to')}
           <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
         </label>
         <button className="btn" style={{ alignSelf: 'flex-end' }} disabled={busy || newDate === w.date}
-          onClick={() => act(() => api.post(`/api/workouts/${w.id}/move`, { date: newDate }), 'Movido' + (w.garmin_workout_id ? ' (y reprogramado en Garmin)' : ''))}>
-          <Icon name="move" />Mover
+          onClick={() => act(() => api.post(`/api/workouts/${w.id}/move`, { date: newDate }), t('Moved') + (w.garmin_workout_id ? ` ${t('(and rescheduled on Garmin)')}` : ''))}>
+          <Icon name="move" />{t('Move')}
         </button>
         <span className="grow" />
         {!confirmDel ? (
-          <button className="btn btn-danger" style={{ alignSelf: 'flex-end' }} disabled={busy} onClick={() => setConfirmDel(true)}><Icon name="trash" />Eliminar</button>
+          <button className="btn btn-danger" style={{ alignSelf: 'flex-end' }} disabled={busy} onClick={() => setConfirmDel(true)}><Icon name="trash" />{t('Delete')}</button>
         ) : (
           <div className="row" style={{ alignSelf: 'flex-end' }}>
-            <span className="small">¿Seguro?</span>
-            <button className="btn btn-danger" disabled={busy} onClick={() => act(() => api.del(`/api/workouts/${w.id}`), 'Eliminado', true)}>Sí, eliminar</button>
+            <span className="small">{t('Sure?')}</span>
+            <button className="btn btn-danger" disabled={busy} onClick={() => act(() => api.del(`/api/workouts/${w.id}`), t('Deleted'), true)}>{t('Yes, delete')}</button>
             <button className="btn btn-ghost" onClick={() => setConfirmDel(false)}>No</button>
           </div>
         )}

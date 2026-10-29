@@ -1,6 +1,7 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef } from 'react'
+import { t } from '../i18n'
 
 // Route on an OpenStreetMap base map. `coords` are [lat, lon]; `marks` are labelled points
 // (km markers, start/finish). `highlight` is an index into coords drawn as a moving dot.
@@ -39,5 +40,5 @@ export default function RouteMap({ coords, marks = [], highlight, height = 280 }
   }, [highlight, coords])
 
   if (coords.length < 2) return null
-  return <div ref={el} className="routemap" style={{ height }} role="img" aria-label="Mapa del recorrido" />
+  return <div ref={el} className="routemap" style={{ height }} role="img" aria-label={t('Route map')} />
 }

@@ -6,6 +6,7 @@ import WorkoutDetail, { Steps, WorkoutMeta } from '../components/WorkoutDetail'
 import { Banner, Empty, Icon, Skeleton } from '../ui'
 import ReadinessCard from '../components/ReadinessCard'
 import { ReplanCard } from '../components/Replan'
+import { t } from '../i18n'
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
@@ -18,23 +19,23 @@ function WeatherChip({ date, w, onAdjusted }: { date: string; w: Workout; onAdju
   return (
     <div style={{ marginTop: 12 }}>
       <div className="row">
-        <span className={`chip ${data.pct >= 1 ? 'chip-warn' : ''}`} title={`Temperatura + punto de rocío = ${data.sum_f} °F`}>
-          <Icon name="sun" size={14} />{Math.round(data.temp)} °C · rocío {Math.round(data.dew)} °C a las {data.hour}h
-          {data.pct >= 1 ? ` · ritmo +${data.pct}%` : ''}
+        <span className={`chip ${data.pct >= 1 ? 'chip-warn' : ''}`} title={t('Temperature + dew point = {f} °F', { f: data.sum_f })}>
+          <Icon name="sun" size={14} />{t('{temp} °C · dew point {dew} °C at {hour}h', { temp: Math.round(data.temp), dew: Math.round(data.dew), hour: data.hour })}
+          {data.pct >= 1 ? ` · ${t('pace +{pct}%', { pct: data.pct })}` : ''}
         </span>
         {data.pct >= 1 && !heated && (
           <button className="btn btn-sm" disabled={busy} onClick={async () => {
             setBusy(true)
             try {
               const r = await api.post<{ changes: unknown[]; pushed: number }>('/api/heat/apply')
-              setMsg(`${r.changes.length} entrenos ajustados por calor${r.pushed ? `, ${r.pushed} actualizados en el reloj` : ''}.`)
+              setMsg(t('{n} workouts adjusted for heat', { n: r.changes.length }) + (r.pushed ? t(', {n} updated on the watch', { n: r.pushed }) : '') + '.')
               onAdjusted()
             } catch (e) { setMsg((e as Error).message) } finally { setBusy(false) }
-          }}>Ajustar por calor</button>
+          }}>{t('Adjust for heat')}</button>
         )}
-        {heated && <span className="chip chip-good"><Icon name="check" size={13} />Ajustado por calor</span>}
+        {heated && <span className="chip chip-good"><Icon name="check" size={13} />{t('Adjusted for heat')}</span>}
       </div>
-      {data.too_hot && <div style={{ marginTop: 8 }}><Banner>Calor extremo: hazla a primera hora, en cinta o cámbiala por un rodaje suave. Hidrátate antes y durante.</Banner></div>}
+      {data.too_hot && <div style={{ marginTop: 8 }}><Banner>{t('Extreme heat: run first thing in the morning, on a treadmill, or swap it for an easy run. Drink before and during.')}</Banner></div>}
       {msg && <div className="small muted" style={{ marginTop: 6 }}>{msg}</div>}
     </div>
   )
@@ -45,13 +46,13 @@ function Hero({ w, date, onOpen, onPushed }: { w: Workout | null; date: string; 
   const [err, setErr] = useState<string | null>(null)
   const [an, setAn] = useState(false)
   const today = iso(new Date())
-  const label = date === today ? 'Hoy' : fmtDate(date, { weekday: 'long', day: 'numeric', month: 'short' })
+  const label = date === today ? t('Today') : fmtDate(date, { weekday: 'long', day: 'numeric', month: 'short' })
   if (!w)
     return (
       <div className="card hero" style={{ ['--hero-zone' as string]: 'var(--z0)' }}>
         <div className="micro">{label}</div>
-        <h2 style={{ marginTop: 6 }}>Descanso</h2>
-        <p className="text-2" style={{ marginTop: 6 }}>Dormir bien y comer suficiente también es entrenar. La adaptación ocurre en la recuperación.</p>
+        <h2 style={{ marginTop: 6 }}>{t('Rest')}</h2>
+        <p className="text-2" style={{ marginTop: 6 }}>{t('Sleeping well and eating enough is training too. Adaptation happens during recovery.')}</p>
       </div>
     )
   const lvl = workoutLevel(w)
@@ -60,9 +61,9 @@ function Hero({ w, date, onOpen, onPushed }: { w: Workout | null; date: string; 
       <div className="row spread">
         <span className="micro">{label}</span>
         <div className="row">
-          {w.status === 'done' && <span className="chip chip-good"><Icon name="check" size={14} />Completado</span>}
-          {w.status === 'modified' && <span className="chip chip-warn">Ajustado</span>}
-          {w.extra && <span className="chip chip-outline">Opcional</span>}
+          {w.status === 'done' && <span className="chip chip-good"><Icon name="check" size={14} />{t('Completed')}</span>}
+          {w.status === 'modified' && <span className="chip chip-warn">{t('Adjusted')}</span>}
+          {w.extra && <span className="chip chip-outline">{t('Optional')}</span>}
         </div>
       </div>
       <h2 style={{ marginTop: 6, fontSize: 28, lineHeight: '34px' }}>{w.title}</h2>
@@ -71,15 +72,15 @@ function Hero({ w, date, onOpen, onPushed }: { w: Workout | null; date: string; 
       {w.status !== 'done' && date >= iso(new Date()) && daysBetween(iso(new Date()), date) <= 2 && <WeatherChip date={date} w={w} onAdjusted={onPushed} />}
       {w.note && <div style={{ marginTop: 12 }}><Banner>{w.note}</Banner></div>}
       <details style={{ marginTop: 12 }}>
-        <summary className="small">Pasos y explicación</summary>
+        <summary className="small">{t('Steps and rationale')}</summary>
         <p className="small text-2" style={{ marginTop: 8 }}>{w.description}</p>
         {w.sport === 'running' && <Steps steps={w.steps} />}
       </details>
       <div className="row" style={{ marginTop: 16 }}>
         {w.status === 'done' && w.activity_id
-          ? <button className="btn btn-primary" onClick={() => setAn(true)}><Icon name="activity" />Real vs plan</button>
-          : <button className="btn btn-primary" onClick={() => onOpen(w)}>Ver detalle</button>}
-        {w.status === 'done' && w.activity_id && <button className="btn" onClick={() => onOpen(w)}>Ver entreno</button>}
+          ? <button className="btn btn-primary" onClick={() => setAn(true)}><Icon name="activity" />{t('Actual vs plan')}</button>
+          : <button className="btn btn-primary" onClick={() => onOpen(w)}>{t('View details')}</button>}
+        {w.status === 'done' && w.activity_id && <button className="btn" onClick={() => onOpen(w)}>{t('View workout')}</button>}
         {w.sport === 'running' && (
           <button className="btn" disabled={busy} onClick={async () => {
             setBusy(true)
@@ -90,7 +91,7 @@ function Hero({ w, date, onOpen, onPushed }: { w: Workout | null; date: string; 
               onPushed()
             } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
           }}>
-            <Icon name={w.garmin_workout_id ? 'check' : 'watch'} />{w.garmin_workout_id ? 'En el reloj' : busy ? 'Enviando…' : 'Enviar al reloj'}
+            <Icon name={w.garmin_workout_id ? 'check' : 'watch'} />{w.garmin_workout_id ? t('On the watch') : busy ? t('Sending…') : t('Send to watch')}
           </button>
         )}
       </div>
@@ -103,7 +104,7 @@ function Hero({ w, date, onOpen, onPushed }: { w: Workout | null; date: string; 
 function WeekStrip({ monday, byDate, sel, onSel }: { monday: string; byDate: Map<string, Workout[]>; sel: string; onSel: (d: string) => void }) {
   const today = iso(new Date())
   return (
-    <div className="weekstrip" role="group" aria-label="Semana">
+    <div className="weekstrip" role="group" aria-label={t('Week')}>
       {DAY_NAMES.map((dn, i) => {
         const d = addDays(monday, i)
         const ws = (byDate.get(d) ?? []).filter((w) => w.status !== 'skipped')
@@ -111,7 +112,7 @@ function WeekStrip({ monday, byDate, sel, onSel }: { monday: string; byDate: Map
         const done = runs.length > 0 && runs.every((w) => w.status === 'done')
         return (
           <button key={d} className={`daycell ${d === today ? 'today' : ''}`} aria-pressed={d === sel} onClick={() => onSel(d)}
-            aria-label={`${fmtDate(d, { weekday: 'long', day: 'numeric' })}: ${ws.map((w) => w.title).join(', ') || 'descanso'}`}>
+            aria-label={`${fmtDate(d, { weekday: 'long', day: 'numeric' })}: ${ws.map((w) => w.title).join(', ') || t('rest')}`}>
             <span className="dname">{dn}</span>
             <span className="dnum">{+d.slice(8)}</span>
             <span className="bars">
@@ -132,27 +133,27 @@ type Review = { week_start: string; comment: string; ai: boolean
 function WeeklyReviewCard() {
   const { data, loading, setData } = useApi<Review>('/api/weekly-review')
   const [busy, setBusy] = useState(false)
-  if (loading && !data) return <div className="card"><div className="micro">Semana pasada</div><Skeleton h={60} style={{ marginTop: 10 }} /></div>
+  if (loading && !data) return <div className="card"><div className="micro">{t('Last week')}</div><Skeleton h={60} style={{ marginTop: 10 }} /></div>
   if (!data) return null
   const f = data.facts
   const end = addDays(data.week_start, 6)
   return (
     <div className="card">
       <div className="row spread">
-        <div className="micro">Semana pasada · {fmtDate(data.week_start, { day: 'numeric', month: 'short' })}–{fmtDate(end, { day: 'numeric', month: 'short' })}</div>
-        <button className="btn btn-ghost btn-icon btn-sm" aria-label="Regenerar resumen" disabled={busy} onClick={async () => {
+        <div className="micro">{t('Last week')} · {fmtDate(data.week_start, { day: 'numeric', month: 'short' })}–{fmtDate(end, { day: 'numeric', month: 'short' })}</div>
+        <button className="btn btn-ghost btn-icon btn-sm" aria-label={t('Regenerate summary')} disabled={busy} onClick={async () => {
           setBusy(true)
           try { setData(await api.post<Review>('/api/weekly-review')) } finally { setBusy(false) }
         }}><Icon name="refresh" size={16} className={busy ? 'spin' : ''} /></button>
       </div>
       <div className="mini-stats" style={{ marginTop: 10 }}>
         <div><span className="micro">Km</span><b>{f.km}{f.km_plan ? <small> / {f.km_plan}</small> : null}</b></div>
-        <div><span className="micro">Sesiones</span><b>{f.sesiones_plan ? `${f.hechas}/${f.sesiones_plan}` : f.carreras}</b></div>
-        <div><span className="micro">Forma (CTL)</span><b>{f.carga.ctl ?? '–'}{f.carga.ctl_cambio ? <small> {f.carga.ctl_cambio > 0 ? '+' : ''}{f.carga.ctl_cambio}</small> : null}</b></div>
+        <div><span className="micro">{t('Sessions')}</span><b>{f.sesiones_plan ? `${f.hechas}/${f.sesiones_plan}` : f.carreras}</b></div>
+        <div><span className="micro">{t('Fitness (CTL)')}</span><b>{f.carga.ctl ?? '–'}{f.carga.ctl_cambio ? <small> {f.carga.ctl_cambio > 0 ? '+' : ''}{f.carga.ctl_cambio}</small> : null}</b></div>
         <div><span className="micro">ACWR</span><b>{f.carga.acwr ?? '–'}</b></div>
       </div>
       <p className="text-2" style={{ marginTop: 12, marginBottom: 0, whiteSpace: 'pre-wrap' }}>{data.comment}</p>
-      {data.ai && <div className="small muted" style={{ marginTop: 6 }}><Icon name="sparkles" size={13} /> Comentario del coach IA</div>}
+      {data.ai && <div className="small muted" style={{ marginTop: 6 }}><Icon name="sparkles" size={13} /> {t('AI coach comment')}</div>}
     </div>
   )
 }
@@ -162,11 +163,11 @@ function RaceSoonCard({ r }: { r: Race }) {
     <a className="card race-soon" href={`#carreras/estrategia/${r.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
       <div className="row spread" style={{ flexWrap: 'nowrap' }}>
         <div style={{ minWidth: 0 }}>
-          <div className="micro">{r.days_to_go === 0 ? '¡Hoy es el día!' : r.days_to_go === 1 ? 'Mañana' : `En ${r.days_to_go} días`}</div>
+          <div className="micro">{r.days_to_go === 0 ? t('Race day!') : r.days_to_go === 1 ? t('Tomorrow') : t('In {n} days', { n: r.days_to_go })}</div>
           <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4 }}>🏁 {r.name}</div>
-          <div className="small muted">{r.strategy_target_s ? `Objetivo ${fmtTime(r.strategy_target_s)} · ` : ''}Ritmo km a km, desnivel, tiempo y avituallamiento</div>
+          <div className="small muted">{r.strategy_target_s ? `${t('Goal')} ${fmtTime(r.strategy_target_s)} · ` : ''}{t('Pace per km, elevation, weather and fuelling')}</div>
         </div>
-        <span className="btn btn-primary btn-sm" style={{ flex: 'none' }}>Estrategia<Icon name="chevronRight" size={16} /></span>
+        <span className="btn btn-primary btn-sm" style={{ flex: 'none' }}>{t('Strategy')}<Icon name="chevronRight" size={16} /></span>
       </div>
     </a>
   )
@@ -199,7 +200,7 @@ export default function TodayPage({ plan, reload, go }: { plan: Plan | null | un
       <div className="row spread">
         <div>
           <div className="text-2" style={{ fontWeight: 600 }}>{cap(fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' }))}</div>
-          {weekNow && plan && <div className="small muted">Semana {weekNow.index}/{plan.weeks.length} · {PHASE_LABEL[weekNow.phase] ?? weekNow.phase}{weekNow.is_recovery ? ' · descarga' : ''}</div>}
+          {weekNow && plan && <div className="small muted">{t('Week {n}/{total}', { n: weekNow.index, total: plan.weeks.length })} · {PHASE_LABEL[weekNow.phase] ?? weekNow.phase}{weekNow.is_recovery ? ` · ${t('recovery week')}` : ''}</div>}
         </div>
         {nextRace && (
           <a href="#carreras" className="chip" style={{ textDecoration: 'none' }}>
@@ -213,10 +214,10 @@ export default function TodayPage({ plan, reload, go }: { plan: Plan | null | un
 
       {!plan ? (
         <div className="card">
-          <Empty icon="calendar" title="Sin plan activo">Crea un plan basado en tu objetivo o pídeselo al coach.</Empty>
+          <Empty icon="calendar" title={t('No active plan')}>{t('Create a plan for your goal or ask the coach for one.')}</Empty>
           <div className="row" style={{ justifyContent: 'center' }}>
-            <button className="btn btn-primary" onClick={() => go('plan')}>Crear plan</button>
-            <button className="btn" onClick={() => go('coach')}>Hablar con el coach</button>
+            <button className="btn btn-primary" onClick={() => go('plan')}>{t('Create plan')}</button>
+            <button className="btn" onClick={() => go('coach')}>{t('Talk to the coach')}</button>
           </div>
         </div>
       ) : (
@@ -225,11 +226,11 @@ export default function TodayPage({ plan, reload, go }: { plan: Plan | null | un
             <div className="card">
               <div className="row spread">
                 <div>
-                  <div className="micro">Antes del plan</div>
-                  <div style={{ fontWeight: 600, marginTop: 4 }}>Tu plan «{plan.name}» empieza el {fmtDate(plan.start_date, { weekday: 'long', day: 'numeric', month: 'long' })} (en {daysBetween(today, plan.start_date)} días).</div>
-                  <div className="small muted">Hasta entonces sigue tu plan actual. Aquí ves la primera semana.</div>
+                  <div className="micro">{t('Before the plan')}</div>
+                  <div style={{ fontWeight: 600, marginTop: 4 }}>{t('Your plan “{name}” starts on {date} (in {n} days).', { name: plan.name, date: fmtDate(plan.start_date, { weekday: 'long', day: 'numeric', month: 'long' }), n: daysBetween(today, plan.start_date) })}</div>
+                  <div className="small muted">{t('Until then, keep following your current plan. Here is the first week.')}</div>
                 </div>
-                <button className="btn" onClick={() => go('plan')}>Ver plan<Icon name="chevronRight" size={16} /></button>
+                <button className="btn" onClick={() => go('plan')}>{t('View plan')}<Icon name="chevronRight" size={16} /></button>
               </div>
             </div>
           )}
@@ -245,7 +246,7 @@ export default function TodayPage({ plan, reload, go }: { plan: Plan | null | un
               ))}
               <div className="card">
                 <div className="card-head">
-                  <span className="micro">{weekNow ? 'Esta semana' : 'Semana 1 del plan'}</span>
+                  <span className="micro">{weekNow ? t('This week') : t('Week 1 of the plan')}</span>
                   {focusWeek && <span className="small muted num">{focusWeek.done_km} / {focusWeek.planned_km} km</span>}
                 </div>
                 <WeekStrip monday={monday} byDate={byDate} sel={selDay} onSel={setSel} />

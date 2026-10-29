@@ -37,7 +37,7 @@ def tenant(cls):
 def current_user_id() -> int:
     uid = _current.get()
     if uid is None:
-        raise NoUserContext("Sin usuario en contexto")
+        raise NoUserContext("No user in context")
     return uid
 
 
@@ -70,7 +70,7 @@ def _filter_by_user(state) -> None:
     if not tenants:
         return
     if uid is None:
-        raise NoUserContext("Consulta de datos sin usuario en contexto")
+        raise NoUserContext("Data query without a user in context")
     for m in tenants:
         state.statement = state.statement.options(
             with_loader_criteria(m, m.user_id == uid, include_aliases=True))

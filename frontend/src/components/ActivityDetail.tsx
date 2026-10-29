@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Area, AreaChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api, fmtPace, fmtTime } from '../api'
 import { Banner, Icon, Skeleton } from '../ui'
+import { t } from '../i18n'
 
 const RouteMap = lazy(() => import('./RouteMap'))
 
@@ -53,7 +54,7 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
 
   if (err) return <Banner tone="bad">{err}</Banner>
   if (!d) return <div className="stack"><Skeleton h={220} /><Skeleton h={120} /></div>
-  if (!d.has_streams) return <Banner tone="info">Esta actividad no tiene datos detallados (importada de archivo o sin GPS).</Banner>
+  if (!d.has_streams) return <Banner tone="info">{t('This activity has no detailed data (imported from a file or without GPS).')}</Banner>
 
   const n = Math.max(1, rows.length - 1)
   const coordIdx = hover != null && d.coords.length ? Math.round((hover / n) * (d.coords.length - 1)) : null
@@ -70,32 +71,32 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <Suspense fallback={<Skeleton h={240} />}>
             <RouteMap coords={d.coords} height={240} highlight={coordIdx}
-              marks={loop(d.coords) ? [{ at: d.coords[0], label: 'Salida y llegada', kind: 'start' }]
+              marks={loop(d.coords) ? [{ at: d.coords[0], label: t('Start and finish'), kind: 'start' }]
                 : [{ at: d.coords[0], label: 'Salida', kind: 'start' }, { at: d.coords[d.coords.length - 1], label: 'Llegada', kind: 'finish' }]} />
           </Suspense>
         </div>
       )}
       <div className="mini-stats">
-        {dy.cadence && <div><span className="micro">Cadencia</span><b>{Math.round(dy.cadence)} <small>ppm</small></b></div>}
-        {dy.stride_cm && <div><span className="micro">Zancada</span><b>{(dy.stride_cm / 100).toFixed(2)} <small>m</small></b></div>}
-        {dy.gct_ms && <div><span className="micro">Contacto suelo</span><b>{Math.round(dy.gct_ms)} <small>ms</small></b></div>}
-        {dy.vertical_osc_cm && <div><span className="micro">Osc. vertical</span><b>{dy.vertical_osc_cm.toFixed(1)} <small>cm</small></b></div>}
-        {dy.power_w && <div><span className="micro">Potencia</span><b>{Math.round(dy.power_w)} <small>W</small></b></div>}
+        {dy.cadence && <div><span className="micro">{t('Cadence')}</span><b>{Math.round(dy.cadence)} <small>{t('spm')}</small></b></div>}
+        {dy.stride_cm && <div><span className="micro">{t('Stride')}</span><b>{(dy.stride_cm / 100).toFixed(2)} <small>m</small></b></div>}
+        {dy.gct_ms && <div><span className="micro">{t('Ground contact')}</span><b>{Math.round(dy.gct_ms)} <small>ms</small></b></div>}
+        {dy.vertical_osc_cm && <div><span className="micro">{t('Vert. oscillation')}</span><b>{dy.vertical_osc_cm.toFixed(1)} <small>cm</small></b></div>}
+        {dy.power_w && <div><span className="micro">{t('Power')}</span><b>{Math.round(dy.power_w)} <small>W</small></b></div>}
       </div>
       <div>
-        <div className="micro">Ritmo</div>
+        <div className="micro">{t('Pace')}</div>
         <ResponsiveContainer width="100%" height={120}>
           <LineChart data={rows} {...common}>
             {xAxis}
             <YAxis stroke={c.muted} fontSize={11} tickLine={false} axisLine={false} width={44} reversed domain={['dataMin - 10', 'dataMax + 10']} tickFormatter={(v) => fmtPace(v)} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${fmtPace(+v)}/km`, 'Ritmo']} labelFormatter={(l) => `km ${l}`} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${fmtPace(+v)}/km`, t('Pace')]} labelFormatter={(l) => `km ${l}`} />
             <Line dataKey="pace" stroke={c.accent} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
           </LineChart>
         </ResponsiveContainer>
       </div>
       {d.streams.hr && (
         <div>
-          <div className="micro">Frecuencia cardiaca</div>
+          <div className="micro">{t('Heart rate')}</div>
           <ResponsiveContainer width="100%" height={110}>
             <LineChart data={rows} {...common}>
               {xAxis}
@@ -108,12 +109,12 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
       )}
       {d.streams.ele && (
         <div>
-          <div className="micro">Altitud</div>
+          <div className="micro">{t('Elevation')}</div>
           <ResponsiveContainer width="100%" height={90}>
             <AreaChart data={rows} {...common}>
               {xAxis}
               <YAxis stroke={c.muted} fontSize={11} tickLine={false} axisLine={false} width={44} domain={['dataMin - 5', 'dataMax + 5']} tickFormatter={(v) => `${Math.round(v)}`} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${Math.round(+v)} m`, 'Altitud']} labelFormatter={(l) => `km ${l}`} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${Math.round(+v)} m`, t('Elevation')]} labelFormatter={(l) => `km ${l}`} />
               <Area dataKey="ele" stroke={c.ele} fill={c.ele} fillOpacity={0.2} strokeWidth={1.5} isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>
@@ -122,7 +123,7 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
       {d.splits.length > 0 && (
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Km</th><th className="n">Ritmo</th><th></th><th className="n">FC</th><th className="n hide-sm">Cad.</th><th className="n">Desn.</th></tr></thead>
+            <thead><tr><th>Km</th><th className="n">{t('Pace')}</th><th></th><th className="n">{t('HR')}</th><th className="n hide-sm">{t('Cad.')}</th><th className="n">{t('Elev.')}</th></tr></thead>
             <tbody>
               {d.splits.map((x) => (
                 <tr key={x.km}>

@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from ..i18n import _
+
 log = logging.getLogger(__name__)
 
 TOKEN_DIR = Path(os.getenv("OPENRUN_GARMIN_TOKENS", Path.home() / ".openrun" / "garmin"))
@@ -137,7 +139,7 @@ class GarminService:
 
     def submit_mfa(self, code: str) -> dict:
         if not self._pending_mfa:
-            raise GarminError("No hay login pendiente de MFA")
+            raise GarminError(_("No login waiting for MFA"))
         g, state = self._pending_mfa
         g.resume_login(state, code)
         self._persist(g)
@@ -160,7 +162,7 @@ class GarminService:
     def client(self):
         if self._client is None:
             if not (self.token_dir / "garmin_tokens.json").exists():
-                raise GarminError("Garmin no conectado")
+                raise GarminError(_("Garmin is not connected"))
             g = self._new()
             g.login(str(self.token_dir))
             self._client = g

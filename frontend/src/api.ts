@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { getLang, locale, t } from './i18n'
 
 export type Step = {
   kind: 'warmup' | 'run' | 'recovery' | 'rest' | 'cooldown' | 'repeat'
@@ -81,11 +82,11 @@ export type Readiness = {
 }
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const init: RequestInit = { method, headers: {} }
+  const init: RequestInit = { method, headers: { 'Accept-Language': getLang() } }
   if (body instanceof FormData) init.body = body
   else if (body !== undefined) {
     init.body = JSON.stringify(body)
-    init.headers = { 'Content-Type': 'application/json' }
+    init.headers = { 'Accept-Language': getLang(), 'Content-Type': 'application/json' }
   }
   const r = await fetch(url, init)
   if (r.status === 401 && !url.startsWith('/api/auth')) window.dispatchEvent(new Event('openrun:auth'))
@@ -115,8 +116,8 @@ export const fmtPace = (s?: number | null) => {
 }
 
 export const ZONE_LABEL: Record<string, string> = {
-  recovery: 'Regenerativo', easy: 'Suave', long: 'Largo', marathon: 'Maratón', half: 'Medio',
-  threshold: 'Umbral', ten_k: '10K', five_k: '5K', interval: 'Intervalos (I)', repetition: 'Repeticiones (R)',
+  recovery: t('Recovery'), easy: t('Easy'), long: t('Long'), marathon: t('Marathon'), half: t('Half'),
+  threshold: t('Threshold'), ten_k: '10K', five_k: '5K', interval: t('Intervals (I)'), repetition: t('Repetitions (R)'),
 }
 
 export const iso = (d: Date) => {
@@ -124,11 +125,11 @@ export const iso = (d: Date) => {
   return z.toISOString().slice(0, 10)
 }
 
-export const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+export const DAY_NAMES = [t('Mon'), t('Tue'), t('Wed'), t('Thu'), t('Fri'), t('Sat'), t('Sun')]
 
-export const PHASE_LABEL: Record<string, string> = { base: 'Base', build: 'Desarrollo', peak: 'Específico', taper: 'Afinamiento', race: 'Carrera' }
-export const STATUS_LABEL: Record<string, string> = { planned: 'Planificado', done: 'Hecho', skipped: 'No realizado', modified: 'Ajustado' }
-export const DIST_LABEL: Record<string, string> = { '1k': '1K', mile: 'Milla', '5k': '5K', '10k': '10K', half: 'Media maratón', marathon: 'Maratón' }
+export const PHASE_LABEL: Record<string, string> = { base: t('Base'), build: t('Build'), peak: t('Peak'), taper: t('Taper'), race: t('Race') }
+export const STATUS_LABEL: Record<string, string> = { planned: t('Planned'), done: t('Done'), skipped: t('Skipped'), modified: t('Adjusted') }
+export const DIST_LABEL: Record<string, string> = { '1k': '1K', mile: t('Mile'), '5k': '5K', '10k': '10K', half: t('Half marathon'), marathon: t('Marathon') }
 
 // Intensity zone tokens (index 0..6) per pace zone / workout type
 const ZONE_LEVEL: Record<string, number> = {
@@ -144,7 +145,7 @@ export const workoutLevel = (w: Pick<Workout, 'type' | 'intensity' | 'sport'>) =
   w.sport === 'strength' ? 0 : TYPE_LEVEL[w.type] ?? ({ low: 2, moderate: 4, high: 5, rest: 0 }[w.intensity] ?? 2)
 
 export const fmtDate = (d: string, o: Intl.DateTimeFormatOptions = { weekday: 'short', day: 'numeric', month: 'short' }) =>
-  new Date(d + 'T12:00').toLocaleDateString('es-ES', o)
+  new Date(d + 'T12:00').toLocaleDateString(locale(), o)
 export const fmtDur = (min: number) => {
   const m = Math.round(min)
   return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}′` : `${m}′`
@@ -189,6 +190,6 @@ export type Analysis = {
   on_target_pct?: number; avg_dev_pct?: number; work_hr?: number | null; planned_id: number | null; planned_title: string | null
 }
 export const VERDICT: Record<string, [string, string]> = {
-  too_easy: ['Más fácil de lo previsto', 'chip-good'], on_target: ['En objetivo', 'chip-accent'], too_hard: ['Costó más de lo previsto', 'chip-warn'],
+  too_easy: [t('Easier than planned'), 'chip-good'], on_target: [t('On target'), 'chip-accent'], too_hard: [t('Harder than planned'), 'chip-warn'],
 }
 export type Weather = { available?: false; temp: number; dew: number; rh: number; hour: number; pct: number; sum_f: number; too_hot: boolean; date: string }

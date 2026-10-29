@@ -68,7 +68,7 @@ def test_extra_run_warns_on_volume_jump():
                           "current_weekly_km": 30, "level": "intermediate"})
         r = S.add_extra_run(s, "2027-01-14", 10)
         assert r["extra"] and r["type"] == "easy" and r["intensity"] == "low"
-        assert any("+10 %" in w for w in r["warnings"])
+        assert any("+10%" in w for w in r["warnings"])
         assert any(x["id"] == r["id"] for x in S.list_workouts(s, "2027-01-14", "2027-01-14"))
 
 
@@ -163,7 +163,7 @@ def test_streaming_events_fallback_and_sanitize(monkeypatch):
         assert done["type"] == "done" and done["tools"] == [{"tool": "calculate_vdot", "ok": True}]
         assert done["reply"] == "Tu VDOT ronda 49,8 . " and "".join(e["delta"] for e in evs if e["type"] == "text") == done["reply"]
         sys_msg = fake.calls[-1]["messages"][0]["content"]
-        assert "RESUMEN ACTUAL DEL ATLETA" in sys_msg and '"hoy"' in sys_msg
+        assert "CURRENT ATHLETE SUMMARY" in sys_msg and '"hoy"' in sys_msg
         assert fake.calls[-1]["stream"] is True and fake.calls[-1]["temperature"] == 0.3 and fake.calls[-1]["reasoning_effort"] == "low"
         tool_msg = fake.calls[-1]["messages"][-1]
         assert tool_msg["role"] == "tool" and '"vdot"' in tool_msg["content"]

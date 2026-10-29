@@ -3,6 +3,7 @@ import { api, fmtDate, fmtKm, fmtTime, iso, useApi, type Plan, type Race } from 
 import { Banner, Empty, Icon, Segmented, Sheet, Skeleton } from '../ui'
 import { PlanForm } from './PlanPage'
 import RaceStrategy from '../components/RaceStrategy'
+import { t } from '../i18n'
 
 type CalItem = { external_id: string; name: string; date: string | null; status: string; url: string; running: boolean }
 type CalEvent = { external_id: string; url: string; date: string | null; time: string | null; location: string | null; price: string | null; route: string | null; distances_km: number[] }
@@ -10,9 +11,9 @@ type AddResult = Race & { changes: string[]; recovery_days?: number; suggestion?
 type Prio = 'A' | 'B' | 'C'
 
 const PRIO_HELP: Record<Prio, string> = {
-  A: 'Objetivo principal: el plan se periodiza y afina hacia ella.',
-  B: 'Preparatoria: mini-taper de 3 días y recuperación (~1 día suave por cada 3 km).',
-  C: 'De entreno: sin taper, cuenta como sesión de calidad; solo el día siguiente suave.',
+  A: t('Main goal: the plan is periodised and tapered towards it.'),
+  B: t('Tune-up: 3-day mini-taper and recovery (~1 easy day per 3 km).'),
+  C: t('Training race: no taper, counts as a quality session; only the next day easy.'),
 }
 const goalFor = (m?: number | null) => (!m ? '10k' : m < 7500 ? '5k' : m < 15000 ? '10k' : m < 30000 ? 'half' : 'marathon')
 
@@ -62,14 +63,14 @@ function AddRaceSheet({ onClose, onAdded }: { onClose: () => void; onAdded: (r: 
   const showForm = mode === 'manual' || sel
 
   return (
-    <Sheet title="Añadir carrera" onClose={onClose} labelledBy="addrace-title">
-      {!sel && <Segmented label="Origen" value={mode} onChange={setMode} options={[['search', 'Buscar en Orycron'], ['manual', 'Manual']]} />}
+    <Sheet title={t('Add race')} onClose={onClose} labelledBy="addrace-title">
+      {!sel && <Segmented label={t('Source')} value={mode} onChange={setMode} options={[['search', t('Search the calendar')], ['manual', t('Manual')]]} />}
       {mode === 'search' && !sel && (
         <div style={{ marginTop: 14 }}>
-          <label className="field">Buscar
-            <input type="search" placeholder="Nombre de la carrera…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <label className="field">{t('Search')}
+            <input type="search" placeholder={t('Race name…')} value={q} onChange={(e) => setQ(e.target.value)} />
           </label>
-          <div className="small muted" style={{ margin: '8px 0' }}>Fuente: <a href="https://www.orycronsport.com/competiciones/?proximas=1" target="_blank" rel="noreferrer">Orycron Sport</a> · Salamanca y alrededores · solo carreras a pie</div>
+          <div className="small muted" style={{ margin: '8px 0' }}>{t('Source')}: <a href="https://www.orycronsport.com/competiciones/?proximas=1" target="_blank" rel="noreferrer">Orycron Sport</a> · {t('Salamanca (Spain) area · running races only')}</div>
           {cal.loading ? <><Skeleton h={56} /><Skeleton h={56} style={{ marginTop: 8 }} /></> : cal.error ? <Banner tone="bad">{cal.error}</Banner> : (
             <div className="list">
               {list.map((it) => (
@@ -79,7 +80,7 @@ function AddRaceSheet({ onClose, onAdded }: { onClose: () => void; onAdded: (r: 
                   <Icon name="plus" />
                 </button>
               ))}
-              {list.length === 0 && <Empty icon="search" title="Sin resultados" />}
+              {list.length === 0 && <Empty icon="search" title={t('No results')} />}
             </div>
           )}
         </div>
@@ -88,35 +89,35 @@ function AddRaceSheet({ onClose, onAdded }: { onClose: () => void; onAdded: (r: 
         <div style={{ marginTop: 14 }}>
           {sel && (
             <div className="row spread" style={{ marginBottom: 12 }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setSel(null); setEv(null) }}>← Volver</button>
-              <a className="small" href={sel.url} target="_blank" rel="noreferrer">Ver en Orycron <Icon name="external" size={13} /></a>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setSel(null); setEv(null) }}>← {t('Back')}</button>
+              <a className="small" href={sel.url} target="_blank" rel="noreferrer">{t('View on Orycron')} <Icon name="external" size={13} /></a>
             </div>
           )}
           {sel && !ev && <Skeleton h={18} w="60%" />}
-          {ev && <div className="small text-2" style={{ marginBottom: 12 }}>{[ev.location, ev.time, ev.route && `Recorrido: ${ev.route}`, ev.price].filter(Boolean).join(' · ')}</div>}
+          {ev && <div className="small text-2" style={{ marginBottom: 12 }}>{[ev.location, ev.time, ev.route && `${t('Course')}: ${ev.route}`, ev.price].filter(Boolean).join(' · ')}</div>}
           <div className="form-grid">
-            <label className="field">Nombre<input value={form.name} onChange={(e) => set('name', e.target.value)} /></label>
-            <label className="field">Fecha<input type="date" value={form.date} min={iso(new Date())} onChange={(e) => set('date', e.target.value)} /></label>
-            <label className="field">Distancia (km)
+            <label className="field">{t('Name')}<input value={form.name} onChange={(e) => set('name', e.target.value)} /></label>
+            <label className="field">{t('Date')}<input type="date" value={form.date} min={iso(new Date())} onChange={(e) => set('date', e.target.value)} /></label>
+            <label className="field">{t('Distance (km)')}
               <input type="number" step="0.001" inputMode="decimal" value={form.km} onChange={(e) => set('km', e.target.value)} />
             </label>
-            <label className="field">Objetivo (opcional)<input placeholder="45:00" value={form.goal_time} onChange={(e) => set('goal_time', e.target.value)} /></label>
+            <label className="field">{t('Goal (optional)')}<input placeholder="45:00" value={form.goal_time} onChange={(e) => set('goal_time', e.target.value)} /></label>
           </div>
           {ev && ev.distances_km.length > 1 && (
             <div className="row" style={{ marginTop: 10 }}>
-              <span className="small muted">Distancias:</span>
+              <span className="small muted">{t('Distances')}:</span>
               {ev.distances_km.map((k) => <button key={k} className={`btn btn-sm ${+form.km === k ? 'btn-primary' : ''}`} onClick={() => set('km', String(k))}>{k} km</button>)}
             </div>
           )}
           <div style={{ marginTop: 14 }}>
-            <div className="field" style={{ marginBottom: 6 }}>Prioridad</div>
-            <Segmented label="Prioridad" value={form.priority} onChange={(v) => set('priority', v)} options={[['A', 'A · Objetivo'], ['B', 'B · Preparatoria'], ['C', 'C · Entreno']]} />
+            <div className="field" style={{ marginBottom: 6 }}>{t('Priority')}</div>
+            <Segmented label={t('Priority')} value={form.priority} onChange={(v) => set('priority', v)} options={[['A', t('A · Goal')], ['B', t('B · Tune-up')], ['C', t('C · Training')]]} />
             <p className="small muted" style={{ marginTop: 6 }}>{PRIO_HELP[form.priority]}</p>
           </div>
           {err && <Banner tone="bad">{err}</Banner>}
           <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
-            <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-            <button className="btn btn-primary" disabled={busy || !form.name || !form.date} onClick={save}><Icon name="flag" />Añadir al plan</button>
+            <button className="btn btn-ghost" onClick={onClose}>{t('Cancel')}</button>
+            <button className="btn btn-primary" disabled={busy || !form.name || !form.date} onClick={save}><Icon name="flag" />{t('Add to plan')}</button>
           </div>
         </div>
       )}
@@ -134,7 +135,7 @@ function RaceDetail({ r, onClose, onChange, onPlan, onStrategy }: { r: Race; onC
     setBusy(true)
     try {
       const x = await api.put<AddResult>(`/api/races/${r.id}`, body)
-      setMsg({ tone: 'ok', text: x.changes.length ? `Plan reajustado:\n${x.changes.join('\n')}` : 'Guardado' })
+      setMsg({ tone: 'ok', text: x.changes.length ? `${t('Plan adjusted')}:\n${x.changes.join('\n')}` : t('Saved') })
       onChange()
     } catch (e) { setMsg({ tone: 'bad', text: (e as Error).message }) } finally { setBusy(false) }
   }
@@ -144,32 +145,32 @@ function RaceDetail({ r, onClose, onChange, onPlan, onStrategy }: { r: Race; onC
         <span className="chip">{fmtDate(r.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
         {r.distance_m && <span className="chip">{fmtKm(r.distance_m)}</span>}
         {r.location && <span className="chip">{r.location}</span>}
-        {!past && <span className="chip chip-accent">{r.days_to_go === 0 ? '¡Hoy!' : `Faltan ${r.days_to_go} días`}</span>}
-        {r.goal_time_s && <span className="chip">Objetivo {fmtTime(r.goal_time_s)}</span>}
-        {r.result_time_s && <span className="chip chip-good">Resultado {fmtTime(r.result_time_s)}</span>}
+        {!past && <span className="chip chip-accent">{r.days_to_go === 0 ? t('Today!') : t('{n} days to go', { n: r.days_to_go })}</span>}
+        {r.goal_time_s && <span className="chip">{t('Goal')} {fmtTime(r.goal_time_s)}</span>}
+        {r.result_time_s && <span className="chip chip-good">{t('Result')} {fmtTime(r.result_time_s)}</span>}
       </div>
       {!past && (
         <>
-          <button className="btn btn-primary btn-block" style={{ marginBottom: 14 }} onClick={() => onStrategy(r)}><Icon name="zap" />Estrategia de carrera: ritmo km a km</button>
-          <div className="field" style={{ marginBottom: 6 }}>Prioridad</div>
-          <Segmented label="Prioridad" value={r.priority} onChange={(v) => update({ priority: v })} options={[['A', 'A · Objetivo'], ['B', 'B · Preparatoria'], ['C', 'C · Entreno']]} />
+          <button className="btn btn-primary btn-block" style={{ marginBottom: 14 }} onClick={() => onStrategy(r)}><Icon name="zap" />{t('Race strategy: pace per km')}</button>
+          <div className="field" style={{ marginBottom: 6 }}>{t('Priority')}</div>
+          <Segmented label={t('Priority')} value={r.priority} onChange={(v) => update({ priority: v })} options={[['A', t('A · Goal')], ['B', t('B · Tune-up')], ['C', t('C · Training')]]} />
           <p className="small muted" style={{ marginTop: 6 }}>{PRIO_HELP[r.priority]}</p>
-          {r.priority === 'A' && <button className="btn" onClick={() => onPlan(r)}><Icon name="calendar" />Crear plan hacia esta carrera</button>}
+          {r.priority === 'A' && <button className="btn" onClick={() => onPlan(r)}><Icon name="calendar" />{t('Create a plan for this race')}</button>}
         </>
       )}
       {past && (
         <div className="row" style={{ alignItems: 'flex-end' }}>
-          <label className="field grow" style={{ maxWidth: 200 }}>Tu tiempo<input placeholder="h:mm:ss" value={result} onChange={(e) => setResult(e.target.value)} /></label>
-          <button className="btn btn-primary" disabled={busy || !result} onClick={() => update({ result_time: result })}>Guardar resultado</button>
+          <label className="field grow" style={{ maxWidth: 200 }}>{t('Your time')}<input placeholder="h:mm:ss" value={result} onChange={(e) => setResult(e.target.value)} /></label>
+          <button className="btn btn-primary" disabled={busy || !result} onClick={() => update({ result_time: result })}>{t('Save result')}</button>
         </div>
       )}
-      {r.url && <p className="small" style={{ marginTop: 12 }}><a href={r.url} target="_blank" rel="noreferrer">Información e inscripción <Icon name="external" size={13} /></a></p>}
+      {r.url && <p className="small" style={{ marginTop: 12 }}><a href={r.url} target="_blank" rel="noreferrer">{t('Info and registration')} <Icon name="external" size={13} /></a></p>}
       {msg && <div style={{ marginTop: 12, whiteSpace: 'pre-wrap' }}><Banner tone={msg.tone}>{msg.text}</Banner></div>}
       <hr />
-      {!confirm ? <button className="btn btn-danger" onClick={() => setConfirm(true)}><Icon name="trash" />Quitar carrera</button> : (
+      {!confirm ? <button className="btn btn-danger" onClick={() => setConfirm(true)}><Icon name="trash" />{t('Remove race')}</button> : (
         <div className="row">
-          <span className="small">Se deshacen los ajustes del plan. ¿Quitar?</span>
-          <button className="btn btn-danger" disabled={busy} onClick={async () => { await api.del(`/api/races/${r.id}`); onChange(); onClose() }}>Sí, quitar</button>
+          <span className="small">{t('The plan adjustments are undone. Remove it?')}</span>
+          <button className="btn btn-danger" disabled={busy} onClick={async () => { await api.del(`/api/races/${r.id}`); onChange(); onClose() }}>{t('Yes, remove')}</button>
           <button className="btn btn-ghost" onClick={() => setConfirm(false)}>No</button>
         </div>
       )}
@@ -196,20 +197,20 @@ export default function RacesPage({ plan, reload }: { plan: Plan | null; reload:
   return (
     <div className="stack">
       <div className="row spread">
-        <p className="text-2" style={{ margin: 0, maxWidth: 560 }}>Apunta las carreras de tu preparación. OpenRun ajusta el plan alrededor de cada una según su prioridad.</p>
-        <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon name="search" />Buscar carrera</button>
+        <p className="text-2" style={{ margin: 0, maxWidth: 560 }}>{t('Add the races in your build-up. OpenRun adjusts the plan around each one according to its priority.')}</p>
+        <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon name="search" />{t('Find a race')}</button>
       </div>
       {last && (
         <Banner tone="ok">
-          <strong>{last.name}</strong> añadida ({last.priority}).
+          <strong>{last.name}</strong> {t('added')} ({last.priority}).
           {last.changes.length > 0 && <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{last.changes.map((c) => <li key={c}>{c}</li>)}</ul>}
           {last.suggestion && <div style={{ marginTop: 6 }}>{last.suggestion}</div>}
         </Banner>
       )}
       <div className="card">
-        <div className="card-head"><span className="micro">Próximas</span></div>
+        <div className="card-head"><span className="micro">{t('Upcoming')}</span></div>
         {loading && !data ? <Skeleton h={56} /> : upcoming.length === 0 ? (
-          <Empty icon="flag" title="Ninguna carrera apuntada">Busca en el calendario de Orycron o añádela a mano.</Empty>
+          <Empty icon="flag" title={t('No races yet')}>{t('Search the race calendar or add one by hand.')}</Empty>
         ) : (
           <div className="list">
             {upcoming.map((r) => (
@@ -218,11 +219,11 @@ export default function RacesPage({ plan, reload }: { plan: Plan | null; reload:
                 <div className="grow">
                   <div className="title">{r.name}</div>
                   <div className="meta">
-                    {[fmtKm(r.distance_m), r.location, planWeek(r.date) ? `semana ${planWeek(r.date)} del plan` : null].filter(Boolean).join(' · ')}
+                    {[fmtKm(r.distance_m), r.location, planWeek(r.date) ? t('plan week {n}', { n: planWeek(r.date) ?? '' }) : null].filter(Boolean).join(' · ')}
                   </div>
                 </div>
                 <div className="right">
-                  <span className={`prio prio-${r.priority}`} aria-label={`Prioridad ${r.priority}`}>{r.priority}</span>
+                  <span className={`prio prio-${r.priority}`} aria-label={`${t('Priority')} ${r.priority}`}>{r.priority}</span>
                   <div className="small muted num" style={{ marginTop: 4 }}>{r.days_to_go} d</div>
                 </div>
               </button>
@@ -232,7 +233,7 @@ export default function RacesPage({ plan, reload }: { plan: Plan | null; reload:
       </div>
       {past.length > 0 && (
         <div className="card">
-          <div className="card-head"><span className="micro">Pasadas</span></div>
+          <div className="card-head"><span className="micro">{t('Past')}</span></div>
           <div className="list">
             {past.map((r) => (
               <button key={r.id} className="list-row" onClick={() => setOpen(r)}>
@@ -247,8 +248,8 @@ export default function RacesPage({ plan, reload }: { plan: Plan | null; reload:
       {adding && <AddRaceSheet onClose={() => setAdding(false)} onAdded={(r) => { setAdding(false); setLast(r); changed() }} />}
       {open && <RaceDetail r={open} onClose={() => setOpen(null)} onChange={changed} onPlan={(r) => { setOpen(null); setPlanFor(r) }} onStrategy={(r) => { setOpen(null); setStrategy(r); window.scrollTo(0, 0) }} />}
       {planFor && (
-        <Sheet title={`Plan hacia ${planFor.name}`} onClose={() => setPlanFor(null)} labelledBy="pf-title">
-          <Banner tone="info">Esto sustituye tu plan activo{plan ? ` («${plan.name}»)` : ''}.</Banner>
+        <Sheet title={t('Plan for {name}', { name: planFor.name })} onClose={() => setPlanFor(null)} labelledBy="pf-title">
+          <Banner tone="info">{t('This replaces your active plan')}{plan ? ` (“${plan.name}”)` : ''}.</Banner>
           <div style={{ marginTop: 12 }}>
             <PlanForm initial={{ goal: goalFor(planFor.distance_m), race_date: planFor.date }} onCreated={() => { setPlanFor(null); changed() }} onCancel={() => setPlanFor(null)} />
           </div>

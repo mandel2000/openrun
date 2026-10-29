@@ -7,7 +7,7 @@
 
 [Leer en español](README.es.md) · [Self-hosting](docs/self-hosting.md) · [MCP (Claude Desktop, Gemini CLI)](docs/mcp.md) · [The science](docs/science.md) · [Contributing](CONTRIBUTING.md)
 
-> The app's interface is in Spanish for now. Translations are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
+> Available in English and Spanish (each user picks it in *Settings*). More languages are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md#translations).
 
 ## Features
 
@@ -91,7 +91,6 @@ Consumer subscriptions (Claude, ChatGPT, Gemini) do not include API access for t
 
 - Garmin's API is unofficial (via [python-garminconnect](https://github.com/cyberjunky/python-garminconnect)); it can break if Garmin changes its login or endpoints.
 - Web Bluetooth (HRV measurement in the browser) works in Chrome and Edge, not Safari or Firefox.
-- The interface is in Spanish.
 
 **Not medical advice.** If you feel pain or unusual symptoms, stop and see a professional.
 

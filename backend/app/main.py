@@ -15,10 +15,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from . import auth, scheduler, tenancy
+from . import auth, i18n, scheduler, tenancy
 from . import services as S
 from .ai import coach
 from .db import get_session, init_db
+from .i18n import _
 from .integrations import orycron, zepp
 from .integrations.garmin import garmin, workout_to_garmin
 from .training import load
@@ -54,12 +55,14 @@ async def access_control(request: Request, call_next):
     public = path in ("/api/health",) or path.startswith("/api/auth")
     uid = auth.request_user(request) if path.startswith("/api/") else None
     if path.startswith("/api/") and not public and uid is None:
-        return JSONResponse({"detail": "Inicia sesión"}, status_code=401, headers=SECURITY_HEADERS)
+        return JSONResponse({"detail": _("Please sign in")}, status_code=401, headers=SECURITY_HEADERS)
     tok = tenancy.set_user(uid)
+    ltok = i18n.set_request_lang(i18n.parse_accept_language(request.headers.get("accept-language")))
     try:
         resp = await call_next(request)
     finally:
         tenancy.reset_user(tok)
+        i18n.reset_request_lang(ltok)
     for k, v in SECURITY_HEADERS.items():
         resp.headers.setdefault(k, v)
     if auth.is_https(request):
@@ -88,7 +91,7 @@ def health(deep: bool = False):
         ref = st["last_tick"] or st.get("started")
         age = (dt.datetime.now() - dt.datetime.fromisoformat(ref)).total_seconds() if ref else 0
         if age > max(600, 10 * st.get("interval_s", 60)):
-            problems.append(f"scheduler parado ({int(age)} s sin ejecutar)")
+            problems.append(f"scheduler stalled ({int(age)} s without running)")
     if st.get("backup_error"):
         problems.append(f"backup: {st['backup_error']}")
     body = {"ok": not problems, "problems": problems, "scheduler": {k: st.get(k) for k in ("running", "last_tick", "last_backup")}}
@@ -97,7 +100,7 @@ def health(deep: bool = False):
 
 def _me(uid: int | None) -> dict | None:
     u = auth.get_user(uid) if uid else None
-    return {"id": u.id, "username": u.username, "name": u.name, "is_admin": u.is_admin} if u else None
+    return {"id": u.id, "username": u.username, "name": u.name, "is_admin": u.is_admin, "lang": u.lang} if u else None
 
 
 class LoginIn(BaseModel):
@@ -123,7 +126,7 @@ def auth_status(request: Request):
 def auth_login(body: LoginIn, request: Request):
     user, err = auth.login(request, body.username, body.password or body.pin)
     if not user:
-        raise HTTPException(429 if err and err.startswith("Demasiados") else 401, err)
+        raise HTTPException(429 if err == auth.too_many_attempts() else 401, err)
     return _with_session(user, request, {"authed": True, "user": _me(user.id)})
 
 
@@ -165,17 +168,18 @@ def auth_register(body: RegisterIn, request: Request):
             raise HTTPException(403, err)
     username = body.username.strip().lower()
     if not USERNAME_RE.match(username):
-        raise HTTPException(400, "Usuario: 3-30 caracteres (letras minúsculas, números, punto, guion)")
+        raise HTTPException(400, _("Username: 3-30 characters (lowercase letters, digits, dot, hyphen)"))
     if problem := auth.password_problem(body.password):
         raise HTTPException(400, problem)
     if auth.find_user(username):
-        raise HTTPException(409, "Ese usuario ya existe")
+        raise HTTPException(409, _("That username already exists"))
     with _S(engine) as s:
         user = User(username=username, name=body.name.strip() or username, password_hash=auth.hash_password(body.password),
-                    created_at=dt.datetime.now().isoformat(timespec="seconds"))
+                    created_at=dt.datetime.now().isoformat(timespec="seconds"), lang=i18n.request_lang())
         s.add(user)
         s.commit()
         s.refresh(user)
+        i18n.forget_user(user.id)
         if inv:
             inv = s.get(Invite, inv.code)
             inv.used_by = user.id
@@ -190,11 +194,12 @@ def auth_register(body: RegisterIn, request: Request):
 def _require_admin() -> None:
     u = auth.get_user(tenancy.current_user_id())
     if not u or not u.is_admin:
-        raise HTTPException(403, "Solo para administradores")
+        raise HTTPException(403, _("Administrators only"))
 
 
 class AccountIn(BaseModel):
     name: str | None = None
+    lang: str | None = None
     current_password: str | None = None
     new_password: str | None = None
 
@@ -229,9 +234,14 @@ def account_put(body: AccountIn, request: Request):
         u = s.get(User, uid)
         if body.name is not None:
             u.name = body.name.strip()[:60] or u.username
+        if body.lang is not None:
+            if body.lang not in i18n.LANGS:
+                raise HTTPException(400, _("Unsupported language"))
+            u.lang = body.lang
+            i18n.forget_user(uid)
         if body.new_password:
             if u.password_hash and not auth.verify_password(body.current_password or "", u.password_hash):
-                raise HTTPException(400, "La contraseña actual no es correcta")
+                raise HTTPException(400, _("The current password is not correct"))
             if problem := auth.password_problem(body.new_password):
                 raise HTTPException(400, problem)
             u.password_hash = auth.hash_password(body.new_password)
@@ -281,7 +291,7 @@ def user_limits(uid: int, body: UserLimitIn):
     with _S(engine) as s:
         u = s.get(User, uid)
         if not u:
-            raise HTTPException(404, "Usuario no existe")
+            raise HTTPException(404, _("User does not exist"))
         u.ai_daily_limit = None if body.ai_daily_limit is None else max(0, min(body.ai_daily_limit, 1000))
         s.add(u)
         s.commit()
@@ -332,7 +342,7 @@ def invite_delete(code: str):
 def user_delete(uid: int):
     _require_admin()
     if uid == tenancy.current_user_id():
-        raise HTTPException(400, "No puedes borrar tu propia cuenta")
+        raise HTTPException(400, _("You can't delete your own account"))
     S.delete_user(uid)
     return {"ok": True}
 
@@ -384,9 +394,9 @@ def settings_get(s: Session = DB):
 def settings_put(body: SettingsIn, s: Session = DB):
     d = body.model_dump(exclude_unset=True)
     if "sync_time" in d and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", d["sync_time"] or ""):
-        raise HTTPException(400, "Hora no válida (HH:MM)")
+        raise HTTPException(400, _("Invalid time (HH:MM)"))
     if "run_hour" in d and not 0 <= (d["run_hour"] or 0) <= 23:
-        raise HTTPException(400, "Hora no válida")
+        raise HTTPException(400, _("Invalid time"))
     return S.update_settings(s, **d)
 
 
@@ -409,7 +419,7 @@ def push_info():
     try:
         key = push.public_key()
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(500, f"Notificaciones no disponibles: {e}") from e
+        raise HTTPException(500, _("Notifications unavailable: {e}", e=e)) from e
     return {"public_key": key, "devices": push.count(tenancy.current_user_id())}
 
 
@@ -437,10 +447,10 @@ def push_unsubscribe(body: PushSubIn):
 
 @app.post("/api/push/test")
 def push_test(s: Session = DB):
-    msg = S.today_message(s) or ("OpenRun", "Las notificaciones funcionan. Te avisaré de tu entreno, tus análisis y el resumen semanal.")
+    msg = S.today_message(s) or ("OpenRun", _("Notifications work. I'll let you know about your workout, your analyses and the weekly summary."))
     n = S.notify(s, None, msg[0], msg[1], "/#hoy", "test")
     if not n:
-        raise HTTPException(400, "No hay ningún dispositivo suscrito o el servicio de notificaciones lo rechazó")
+        raise HTTPException(400, _("No device is subscribed or the notification service rejected it"))
     return {"sent": n}
 
 
@@ -462,7 +472,7 @@ def weekly_reviews(s: Session = DB):
 @app.get("/api/routines")
 def routines():
     from .training import strength
-    return {"warmup": strength.WARMUP, "mobility": strength.MOBILITY}
+    return {"warmup": strength.localized(strength.WARMUP), "mobility": strength.localized(strength.MOBILITY)}
 
 
 @app.get("/api/activities/{aid}/detail")
@@ -472,7 +482,7 @@ def activity_detail(aid: int, refresh: bool = False, s: Session = DB):
     except ValueError as e:
         raise HTTPException(404, str(e)) from e
     except Exception as e:  # noqa: BLE001 - Garmin down / not connected: say so
-        raise HTTPException(502, f"No se pudieron descargar los datos de Garmin: {e}") from e
+        raise HTTPException(502, _("Could not download the Garmin data: {e}", e=e)) from e
 
 
 @app.get("/api/activities/{aid}/analysis")
@@ -487,9 +497,9 @@ def activity_analysis(aid: int, refresh: bool = False, s: Session = DB):
     try:
         res = S.analyze_activity(s, act)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"No se pudieron leer las vueltas de Garmin: {e}") from e
+        raise HTTPException(502, _("Could not read the Garmin laps: {e}", e=e)) from e
     if res is None:
-        raise HTTPException(400, "Solo hay análisis por vueltas para actividades de Garmin")
+        raise HTTPException(400, _("Lap analysis is only available for Garmin activities"))
     return res
 
 
@@ -551,7 +561,7 @@ class RaceIn(BaseModel):
 @app.post("/api/athlete/race-result")
 def race_result(body: RaceIn, s: Session = DB):
     if body.distance not in RACE_DISTANCES_M:
-        raise HTTPException(400, "distancia no válida")
+        raise HTTPException(400, _("invalid distance"))
     v = vdot_from_race(RACE_DISTANCES_M[body.distance], parse_time(body.time))
     if body.recalibrate:
         return S.recalibrate_paces(s, v, f"race {body.distance} {body.time}")
@@ -771,7 +781,7 @@ def garmin_login(body: GarminLogin):
     try:
         return garmin.login(body.email, body.password)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, f"Login Garmin falló: {e}") from e
+        raise HTTPException(400, _("Garmin login failed: {e}", e=e)) from e
 
 
 @app.post("/api/garmin/mfa")
@@ -793,7 +803,7 @@ def garmin_sync(days: int = 14, full: bool = False, s: Session = DB):
     try:
         return S.sync_garmin(s, days, full)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, f"Sync falló: {e}") from e
+        raise HTTPException(400, _("Sync failed: {e}", e=e)) from e
 
 
 class PushIn(BaseModel):
@@ -828,7 +838,7 @@ def hrv_reading(body: HrvReading, s: Session = DB):
     """Morning HRV check from the Helio Strap's RR intervals (Web Bluetooth)."""
     value = load.rmssd(body.rr_ms)
     if value is None:
-        raise HTTPException(400, "Lectura insuficiente o con artefactos: repite 2-3 min tumbado y quieto.")
+        raise HTTPException(400, _("Reading too short or noisy: repeat for 2-3 min lying still."))
     row: dict[str, Any] = {"date": body.date or dt.date.today().isoformat(), "source": "ble", "hrv_rmssd": round(value, 1)}
     if body.avg_hr:
         row["rest_hr"] = round(body.avg_hr)
@@ -929,7 +939,7 @@ class ToolIn(BaseModel):
 def run_tool(name: str, body: ToolIn, s: Session = DB):
     """Coach tools over HTTP (used by the local MCP server when OpenRun runs on a server)."""
     if name not in {t["name"] for t in coach.TOOLS}:
-        raise HTTPException(404, "herramienta desconocida")
+        raise HTTPException(404, "unknown tool")
     try:
         return {"ok": True, "result": coach.run_tool(s, name, body.args)}
     except Exception as e:  # noqa: BLE001 - report to the model like the in-app coach does
@@ -944,7 +954,7 @@ class RecalIn(BaseModel):
 @app.post("/api/athlete/recalibrate")
 def recalibrate(body: RecalIn, s: Session = DB):
     if not 20 <= body.vdot <= 85:
-        raise HTTPException(400, "VDOT fuera de rango")
+        raise HTTPException(400, _("VDOT out of range"))
     return S.recalibrate_paces(s, body.vdot, body.source)
 
 
@@ -959,7 +969,7 @@ async def import_history(files: list[UploadFile] = File(...)):
     for f in files:
         name = f.filename or "upload"
         if not re.search(r"\.(zip|fit|gpx|tcx)(\.gz)?$", name, re.I):
-            raise HTTPException(400, f"Formato no soportado: {name}")
+            raise HTTPException(400, _("Unsupported format: {name}", name=name))
         fd, path = tempfile.mkstemp(prefix="openrun-import-", suffix="-" + Path(name).name)
         with open(fd, "wb") as out:
             shutil.copyfileobj(f.file, out, 1024 * 1024)
@@ -971,7 +981,7 @@ async def import_history(files: list[UploadFile] = File(...)):
 def import_status(job_id: str):
     job = S.IMPORT_JOBS.get(job_id)
     if not job or job.get("user_id") != tenancy.current_user_id():
-        raise HTTPException(404, "importación no encontrada")
+        raise HTTPException(404, _("import not found"))
     return job
 
 
@@ -1017,7 +1027,7 @@ def races(s: Session = DB):
 def race_add(body: RaceEntryIn, s: Session = DB):
     d = _race_fields(body)
     if not d.get("name") or not d.get("date"):
-        raise HTTPException(400, "nombre y fecha obligatorios")
+        raise HTTPException(400, _("name and date are required"))
     try:
         return S.add_race(s, d.pop("name"), d.pop("date"), d.pop("distance_m", None), d.pop("priority", "B"), **d)
     except ValueError as e:
@@ -1059,7 +1069,7 @@ def race_strategy(rid: int, mode: str | None = None, s: Session = DB):
 @app.put("/api/races/{rid}/strategy")
 def race_strategy_save(rid: int, body: StrategyIn, s: Session = DB):
     if body.start_time and not re.match(r"^\d{1,2}:\d{2}$", body.start_time):
-        raise HTTPException(400, "Hora de salida: formato HH:MM")
+        raise HTTPException(400, _("Start time: HH:MM format"))
     return _val(lambda: S.save_race_strategy(s, rid, body.mode, parse_time(body.target) if body.target else None,
                                              body.start_time.zfill(5) if body.start_time else None))
 
@@ -1068,7 +1078,7 @@ def race_strategy_save(rid: int, body: StrategyIn, s: Session = DB):
 async def race_course_upload(rid: int, file: UploadFile = File(...), s: Session = DB):
     content = await file.read(8_000_001)
     if len(content) > 8_000_000:
-        raise HTTPException(413, "Archivo demasiado grande (máx. 8 MB)")
+        raise HTTPException(413, _("File too large (max. 8 MB)"))
     return _val(lambda: S.set_race_course(s, rid, file.filename or "recorrido.gpx", _unzip_track(content)))
 
 
@@ -1083,7 +1093,7 @@ def _unzip_track(content: bytes) -> bytes:
         with zipfile.ZipFile(io.BytesIO(content)) as z:
             name = next((n for n in z.namelist() if n.lower().endswith((".gpx", ".tcx", ".kml"))), None)
             if not name:
-                raise HTTPException(400, "El zip no contiene ningún GPX, TCX o KML")
+                raise HTTPException(400, _("The zip has no GPX, TCX or KML file"))
             return z.read(name)
     return content
 
@@ -1096,13 +1106,13 @@ def _public_https(url: str) -> None:
 
     u = urlparse(url)
     if u.scheme != "https" or not u.hostname:
-        raise HTTPException(400, "La URL debe empezar por https://")
+        raise HTTPException(400, _("The URL must start with https://"))
     try:
         addrs = {ai[4][0] for ai in socket.getaddrinfo(u.hostname, 443)}
     except OSError as e:
-        raise HTTPException(400, f"No se encuentra {u.hostname}") from e
+        raise HTTPException(400, _("Cannot find {host}", host=u.hostname)) from e
     if any(not ipaddress.ip_address(a.split("%")[0]).is_global for a in addrs):
-        raise HTTPException(400, "Dirección no permitida")
+        raise HTTPException(400, _("Address not allowed"))
 
 
 @app.post("/api/races/{rid}/course/url")
@@ -1117,9 +1127,9 @@ def race_course_url(rid: int, body: CourseUrlIn, s: Session = DB):
             for chunk in resp.iter_bytes():
                 content += chunk
                 if len(content) > 8_000_000:
-                    raise HTTPException(413, "Archivo demasiado grande (máx. 8 MB)")
+                    raise HTTPException(413, _("File too large (max. 8 MB)"))
     except httpx.HTTPError as e:
-        raise HTTPException(400, f"No se pudo descargar: {e}") from e
+        raise HTTPException(400, _("Could not download: {e}", e=e)) from e
     name = body.url.rsplit("/", 1)[-1].split("?")[0] or "recorrido.gpx"
     return _val(lambda: S.set_race_course(s, rid, name, _unzip_track(content)))
 
@@ -1139,7 +1149,7 @@ def race_calendar(q: str = "", all: bool = False):
     try:
         items = orycron.upcoming(include_non_running=all)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"No se pudo leer el calendario de Orycron: {e}") from e
+        raise HTTPException(502, _("Could not read the race calendar: {e}", e=e)) from e
     ql = q.lower().strip()
     return [i for i in items if not ql or ql in i["name"].lower()]
 
@@ -1151,7 +1161,7 @@ def race_calendar_event(eid: str):
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"No se pudo leer la competición: {e}") from e
+        raise HTTPException(502, _("Could not read the race: {e}", e=e)) from e
 
 
 DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"

@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { t } from './i18n'
 
 // Lucide icons (ISC license), inlined as path data.
 const PATHS: Record<string, string> = {
@@ -74,7 +75,7 @@ export function Sheet({ title, onClose, children, labelledBy }: { title?: ReactN
         {title !== undefined && (
           <div className="card-head">
             <h2 id={labelledBy} style={{ minWidth: 0 }}>{title}</h2>
-            <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Cerrar"><Icon name="x" /></button>
+            <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label={t('Close')}><Icon name="x" /></button>
           </div>
         )}
         {children}

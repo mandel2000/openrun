@@ -19,11 +19,12 @@ import datetime as dt
 import math
 import statistics
 
+from ..i18n import N_, _
 from .vdot import fmt_time, predict_race_time, vdot_from_race
 
 PR_DISTANCES = {"1k": 1000.0, "mile": 1609.344, "5k": 5000.0, "10k": 10000.0, "half": 21097.5, "marathon": 42195.0}
 PREDICT_DISTANCES = ("5k", "10k", "half", "marathon")
-LABEL = {"1k": "1K", "mile": "Milla", "5k": "5K", "10k": "10K", "half": "Media maratón", "marathon": "Maratón"}
+LABEL = {"1k": "1K", "mile": N_("Mile"), "5k": "5K", "10k": "10K", "half": N_("Half marathon"), "marathon": N_("Marathon")}
 WINDOWS = {"all": None, "1y": 365, "6m": 182, "1m": 30}
 RIEGEL_EXP = 1.06
 
@@ -103,7 +104,7 @@ def predictions(activities: list[dict], garmin_pred: dict | None = None, hr_vdot
     if efforts:
         best = max(efforts, key=lambda e: e["vdot"])
         models["vdot"] = {"label": "VDOT (Daniels)", "vdot": round(best["vdot"], 1),
-                          "source": f"{LABEL[best['key']]} {fmt_time(best['time_s'])} ({best['date']})",
+                          "source": f"{_(LABEL[best['key']])} {fmt_time(best['time_s'])} ({best['date']})",
                           "times": {k: predict_race_time(best["vdot"], PR_DISTANCES[k]) for k in PREDICT_DISTANCES}}
         # Riegel from the best effort at each distance, choosing the closest distance per target
         best_by_key: dict[str, dict] = {}
@@ -115,16 +116,16 @@ def predictions(activities: list[dict], garmin_pred: dict | None = None, hr_vdot
             D = PR_DISTANCES[k]
             src = min(best_by_key.values(), key=lambda e: abs(math.log(D / PR_DISTANCES[e["key"]])))
             riegel[k] = src["time_s"] * (D / PR_DISTANCES[src["key"]]) ** RIEGEL_EXP
-        models["riegel"] = {"label": "Riegel", "source": "mejor esfuerzo de distancia más cercana", "times": riegel}
+        models["riegel"] = {"label": "Riegel", "source": _("best effort at the nearest distance"), "times": riegel}
 
     if garmin_pred:
         g = {k: garmin_pred.get(f) for k, f in (("5k", "time5K"), ("10k", "time10K"), ("half", "timeHalfMarathon"),
                                                   ("marathon", "timeMarathon")) if garmin_pred.get(f)}
         if g:
-            models["garmin"] = {"label": "Garmin", "source": "predictor del reloj", "times": g}
+            models["garmin"] = {"label": "Garmin", "source": _("watch predictor"), "times": g}
 
     if hr_vdot:
-        models["hr"] = {"label": "FC (Swain)", "vdot": round(hr_vdot, 1), "source": "rodajes vs FC, orientativo",
+        models["hr"] = {"label": _("HR (Swain)"), "vdot": round(hr_vdot, 1), "source": _("runs vs HR, rough guide"),
                         "times": {k: predict_race_time(hr_vdot, PR_DISTANCES[k]) for k in PREDICT_DISTANCES}}
 
     consensus = {}

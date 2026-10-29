@@ -4,6 +4,13 @@ All notable changes to OpenRun are documented here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Added
+- English and Spanish: the whole app (interface, workout titles and descriptions, notifications, analysis, race strategy and the AI coach's answers) follows each user's language, chosen in *Settings › Appearance and language* or taken from the browser. `OPENRUN_LANG` sets the default.
+- CI checks that every interface and server string has a Spanish translation.
+
+### Changed
+- Code, AI prompts and tool descriptions are in English; the daily routine log uses English step names.
+
 ## [0.1.0] - 2026-10-29
 
 First public release.

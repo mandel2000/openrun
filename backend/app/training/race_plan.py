@@ -20,6 +20,8 @@ from __future__ import annotations
 import math
 import xml.etree.ElementTree as ET
 
+from ..i18n import N_, _
+
 # ---------------------------------------------------------------- course profiles
 
 
@@ -56,7 +58,7 @@ def parse_track(filename: str, content: bytes) -> list[tuple[float, float, float
                 if len(parts) >= 2:
                     pts.append((float(parts[1]), float(parts[0]), float(parts[2]) if len(parts) > 2 and float(parts[2]) != 0 else None))
     if len(pts) < 2:
-        raise ValueError(f"{filename}: no se encontró ningún recorrido (trk/rte/LineString)")
+        raise ValueError(_("{file}: no course found (trk/rte/LineString)", file=filename))
     return pts
 
 
@@ -130,18 +132,18 @@ _BEHOBIA = [(0, 5), (1000, 8), (2000, 25), (3000, 45), (3400, 55), (4000, 45), (
             (13600, 30), (14000, 18), (15000, 12), (16000, 15), (17000, 55), (18000, 24), (18800, 8), (19200, 12),
             (20000, 6)]
 _BEHOBIA_NOTES = {
-    2: "Irun: subida suave entre el público. No te dejes llevar.",
-    3: "Repecho fuerte de salida de Irun (Ventas / Arretxe). Por esfuerzo, no por ritmo.",
-    5: "Bajada: recupera y ve soltando, sin frenar.",
-    7: "Gaintxurizketa (~2 km al 3 %). Cadencia alta, zancada corta, esfuerzo constante.",
-    8: "Coronas Gaintxurizketa: los 200 m tras la cima, vuelve a tu ritmo.",
-    9: "Bajada larga a Errenteria: aprovéchala relajado, deja que te lleve.",
-    12: "Llano de Errenteria: buen tramo para asentar ritmo. Ojo con los pasos elevados.",
-    13: "Capuchinos: 450 m al 5 %, lo más duro. Brazos activos, corto y rápido.",
-    16: "Trintxerpe / Herrera: prepárate para Miracruz.",
-    17: "Alto de Miracruz (~1.5 km al 3 %). Lo que guardaste, se gasta aquí.",
-    18: "Bajada por Ategorrieta: ya puedes apretar.",
-    20: "Zurriola y Boulevard: a vaciarte.",
+    2: N_("Irun: gentle climb through the crowd. Don't get carried away."),
+    3: N_("Steep climb out of Irun (Ventas / Arretxe). Run by effort, not by pace."),
+    5: N_("Downhill: recover and loosen up, without braking."),
+    7: N_("Gaintxurizketa (~2 km at 3%). High cadence, short stride, steady effort."),
+    8: N_("Top of Gaintxurizketa: 200 m after the summit, back to your pace."),
+    9: N_("Long descent to Errenteria: use it relaxed, let it carry you."),
+    12: N_("Flat through Errenteria: a good stretch to settle the pace. Watch the speed bumps."),
+    13: N_("Capuchinos: 450 m at 5%, the hardest part. Active arms, short and quick."),
+    16: N_("Trintxerpe / Herrera: get ready for Miracruz."),
+    17: N_("Alto de Miracruz (~1.5 km at 3%). Whatever you saved, spend it here."),
+    18: N_("Downhill through Ategorrieta: now you can push."),
+    20: N_("Zurriola and Boulevard: empty the tank."),
 }
 
 
@@ -159,7 +161,7 @@ def _interp(points: list[tuple[float, float]], total: float) -> list[list[float]
 
 
 BUILTIN = {
-    "behobia": {"name": "Behobia-San Sebastián (perfil aproximado)", "distance_m": 20000, "approx": True,
+    "behobia": {"name": "Behobia-San Sebastián", "distance_m": 20000, "approx": True,
                 "profile": _interp(_BEHOBIA, 20000), "notes": _BEHOBIA_NOTES, "start": [43.3373, -1.7581],
                 "start_time": "10:30"},
 }
@@ -244,40 +246,49 @@ def pace_plan(profile: list[list[float]], target_s: float, notes: dict | None = 
                     "split_s": round(r["time"], 1), "cum_s": round(cum, 1), "gain_m": round(r["up"]), "loss_m": round(r["down"]),
                     "grade_pct": round(net / length * 100, 1), "max_grade_pct": round(r["max_grade"], 1),
                     "terrain": "subida" if net / length > 0.012 else "bajada" if net / length < -0.012 else "llano",
-                    "note": (notes or {}).get(r["km"]) or (notes or {}).get(str(r["km"]))})
+                    "note": _n((notes or {}).get(r["km"]) or (notes or {}).get(str(r["km"])))})
     half = next((x["cum_s"] for x in out if x["km"] * 1000 >= distance / 2), None)
     return {"kms": out, "total_s": round(cum), "avg_pace_s": round(cum / distance * 1000, 1), "flat_pace_s": round(flat_pace, 1),
             "half_s": half, "course_factor": round(course_factor(profile), 4)}
+
+
+TERRAIN = {"subida": N_("uphill"), "bajada": N_("downhill"), "llano": N_("flat")}  # ids stay Spanish (API data)
+
+
+def _n(note: str | None) -> str | None:
+    return _(note) if note else note
 
 
 def fuelling(total_s: float, weight_kg: float | None, distance_m: float) -> list[str]:
     h = total_s / 3600
     tips = []
     if h >= 1.5:
-        tips.append(f"Carga de hidratos: 7-10 g/kg el día anterior{f' (≈{round(weight_kg * 8)} g)' if weight_kg else ''}: arroz, pasta, pan, fruta; poca fibra y grasa.")
+        tips.append(_("Carb loading: 7-10 g/kg the day before{grams}: rice, pasta, bread, fruit; little fibre and fat.",
+                      grams=f" (≈{round(weight_kg * 8)} g)" if weight_kg else ""))
     else:
-        tips.append("Cena normal rica en hidratos la víspera; no hace falta carga específica para menos de 90 min.")
-    tips.append("Desayuno 2,5-3 h antes: 1-2 g/kg de hidratos fáciles (pan blanco con miel o mermelada, plátano). Nada nuevo el día de carrera.")
+        tips.append(_("Normal carb-rich dinner the night before; no specific loading needed under 90 min."))
+    tips.append(_("Breakfast 2.5-3 h before: 1-2 g/kg of easy carbs (white bread with honey or jam, banana). Nothing new on race day."))
     if h >= 1.0:
         n = 2 if h >= 1.4 else 1
         at = [round(distance_m / 1000 * f) for f in ((0.33, 0.66) if n == 2 else (0.45,))]
-        tips.append(f"Durante: {n} gel{'es' if n > 1 else ''} (≈{25 * n} g de hidratos, 30-60 g/h) hacia los km {' y '.join(map(str, at))}, siempre con agua. Pruébalos antes en un entreno largo.")
+        tips.append(_("During: {n} gel(s) (≈{g} g of carbs, 30-60 g/h) around km {kms}, always with water. Try them first in a long run.",
+                      n=n, g=25 * n, kms=f" {_('and')} ".join(map(str, at))))
     else:
-        tips.append("Durante: con menos de una hora basta enjuagarse la boca con bebida isotónica; agua si hace calor.")
-    tips.append("Bebe a sorbos en los avituallamientos según la sed; no hace falta beber en todos.")
+        tips.append(_("During: under an hour, rinsing your mouth with a sports drink is enough; water if it's hot."))
+    tips.append(_("Sip at the aid stations according to thirst; no need to drink at every one."))
     return tips
 
 
 def strategy_tips(total_s: float, cf: float, heat_pct: float) -> list[str]:
     tips = [
-        "Corre por esfuerzo en las cuestas: tu ritmo sube, tu esfuerzo no. Recupera lo perdido en la bajada siguiente, no en la subida.",
-        "Primer km algo más lento de lo que el cuerpo pide: la salida es estrecha y llena de gente; salir rápido se paga al final.",
-        "Mira la media por tramos, no el ritmo instantáneo: el GPS falla en túneles y calles estrechas. Usa las marcas de km oficiales.",
+        _("Run the hills by effort: your pace goes up, your effort doesn't. Make up lost time on the next descent, not on the climb."),
+        _("First km a bit slower than your body wants: starts are narrow and crowded; going out fast costs you at the end."),
+        _("Watch the average per section, not the instant pace: GPS fails in tunnels and narrow streets. Use the official km markers."),
     ]
     if cf > 1.01:
-        tips.append(f"Este recorrido cuesta ≈{(cf - 1) * 100:.1f} % más que uno llano: tu ritmo medio será más lento que en un llano a igual forma. Es normal.")
+        tips.append(_("This course costs ≈{pct}% more than a flat one: your average pace will be slower than on the flat at the same fitness. That's normal.", pct=f"{(cf - 1) * 100:.1f}"))
     if heat_pct > 0:
-        tips.append(f"Calor previsto: objetivo ralentizado un {heat_pct:.1f} %. Mójate nuca y antebrazos en los avituallamientos.")
+        tips.append(_("Heat forecast: target slowed by {pct}%. Wet your neck and forearms at the aid stations.", pct=f"{heat_pct:.1f}"))
     return tips
 
 
@@ -287,5 +298,5 @@ def watch_steps(kms: list[dict], tolerance_s: float = 6.0) -> list[dict]:
     for x in kms:
         steps.append({"kind": "run", "duration_type": "distance", "duration_value": x["distance_m"],
                       "pace_slow": round(x["pace_s"] + tolerance_s, 1), "pace_fast": round(x["pace_s"] - tolerance_s, 1),
-                      "zone": None, "note": f"Km {x['km']}: {x['note'] or x['terrain']}"[:120]})
+                      "zone": None, "note": f"Km {x['km']}: {x['note'] or _(TERRAIN[x['terrain']])}"[:120]})
     return steps

@@ -22,6 +22,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 from collections.abc import Callable, Iterator
 
+from ..i18n import _
+
 EFFORT_DISTANCES = (1000, 1609, 5000, 10000, 21097, 42195)
 MAX_FILE_BYTES = 64 * 1024 * 1024  # per decompressed member; guards against zip bombs
 MAX_SPEED = 8.5  # m/s (~1:58/km); GPS jumps above this are discarded
@@ -289,7 +291,7 @@ def parse_file(name: str, data: bytes) -> dict | None:
         data = gzip.decompress(data)
         low = low[:-3]
     if len(data) > MAX_FILE_BYTES:
-        raise ValueError("archivo demasiado grande")
+        raise ValueError(_("file too large"))
     if low.endswith(".fit"):
         return parse_fit(data)
     if low.endswith(".gpx"):

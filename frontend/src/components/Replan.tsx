@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api, fmtDate, useApi } from '../api'
 import { Banner, Icon } from '../ui'
+import { t } from '../i18n'
 
 // Missed sessions and breaks: the plan adapts instead of leaving holes (see backend training/replan.py).
 type Missed = { id: number; date: string; title: string; key: boolean; slot: { date: string; replaces_id: number | null; replaces_title: string | null } | null }
@@ -21,19 +22,19 @@ export function BreakForm({ initialDays, onDone }: { initialDays?: number | null
       setErr(null)
       try {
         const r = await api.post<BreakRes>('/api/replan/break', { days: +days, reason })
-        onDone(`Plan ajustado: ${r.changed} entrenos de vuelta progresiva (${r.easy_days} días solo suave). ${r.notes.join(' ')}${r.rebuild ? ' Tras tanto tiempo, mejor crea un plan nuevo desde tu forma actual (Plan › Nuevo plan).' : ''}`)
+        onDone(`${t('Plan adjusted: {n} return-to-running workouts ({d} easy-only days).', { n: r.changed, d: r.easy_days })} ${r.notes.join(' ')}${r.rebuild ? ` ${t('After such a long break, better create a new plan from your current fitness (Plan › New plan).')}` : ''}`)
       } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
     }}>
       <div className="row" style={{ alignItems: 'flex-end' }}>
-        <label className="field" style={{ width: 120 }}>Días parado<input type="number" min={1} max={120} inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></label>
+        <label className="field" style={{ width: 120 }}>{t('Days off')}<input type="number" min={1} max={120} inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></label>
         <label className="field grow">Motivo
           <select value={reason} onChange={(e) => setReason(e.target.value)}>
-            <option value="illness">Enfermedad</option><option value="injury">Lesión / molestia</option><option value="travel">Viaje / trabajo</option><option value="other">Otro</option>
+            <option value="illness">{t('Illness')}</option><option value="injury">{t('Injury / niggle')}</option><option value="travel">{t('Travel / work')}</option><option value="other">{t('Other')}</option>
           </select>
         </label>
       </div>
-      <p className="small muted" style={{ margin: 0 }}>Cierra los entrenos que no hiciste, ajusta ritmos si llevas más de 5 días sin correr y hace la vuelta progresiva (primero solo suave, luego menos volumen).</p>
-      <div className="row"><button className="btn btn-primary btn-sm" disabled={busy || !+days}>Ajustar el plan</button>{err && <span className="err small">{err}</span>}</div>
+      <p className="small muted" style={{ margin: 0 }}>{t('Closes the workouts you didn\'t do, adjusts paces if you\'ve been off for more than 5 days and builds a gradual return (easy running first, then reduced volume).')}</p>
+      <div className="row"><button className="btn btn-primary btn-sm" disabled={busy || !+days}>{t('Adjust the plan')}</button>{err && <span className="err small">{err}</span>}</div>
     </form>
   )
 }
@@ -55,29 +56,29 @@ export function ReplanCard({ onChanged }: { onChanged: () => void }) {
   }
   return (
     <div className="card">
-      <div className="card-head"><span className="micro">Ajustes del plan</span><Icon name="calendar" size={18} /></div>
+      <div className="card-head"><span className="micro">{t('Plan adjustments')}</span><Icon name="calendar" size={18} /></div>
       {data.suggest_break && !brk && (
         <div className="stack" style={{ gap: 8 }}>
-          <div><b>Llevas {data.days_since_run} días sin correr.</b> <span className="text-2">¿Has estado parado? Reajusto la vuelta para que no retomes donde lo dejaste.</span></div>
-          <div className="row"><button className="btn btn-sm btn-primary" onClick={() => setBrk(true)}>Sí, ajustar</button></div>
+          <div><b>{t('You haven’t run for {n} days.', { n: data.days_since_run ?? 0 })}</b> <span className="text-2">{t('Have you had a break? I’ll adjust your return so you don’t pick up where you left off.')}</span></div>
+          <div className="row"><button className="btn btn-sm btn-primary" onClick={() => setBrk(true)}>{t('Yes, adjust')}</button></div>
         </div>
       )}
       {brk && <BreakForm initialDays={data.days_since_run} onDone={(m) => { setMsg(m); setBrk(false); reload(); onChanged() }} />}
       {keys.map((m) => (
         <div key={m.id} className="stack" style={{ gap: 6, marginTop: 10 }}>
-          <div>No hiciste <b>«{m.title}»</b> ({day(m.date)}).</div>
+          <div>{t('You didn’t do')} <b>“{m.title}”</b> ({day(m.date)}).</div>
           {m.slot ? (
             <>
-              <div className="small text-2">Puedo pasarla al <b>{day(m.slot.date)}</b>{m.slot.replaces_title ? <> en lugar de «{m.slot.replaces_title}»</> : ''}, sin juntar dos días duros.</div>
+              <div className="small text-2">{t('I can move it to')} <b>{day(m.slot.date)}</b>{m.slot.replaces_title ? <> {t('instead of')} “{m.slot.replaces_title}”</> : ''}{t(', without two hard days in a row.')}</div>
               <div className="row">
-                <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => act(m.id, true)}>Recolocar</button>
-                <button className="btn btn-sm" disabled={busy} onClick={() => act(m.id, false)}>Dejarla pasar</button>
+                <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => act(m.id, true)}>{t('Reschedule')}</button>
+                <button className="btn btn-sm" disabled={busy} onClick={() => act(m.id, false)}>{t('Let it go')}</button>
               </div>
             </>
           ) : (
             <div className="row">
-              <span className="small text-2 grow">No hay hueco esta semana sin juntar sesiones duras: mejor dejarla pasar.</span>
-              <button className="btn btn-sm" disabled={busy} onClick={() => act(m.id, false)}>Vale</button>
+              <span className="small text-2 grow">{t('No slot this week without stacking hard sessions: better let it go.')}</span>
+              <button className="btn btn-sm" disabled={busy} onClick={() => act(m.id, false)}>{t('OK')}</button>
             </div>
           )}
         </div>

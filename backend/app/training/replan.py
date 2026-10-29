@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import datetime as dt
 
+from ..i18n import _
+
 
 def is_key(data: dict) -> bool:
     return data.get("sport") == "running" and data.get("type") != "race" and (
@@ -83,10 +85,10 @@ def break_protocol(days_off: int, reason: str = "other") -> dict:
         easy, pct = easy + 2, pct + 10
     notes = []
     if ill:
-        notes.append("Si hubo fiebre o síntomas en el pecho, espera 24-48 h sin síntomas antes de volver a correr.")
+        notes.append(_("If you had a fever or chest symptoms, wait 24-48 h without symptoms before running again."))
     if injury:
-        notes.append("Sin dolor al correr ni al día siguiente; si vuelve, para y consulta con un fisio.")
+        notes.append(_("No pain while running or the next day; if it comes back, stop and see a physio."))
     if days_off > 5:
-        notes.append(f"Ritmos ajustados a tu forma actual (≈ −{round((1 - vdot_factor(days_off)) * 100)} % de VDOT tras {days_off} días).")
+        notes.append(_("Paces adjusted to your current fitness (≈ −{pct}% VDOT after {n} days).", pct=round((1 - vdot_factor(days_off)) * 100), n=days_off))
     return {"days_off": days_off, "easy_days": easy, "reduce_days": reduce, "reduce_pct": pct,
             "vdot_factor": vdot_factor(days_off), "rebuild": days_off > 28, "notes": notes}

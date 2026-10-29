@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { t } from '../i18n'
 
 export type Exercise = { name: string; sets: number; reps: string; rest_s: number; cue: string; load?: string }
 export type Routine = { title: string; goal: string; minutes: number; exercises: Exercise[] }
@@ -23,11 +24,11 @@ export function ExerciseList({ items, storeKey }: { items: Exercise[]; storeKey?
             <div className="row spread" style={{ flexWrap: 'nowrap', alignItems: 'flex-start' }}>
               <div style={{ minWidth: 0 }}>
                 <b>{e.name}</b>
-                <div className="small num">{e.sets > 1 ? `${e.sets} × ` : ''}{e.reps}{e.rest_s ? ` · descanso ${e.rest_s >= 60 ? `${Math.round(e.rest_s / 6) / 10} min` : `${e.rest_s} s`}` : ''}{e.load ? ` · ${e.load}` : ''}</div>
+                <div className="small num">{e.sets > 1 ? `${e.sets} × ` : ''}{e.reps}{e.rest_s ? ` · ${t('rest')} ${e.rest_s >= 60 ? `${Math.round(e.rest_s / 6) / 10} min` : `${e.rest_s} s`}` : ''}{e.load ? ` · ${e.load}` : ''}</div>
                 <div className="small muted">{e.cue}</div>
               </div>
               {storeKey && (
-                <button className="btn btn-sm" style={{ flex: 'none' }} aria-label={`Serie hecha: ${e.name}`}
+                <button className="btn btn-sm" style={{ flex: 'none' }} aria-label={t('Set done: {name}', { name: e.name })}
                   onClick={() => setDone((d) => ({ ...d, [i]: n >= e.sets ? 0 : n + 1 }))}>
                   {n >= e.sets ? '✓' : `${n}/${e.sets}`}
                 </button>

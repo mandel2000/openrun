@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Workout } from '../api'
+import { locale, t } from '../i18n'
 
 // Pointer-based drag & drop for plan sessions. HTML5 drag events don't fire on touch screens, so
 // this handles mouse (drag after 5 px) and touch (long press, then drag) the same way.
@@ -81,7 +82,7 @@ export function DragGhost({ drag }: { drag: DragState }) {
   return (
     <div className="drag-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden>
       <b>{drag.w.title}</b>
-      <span>{drag.over ? `→ ${new Date(drag.over + 'T12:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}` : 'Suelta en un día'}</span>
+      <span>{drag.over ? `→ ${new Date(drag.over + 'T12:00').toLocaleDateString(locale(), { weekday: 'short', day: 'numeric' })}` : t('Drop on a day')}</span>
     </div>
   )
 }

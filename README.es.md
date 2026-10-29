@@ -3,6 +3,8 @@
 [![CI](https://github.com/mandel2000/openrun/actions/workflows/ci.yml/badge.svg)](https://github.com/mandel2000/openrun/actions/workflows/ci.yml)
 [![Licencia: AGPL-3.0](https://img.shields.io/badge/licencia-AGPL--3.0-blue.svg)](LICENSE)
 
+En español e inglés (cada usuario lo elige en *Ajustes*).
+
 **Entrenador de running open source que instalas tú.** Planes basados en evidencia, sincronización con Garmin (datos y entrenos estructurados al reloj), readiness guiada por HRV y un coach IA que trabaja con tus datos reales. Una alternativa gratuita a apps de suscripción como Runna.
 
 [Read in English](README.md) · [Instalar en un servidor](docs/es/servidor.md) · [Arranque automático y móvil](docs/es/arranque-y-movil.md) · [La ciencia](docs/es/ciencia.md) · [Contribuir](CONTRIBUTING.md)

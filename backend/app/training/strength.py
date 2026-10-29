@@ -16,89 +16,108 @@ Evidence:
 
 from __future__ import annotations
 
+import copy
+
+from ..i18n import N_, _
+
 
 def ex(name: str, sets: int, reps: str, rest_s: int, cue: str, load: str = "") -> dict:
     return {"name": name, "sets": sets, "reps": reps, "rest_s": rest_s, "cue": cue, "load": load}
 
 
+# Texts are English and translated when a session is handed out (localized()).
 SESSIONS: dict[str, dict] = {
     "base": {
-        "title": "Fuerza general",
-        "goal": "Base de fuerza y control en una pierna: tendones y articulaciones preparados para cargar más km.",
+        "title": N_("General strength"),
+        "goal": N_("Base strength and single-leg control: tendons and joints ready to handle more km."),
         "minutes": 35,
         "exercises": [
-            ex("Sentadilla goblet", 3, "10-12", 75, "Pecho alto, rodillas siguen la punta del pie, baja hasta muslo paralelo.", "RPE 7: te sobran 3 reps"),
-            ex("Peso muerto rumano", 3, "10", 75, "Cadera atrás con espalda neutra, mancuernas pegadas a las piernas; siente los isquios."),
-            ex("Zancada atrás", 3, "8 por pierna", 60, "Paso largo atrás, rodilla delantera estable sin irse hacia dentro."),
-            ex("Puente de glúteo a 1 pierna", 3, "12 por pierna", 45, "Empuja con el talón, pelvis nivelada, aprieta glúteo arriba 1 s."),
-            ex("Elevación de gemelos de pie (rodilla recta)", 3, "15", 45, "Sube 1 s, baja en 3 s, rango completo en un escalón."),
-            ex("Elevación de gemelos sentado (rodilla flexionada)", 3, "15", 45, "Sóleo: peso sobre las rodillas, lento y completo."),
-            ex("Plancha lateral", 3, "30 s por lado", 30, "Cuerpo en línea, cadera alta, sin hundir el hombro."),
+            ex(N_("Goblet squat"), 3, "10-12", 75, N_("Chest up, knees track over the toes, down to thighs parallel."), N_("RPE 7: 3 reps in reserve")),
+            ex(N_("Romanian deadlift"), 3, "10", 75, N_("Hips back with a neutral spine, dumbbells close to the legs; feel the hamstrings.")),
+            ex(N_("Reverse lunge"), 3, N_("8 per leg"), 60, N_("Long step back, front knee stable without caving in.")),
+            ex(N_("Single-leg glute bridge"), 3, N_("12 per leg"), 45, N_("Push through the heel, pelvis level, squeeze the glute at the top for 1 s.")),
+            ex(N_("Standing calf raise (straight knee)"), 3, "15", 45, N_("Up in 1 s, down in 3 s, full range on a step.")),
+            ex(N_("Seated calf raise (bent knee)"), 3, "15", 45, N_("Soleus: weight on the knees, slow and full range.")),
+            ex(N_("Side plank"), 3, N_("30 s per side"), 30, N_("Body in line, hips high, don't sink into the shoulder.")),
         ],
     },
     "build": {
-        "title": "Fuerza máxima + pliometría",
-        "goal": "Fuerza pesada y rigidez del tendón para mejorar la economía de carrera (2-8 %).",
+        "title": N_("Max strength + plyometrics"),
+        "goal": N_("Heavy strength and tendon stiffness to improve running economy (2-8%)."),
         "minutes": 40,
         "exercises": [
-            ex("Saltos al cajón", 3, "5", 90, "Máxima intención, aterriza suave y bájate andando. Calidad > cansancio.", "Primero, sin fatiga"),
-            ex("Pogos (saltitos de tobillo)", 3, "20", 60, "Rodillas casi rectas, rebote rápido sobre antepié, poco tiempo de contacto."),
-            ex("Sentadilla o peso muerto trap-bar", 4, "5", 150, "Pesado pero limpio: técnica perfecta en todas las reps.", "RPE 8 (te sobran 2)"),
-            ex("Step-up con carga", 3, "6 por pierna", 90, "Cajón a altura de rodilla, empuja solo con la pierna de arriba."),
-            ex("Gemelo sóleo con carga (sentado)", 3, "10-12", 60, "Carga alta, 3 s de bajada."),
-            ex("Copenhagen (aductores)", 2, "6-8 por lado", 45, "Versión corta (rodilla apoyada) si es la primera vez."),
+            ex(N_("Box jumps"), 3, "5", 90, N_("Maximum intent, land softly and step down. Quality over fatigue."), N_("First, while fresh")),
+            ex(N_("Pogos (ankle hops)"), 3, "20", 60, N_("Knees almost straight, quick bounce on the forefoot, short ground contact.")),
+            ex(N_("Squat or trap-bar deadlift"), 4, "5", 150, N_("Heavy but clean: perfect technique on every rep."), N_("RPE 8 (2 in reserve)")),
+            ex(N_("Loaded step-up"), 3, N_("6 per leg"), 90, N_("Knee-height box, drive only with the top leg.")),
+            ex(N_("Loaded soleus raise (seated)"), 3, "10-12", 60, N_("Heavy load, 3 s down.")),
+            ex(N_("Copenhagen plank (adductors)"), 2, N_("6-8 per side"), 45, N_("Short version (knee supported) the first time.")),
         ],
     },
     "maintenance": {
-        "title": "Mantenimiento de fuerza",
-        "goal": "Mantener lo ganado con poco volumen: no debe dejarte cansado para la próxima sesión de calidad.",
+        "title": N_("Strength maintenance"),
+        "goal": N_("Keep what you gained with little volume: it must not leave you tired for the next quality session."),
         "minutes": 25,
         "exercises": [
-            ex("Pogos", 2, "15", 60, "Rebote rápido y elástico."),
-            ex("Sentadilla trap-bar o goblet pesada", 2, "5", 120, "Pesado, pocas reps, lejos del fallo.", "RPE 7-8"),
-            ex("Peso muerto rumano", 2, "6", 90, "Controlado."),
-            ex("Gemelo sóleo con carga", 2, "12", 45, "Lento al bajar."),
-            ex("Plancha frontal", 2, "40 s", 30, "Glúteos activos, sin arquear la lumbar."),
+            ex(N_("Pogos"), 2, "15", 60, N_("Quick, springy bounce.")),
+            ex(N_("Heavy trap-bar or goblet squat"), 2, "5", 120, N_("Heavy, few reps, far from failure."), "RPE 7-8"),
+            ex(N_("Romanian deadlift"), 2, "6", 90, N_("Controlled.")),
+            ex(N_("Loaded soleus raise"), 2, "12", 45, N_("Slow on the way down.")),
+            ex(N_("Front plank"), 2, "40 s", 30, N_("Glutes on, don't arch the lower back.")),
         ],
     },
 }
 
 MOBILITY = {
-    "title": "Movilidad post-carrera",
-    "goal": "10 minutos suaves después de correr para recuperar rango de movimiento. Sin rebotes ni dolor.",
+    "title": N_("Post-run mobility"),
+    "goal": N_("10 easy minutes after running to restore range of motion. No bouncing, no pain."),
     "minutes": 10,
     "exercises": [
-        ex("Estiramiento de flexor de cadera (rodilla en el suelo)", 1, "45 s por lado", 0, "Mete la pelvis y empuja la cadera adelante."),
-        ex("Gemelo y sóleo en pared", 1, "30 s + 30 s por pierna", 0, "Primero rodilla recta, luego flexionada."),
-        ex("Isquios con pierna en alto", 1, "45 s por pierna", 0, "Espalda recta, inclínate desde la cadera."),
-        ex("Figura 4 (glúteo/piriforme)", 1, "45 s por lado", 0, "Tumbado, tobillo sobre la rodilla contraria."),
-        ex("Rotación torácica en cuadrupedia", 1, "8 por lado", 0, "Mano en la nuca, abre el codo al techo siguiéndolo con la vista."),
-        ex("Respiración diafragmática tumbado", 1, "1 min", 0, "Inhala 4 s, exhala 6 s: baja pulsaciones y activa la recuperación."),
+        ex(N_("Hip flexor stretch (kneeling)"), 1, N_("45 s per side"), 0, N_("Tuck the pelvis and push the hip forward.")),
+        ex(N_("Calf and soleus against a wall"), 1, N_("30 s + 30 s per leg"), 0, N_("First with the knee straight, then bent.")),
+        ex(N_("Hamstring stretch, leg raised"), 1, N_("45 s per leg"), 0, N_("Straight back, lean from the hips.")),
+        ex(N_("Figure 4 (glute/piriformis)"), 1, N_("45 s per side"), 0, N_("Lying down, ankle over the opposite knee.")),
+        ex(N_("Quadruped thoracic rotation"), 1, N_("8 per side"), 0, N_("Hand behind the head, open the elbow to the ceiling and follow it with your eyes.")),
+        ex(N_("Diaphragmatic breathing, lying down"), 1, "1 min", 0, N_("Breathe in for 4 s, out for 6 s: lowers heart rate and kick-starts recovery.")),
     ],
 }
 
 WARMUP = {
-    "title": "Calentamiento dinámico",
-    "goal": "5-8 minutos antes de series o carreras. Nada de estiramientos estáticos aquí.",
+    "title": N_("Dynamic warm-up"),
+    "goal": N_("5-8 minutes before intervals or races. No static stretching here."),
     "minutes": 7,
     "exercises": [
-        ex("Balanceos de pierna adelante-atrás", 1, "10 por pierna", 0, "Apoyado en una pared, amplitud progresiva."),
-        ex("Balanceos laterales", 1, "10 por pierna", 0, "Cadera suelta."),
-        ex("Zancada con rotación", 1, "5 por lado", 0, "Gira el tronco hacia la pierna delantera."),
-        ex("Skipping bajo", 2, "20 m", 0, "Cadencia rápida, contacto corto."),
-        ex("Talones al glúteo", 2, "20 m", 0, "Relajado."),
-        ex("Progresivos", 3, "80 m", 45, "De suave a rápido (no sprint), vuelve andando."),
+        ex(N_("Front-to-back leg swings"), 1, N_("10 per leg"), 0, N_("Hold on to a wall, gradually bigger.")),
+        ex(N_("Side leg swings"), 1, N_("10 per leg"), 0, N_("Loose hips.")),
+        ex(N_("Lunge with rotation"), 1, N_("5 per side"), 0, N_("Turn the torso towards the front leg.")),
+        ex(N_("Low skips"), 2, "20 m", 0, N_("Quick cadence, short contact.")),
+        ex(N_("Butt kicks"), 2, "20 m", 0, N_("Relaxed.")),
+        ex(N_("Strides"), 3, "80 m", 45, N_("From easy to fast (not a sprint), walk back.")),
     ],
 }
 
 
+def localized(block: dict) -> dict:
+    """Copy of a session/routine with its texts in the current user's language."""
+    out = copy.deepcopy(block)
+    out["title"], out["goal"] = _(out["title"]), _(out["goal"])
+    for e in out["exercises"]:
+        for k in ("name", "reps", "cue", "load"):
+            if e[k]:
+                e[k] = _(e[k])
+    return out
+
+
 def session(focus: str) -> dict:
-    return SESSIONS.get(focus) or SESSIONS["base"]
+    return localized(SESSIONS.get(focus) or SESSIONS["base"])
 
 
 def focus_for_title(title: str) -> str:
+    """Stored strength workouts only keep their title (in the language they were created in)."""
     t = (title or "").lower()
-    return "build" if "máxima" in t or "pliometr" in t else "maintenance" if "manten" in t else "base"
+    if "máxima" in t or "pliometr" in t or "max strength" in t or "plyometric" in t:
+        return "build"
+    return "maintenance" if "manten" in t or "maintenance" in t else "base"
 
 
 def describe(sess: dict) -> str:

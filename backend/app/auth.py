@@ -24,9 +24,15 @@ from pathlib import Path
 
 from fastapi import Request
 
+from .i18n import _
+
 COOKIE = "openrun_session"
 SESSION_DAYS = 90
 MIN_PUBLIC_PASSWORD = 12
+
+
+def too_many_attempts() -> str:
+    return _("Too many attempts. Wait 10 minutes.")
 
 
 def _env(name: str, default: str = "") -> str:
@@ -63,9 +69,9 @@ ADMIN_USERNAME = _env("OPENRUN_ADMIN_USER", "admin").lower()
 def check_config() -> None:
     """Refuse to run publicly with a weak or missing bootstrap password."""
     if not TRUST_LOCAL and len(PASSWORD) < MIN_PUBLIC_PASSWORD:
-        raise RuntimeError(f"OPENRUN_PASSWORD debe tener al menos {MIN_PUBLIC_PASSWORD} caracteres en un servidor público")
+        raise RuntimeError(f"OPENRUN_PASSWORD must be at least {MIN_PUBLIC_PASSWORD} characters on a public server")
     if API_TOKEN and len(API_TOKEN) < 32:
-        raise RuntimeError("OPENRUN_API_TOKEN debe tener al menos 32 caracteres")
+        raise RuntimeError("OPENRUN_API_TOKEN must be at least 32 characters")
 
 
 # ---------------------------------------------------------------- passwords
@@ -79,7 +85,7 @@ def hash_password(pw: str) -> str:
 
 def verify_password(pw: str, stored: str) -> bool:
     try:
-        _, salt, h = stored.split("$")
+        _scheme, salt, h = stored.split("$")
         got = hashlib.scrypt(pw.encode(), salt=base64.b64decode(salt), n=2**14, r=8, p=1, dklen=32)
         return hmac.compare_digest(got, base64.b64decode(h))
     except (ValueError, TypeError):
@@ -88,7 +94,7 @@ def verify_password(pw: str, stored: str) -> bool:
 
 def password_problem(pw: str) -> str | None:
     if len(pw) < MIN_USER_PASSWORD:
-        return f"La contraseña debe tener al menos {MIN_USER_PASSWORD} caracteres"
+        return _("The password must be at least {n} characters", n=MIN_USER_PASSWORD)
     return None
 
 
@@ -253,7 +259,7 @@ def _throttled(request: Request) -> tuple[str, list[float], str | None]:
     ip = client_ip(request)
     now = time.time()
     recent = [t for t in _fails.get(ip, []) if now - t < 600]
-    return ip, recent, ("Demasiados intentos. Espera 10 minutos." if len(recent) >= 10 else None)
+    return ip, recent, (too_many_attempts() if len(recent) >= 10 else None)
 
 
 def _fail(ip: str, recent: list[float]) -> None:
@@ -270,7 +276,7 @@ def login(request: Request, username: str, password: str):
     user = find_user(username or ADMIN_USERNAME)
     if not user or not user.password_hash or not verify_password(password.strip(), user.password_hash):
         _fail(ip, recent)
-        return None, "Usuario o contraseña incorrectos"
+        return None, _("Wrong username or password")
     _fails.pop(ip, None)
     return user, None
 
@@ -285,5 +291,5 @@ def check_invite(request: Request, code: str):
         inv = s.get(Invite, code.strip())
         if not inv or inv.used_by or inv.expires_at < time.strftime("%Y-%m-%dT%H:%M:%S"):
             _fail(ip, recent)
-            return None, "Invitación no válida o caducada"
+            return None, _("Invalid or expired invitation")
         return inv, None

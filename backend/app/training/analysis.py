@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import datetime as dt
 
+from ..i18n import _
+
 QUALITY_ZONES = {"marathon", "half", "threshold", "ten_k", "five_k", "interval", "repetition"}
 HR_CHECKED = {"marathon", "half", "threshold"}  # HR lags too much in short I/R reps to judge
 EASY_ZONES = {"recovery", "easy", "long"}
@@ -81,7 +83,7 @@ def analyze(laps: list[dict], planned: dict | None, lthr: int | None = None) -> 
     if planned:
         easy_rows = [r for r in rows if r["zone"] in EASY_ZONES and r["kind"] == "run" and r["dev_pct"] is not None]
         if easy_rows and sum(r["dev_pct"] for r in easy_rows) / len(easy_rows) > 5:
-            out["notes"].append("Los tramos suaves fueron demasiado rápidos: el rodaje suave debe ser conversacional (80/20).")
+            out["notes"].append(_("The easy parts were too fast: easy running should be conversational (80/20)."))
     if not work:
         return out
     on = sum(1 for r in work if r["status"] == "ok")
@@ -93,13 +95,13 @@ def analyze(laps: list[dict], planned: dict | None, lthr: int | None = None) -> 
 
     if slow_n * 2 >= len(work) or (lthr and hr_avg and hr_avg > lthr * 1.05 and avg_dev >= -2):
         out["verdict"] = "too_hard"
-        out["notes"].append("Las series costaron más de lo previsto (ritmo por debajo o FC alta). Si se repite, bajaremos ritmos.")
+        out["notes"].append(_("The reps were harder than planned (slower pace or high HR). If it happens again, paces will come down."))
     elif avg_dev >= 2 and not (lthr and hr_avg and hr_avg > lthr * 1.02):
         out["verdict"] = "too_easy"
-        out["notes"].append("Series más rápidas que el objetivo sin disparar la FC: tu forma puede haber mejorado.")
+        out["notes"].append(_("Reps faster than target without a spike in HR: your fitness may have improved."))
     else:
         out["verdict"] = "on_target"
-        out["notes"].append("Sesión dentro de los ritmos objetivo.")
+        out["notes"].append(_("Session within the target paces."))
     return out
 
 
@@ -117,7 +119,7 @@ def pace_insight(sessions: list[dict], today: dt.date, last_change: str | None, 
     easy = sum(1 for x in recent if x["verdict"] == "too_easy")
     hard = sum(1 for x in recent if x["verdict"] == "too_hard")
     if easy >= 2 and hard == 0:
-        return {"from": vdot, "to": round(vdot + 0.5, 1), "reason": f"{easy} de tus últimas {len(recent)} sesiones de calidad fueron más rápidas que el objetivo sin FC alta"}
+        return {"from": vdot, "to": round(vdot + 0.5, 1), "reason": _("{n} of your last {total} quality sessions were faster than target without a high HR", n=easy, total=len(recent))}
     if hard >= 2:
-        return {"from": vdot, "to": round(vdot - 0.5, 1), "reason": f"{hard} de tus últimas {len(recent)} sesiones de calidad costaron más de lo previsto"}
+        return {"from": vdot, "to": round(vdot - 0.5, 1), "reason": _("{n} of your last {total} quality sessions were harder than planned", n=hard, total=len(recent))}
     return None
