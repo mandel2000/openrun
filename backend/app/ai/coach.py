@@ -88,7 +88,7 @@ TOOLS: list[dict[str, Any]] = [
      "input_schema": {"type": "object", "properties": {"start": {"type": "string"}, "end": {"type": "string"}}, "required": ["start", "end"]}},
     {"name": "get_recent_activities", "description": "Actividades reales recientes (Garmin): distancia, ritmo, FC, TRIMP, training effect.",
      "input_schema": {"type": "object", "properties": {"days": {"type": "integer", "default": 21}}}},
-    {"name": "get_readiness", "description": "Readiness de hoy (HRV vs línea base, FC reposo, sueño) y últimos 14 días de bienestar.",
+    {"name": "get_readiness", "description": "Readiness de hoy: nota 0-100 y sus partes (HRV, sueño, FC reposo, carga, check-in de sensaciones), la propuesta para el entreno de hoy y los últimos 14 días de bienestar.",
      "input_schema": {"type": "object", "properties": {}}},
     {"name": "get_training_load", "description": "Carga: CTL (fitness 42d), ATL (fatiga 7d), TSB (forma) y ACWR, últimos 28 días.",
      "input_schema": {"type": "object", "properties": {}}},
@@ -145,8 +145,6 @@ TOOLS: list[dict[str, Any]] = [
     {"name": "not_feeling_100", "description": "El atleta no está al 100%: reduce (o descanso activo) los próximos N días.",
      "input_schema": {"type": "object", "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 14},
                                                          "mode": {"type": "string", "enum": ["reduce", "rest"]}}, "required": ["days"]}},
-    {"name": "get_readiness", "description": "Readiness de hoy: nota 0-100 y sus partes (HRV, sueño, FC reposo, carga, sensaciones del check-in) y la propuesta para el entreno de hoy.",
-     "input_schema": {"type": "object", "properties": {}}},
     {"name": "get_missed_sessions", "description": "Entrenos de los últimos días no realizados y, para las sesiones clave, el hueco propuesto para recuperarlas esta semana.",
      "input_schema": {"type": "object", "properties": {}}},
     {"name": "reschedule_missed", "description": "Recupera una sesión clave perdida en su hueco propuesto (accept=true) o la da por no realizada (accept=false).",
@@ -181,8 +179,7 @@ def run_tool(s: Session, name: str, args: dict) -> Any:
     if name == "get_recent_activities":
         return S.recent_activities(s, args.get("days", 21))
     if name == "get_readiness":
-        rows = S.wellness_rows(s, 14)
-        return {"readiness": S.readiness_today(s), "last_14_days": rows}
+        return {**S.readiness_view(s), "last_14_days": S.wellness_rows(s, 14)}
     if name == "get_training_load":
         tl = S.training_load(s, 28)
         return {"series": tl["series"], "fitness_estimate_from_hr": S.fitness_estimate(s)}
@@ -235,8 +232,6 @@ def run_tool(s: Session, name: str, args: dict) -> Any:
         return {k: v for k, v in p.items() if k != "weeks"} | {"n_weeks": len(p["weeks"])}
     if name == "adapt_today_to_readiness":
         return S.adapt_today(s, today.isoformat())
-    if name == "get_readiness":
-        return S.readiness_view(s)
     if name == "get_missed_sessions":
         return S.replan_check(s)
     if name == "reschedule_missed":
