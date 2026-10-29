@@ -9,6 +9,7 @@ import threading
 
 from sqlmodel import Session, select
 
+from . import demo
 from . import services as S
 from .db import User, engine
 from .i18n import _
@@ -38,6 +39,13 @@ def tick() -> dict | None:
     out: dict = {}
     try:
         for uid in user_ids():
+            if demo.is_demo(uid):  # no routine: its data is rebuilt each day instead
+                try:
+                    if demo.seeded_on(uid) != dt.date.today().isoformat():
+                        demo.reset(uid)
+                except Exception:  # noqa: BLE001
+                    log.exception("demo reset failed")
+                continue
             try:
                 with as_user(uid), Session(engine) as s:
                     if due(S.get_settings(s), S.meta_get(s, "daily_log").get("last_date"), dt.datetime.now()):

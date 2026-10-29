@@ -4,7 +4,7 @@ import { Banner, Icon, Markdown } from '../ui'
 import { getLang, t } from '../i18n'
 
 type Msg = { role: 'user' | 'assistant' | 'tool'; text: string; tools?: string[] }
-type Info = { provider: string; model: string; configured: boolean }
+type Info = { provider: string; model: string; configured: boolean; demo?: boolean }
 
 const SUGGESTIONS = [
   t('Review my last week and tell me how I am doing'),
@@ -102,13 +102,14 @@ export default function CoachPage({ onChange }: { onChange: () => void }) {
         )}
         {msgs.length > 0 && <button className="btn btn-sm btn-ghost" onClick={() => api.del('/api/chat').then(() => setMsgs([]))}><Icon name="plus" size={16} />{t('New conversation')}</button>}
       </div>
-      {info.data && !info.data.configured && (
+      {info.data?.demo && <Banner tone="info">{t('The AI coach is off in the demo. In your own install it reads your data and changes your plan; it can run on a free provider, locally with Ollama, or from Claude Desktop via MCP.')}</Banner>}
+      {info.data && !info.data.configured && !info.data.demo && (
         <Banner>
           {t('The coach has no AI provider configured. Options with no extra subscription are in')} <a href="#ajustes">{t('Settings › AI coach')}</a> {t('(free Gemini or NVIDIA, local Ollama, or your Claude via MCP).')}
         </Banner>
       )}
       <div className="msgs" aria-live="polite">
-        {msgs.length === 0 && (
+        {msgs.length === 0 && !info.data?.demo && (
           <div className="card">
             <p className="text-2">{t('Ask anything. The coach reads your plan, activities, HRV, load, records and races, and creates workouts with paces computed from your VDOT (never made up).')}</p>
             <div className="row">{SUGGESTIONS.map((s) => <button key={s} className="btn btn-sm btn-wrap" onClick={() => send(s)}>{s}</button>)}</div>
@@ -124,12 +125,12 @@ export default function CoachPage({ onChange }: { onChange: () => void }) {
         {busy && <div className="toolcard"><span className="chip"><Icon name="refresh" size={13} className="spin" />{status ? `${status}…` : t('Thinking…')}</span></div>}
         <div ref={end} />
       </div>
-      <form className="composer" onSubmit={(e) => { e.preventDefault(); send(text) }}>
+      {!info.data?.demo && <form className="composer" onSubmit={(e) => { e.preventDefault(); send(text) }}>
         <label className="sr-only" htmlFor="coach-input">{t('Message to the coach')}</label>
         <textarea id="coach-input" ref={ta} rows={1} value={text} placeholder={t('Write to the coach…')} onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text) } }} />
         <button className="btn btn-primary btn-icon" disabled={busy || !text.trim()} aria-label={t('Send')}><Icon name="send" /></button>
-      </form>
+      </form>}
     </div>
   )
 }

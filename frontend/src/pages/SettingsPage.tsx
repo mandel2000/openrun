@@ -43,7 +43,7 @@ function ConnHead({ icon, title, status, tone = 'good' }: { icon: IconName; titl
   )
 }
 
-export function GarminCard({ onChange }: { onChange: () => void }) {
+export function GarminCard({ onChange, demo }: { onChange: () => void; demo?: boolean }) {
   const [st, setSt] = useState<GStatus | null>(null)
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
@@ -59,6 +59,13 @@ export function GarminCard({ onChange }: { onChange: () => void }) {
     try { setSt(await fn()); onChange() } catch (e) { setMsg({ tone: 'bad', text: (e as Error).message }) } finally { setBusy(false) }
   }
 
+  if (demo)
+    return (
+      <div className="card">
+        <ConnHead icon="watch" title="Garmin Connect" status={t('Off in the demo')} tone="warn" />
+        <p className="small text-2" style={{ marginTop: 10, marginBottom: 0 }}>{t('In your own install, sign in with your Garmin account to sync runs, sleep and HRV and send workouts to your watch.')}</p>
+      </div>
+    )
   return (
     <div className="card">
       <ConnHead icon="watch" title="Garmin Connect" status={st ? (st.connected ? t('Connected') : t('Disconnected')) : null} tone={st?.connected ? 'good' : 'warn'} />
@@ -643,9 +650,12 @@ function AccountCard({ me, onMe }: { me: Me; onMe: () => void }) {
     <div className="card stack">
       <ConnHead icon="user" title={t('Your account')} status={me.is_admin ? t('Administrator') : null} />
       <p className="small text-2" style={{ margin: 0 }}>{t('Username')} <b>{me.username}</b>. {t('Your data, your plan, your Garmin and your coach chat are yours alone.')}</p>
-      {acc.data?.ai && (
+      {acc.data?.ai && !me.is_demo && (
         <div className="small text-2">{t('AI coach today:')} <b className="num">{acc.data.ai.count}</b> {acc.data.ai.limit != null ? t('of {n} requests (resets daily)', { n: acc.data.ai.limit }) : t('requests (no limit)')}</div>
       )}
+      {me.is_demo ? (
+        <button type="button" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => api.post('/api/auth/logout').then(() => { window.location.hash = ''; window.location.reload() })}>{t('Sign out')}</button>
+      ) : (<>
       <div className="row" style={{ alignItems: 'flex-end' }}>
         <label className="field grow">{t('Name')}<input value={name} onChange={(e) => setName(e.target.value)} /></label>
         <button className="btn btn-sm" disabled={!name.trim() || name === me.name} onClick={() => save({ name }, t('Name saved'))}>{t('Save')}</button>
@@ -662,6 +672,7 @@ function AccountCard({ me, onMe }: { me: Me; onMe: () => void }) {
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => api.post('/api/auth/logout').then(() => { window.location.hash = ''; window.location.reload() })}>{t('Sign out')}</button>
         </div>
       </form>
+      </>)}
       {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
     </div>
   )
@@ -774,7 +785,7 @@ export default function SettingsPage({ onChange, me, onMe }: { onChange: () => v
   return (
     <div className="stack" style={{ maxWidth: 820 }}>
       {me && <AccountCard me={me} onMe={onMe} />}
-      <GarminCard onChange={onChange} />
+      <GarminCard onChange={onChange} demo={!!me?.is_demo} />
       <HelioCard />
       <AutomationCard />
       <NotificationsCard />

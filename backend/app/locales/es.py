@@ -315,4 +315,10 @@ ES = {
     "uphill": "subida",
     "downhill": "bajada",
     "flat": "llano",
+    "Autumn 10K": "10K de otoño",
+    "Spring 10K": "10K de primavera",
+    "City Half Marathon": "Medio maratón de la ciudad",
+    "Half marathon in {weeks} weeks": "Media maratón en {weeks} semanas",
+    "Not available in the demo": "No disponible en la demo",
+    "Club 10K": "10K del club",
 }
