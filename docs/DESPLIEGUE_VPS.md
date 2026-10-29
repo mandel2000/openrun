@@ -29,6 +29,7 @@ El contenedor corre sin root (uid 1000), con `TZ=Europe/Madrid` y healthcheck en
 | `OPENRUN_PUBLIC_URL` | Recomendada | `https://run.tudominio.com` (se muestra en *Ajustes* y en la config del MCP) |
 | `ANTHROPIC_API_KEY` / `OPENRUN_PROVIDER` / `GEMINI_API_KEY` / `NVIDIA_API_KEY` / `OPENRUN_MODEL` | No | Coach IA dentro de la app (`OPENRUN_PROVIDER=nvidia` para el plan gratuito de NVIDIA) |
 | `OPENRUN_MODEL_FALLBACKS` / `OPENRUN_REASONING_EFFORT` | No | Modelos de respaldo (separados por comas) y nivel de razonamiento; con NVIDIA por defecto `openai/gpt-oss-20b` y `low` (primera palabra en ~5 s en vez de 15–70 s) |
+| `OPENRUN_AI_DAILY_LIMIT` | No | Peticiones diarias al coach IA por usuario (por defecto 40; los administradores sin límite). Se cambia por usuario en *Ajustes › Usuarios* |
 | `OPENRUN_DATABASE_URL` | No | Base de datos externa (p. ej. `postgresql+psycopg://…`); por defecto SQLite en `/data` |
 
 En la imagen ya vienen `OPENRUN_TRUST_LOCAL=0` (detrás de un proxy nada es «local») y `OPENRUN_TRUST_PROXY=1` (IP real y HTTPS desde las cabeceras de Traefik).
@@ -46,7 +47,8 @@ python3 -c "import secrets; print(secrets.token_urlsafe(40))"   # API token
 - Al actualizar desde la versión de un solo usuario, el primer arranque crea el administrador (usuario 1, `OPENRUN_ADMIN_USER`) y le asigna todos los datos existentes. Antes guarda una copia completa en `/data/openrun-pre-multiuser.db`, y la migración va en una sola transacción.
 - **Invitar a alguien**: *Ajustes › Usuarios › Crear invitación* → copia el enlace (`https://…/#invitacion=…`) y envíaselo. Sirve una sola vez y caduca en 14 días. Al abrirlo, la persona elige usuario y contraseña (mínimo 10 caracteres) y conecta su Garmin en *Ajustes*.
 - El administrador puede borrar cuentas (con todos sus datos).
-- El coach IA (y su API key) es común: cada usuario habla con él sobre sus propios datos. Con NVIDIA gratis el límite es de ~40 peticiones por minuto entre todos.
+- El coach IA (y su API key) es común: cada usuario habla con él sobre sus propios datos. Con NVIDIA gratis el límite es de ~40 peticiones por minuto entre todos. Cada usuario tiene un máximo diario de peticiones (chat, resumen semanal, explicaciones de readiness): `OPENRUN_AI_DAILY_LIMIT`, editable por usuario en *Ajustes › Usuarios*.
+- Un usuario nuevo ve una bienvenida guiada en *Hoy* hasta que crea su plan o la salta.
 - El API token del MCP actúa como el administrador.
 
 ## Notificaciones
@@ -64,6 +66,13 @@ Avisos: entreno del día tras la rutina de la mañana, análisis de cada carrera
 2. En Coolify, app OpenRun › *Domains*: cambia `https://openrun.<server-ip>.sslip.io` por `https://run.tudominio.com` (puedes dejar los dos separados por coma durante el cambio). Traefik pide el certificado de Let's Encrypt solo.
 3. Cambia la variable `OPENRUN_PUBLIC_URL` a la nueva dirección y redespliega.
 4. En el móvil, abre la nueva dirección, inicia sesión, vuelve a añadirla a la pantalla de inicio y reactiva las notificaciones (son por dominio).
+
+## Monitorización
+
+- `GET /api/health` responde siempre (lo usa el healthcheck del contenedor). `GET /api/health?deep=1` comprueba además la base de datos, que el planificador interno siga ejecutándose y que la última copia de seguridad no haya fallado; si algo va mal responde 503 con la lista de problemas.
+- GitHub Actions (`.github/workflows/uptime.yml`) llama a `?deep=1` cada hora. Si falla 3 veces seguidas, la ejecución falla y GitHub manda un email al dueño del repositorio. Para recibirlo también en el móvil: instala la app **ntfy**, suscríbete a un tema con un nombre largo y aleatorio y guárdalo como *secret* `NTFY_TOPIC` del repositorio. La dirección se cambia con la variable `OPENRUN_URL` del repositorio.
+- Si falla la copia de seguridad diaria, los administradores reciben una notificación push.
+- `.github/workflows/ci.yml` pasa los tests del backend y compila el frontend en cada push.
 
 ## Seguridad
 

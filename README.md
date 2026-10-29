@@ -5,11 +5,13 @@ Alternativa open source y local a Runna: planes de running basados en evidencia,
 - **Planes** 5K / 10K / medio / maratón / base: periodización, ritmos VDOT (Daniels), 80/20, progresión ≤10 % con descargas, taper, fuerza.
 - **Garmin Forerunner 265**: descarga actividades, HRV, sueño y FC reposo; envía entrenos estructurados (con objetivos de ritmo) al calendario → reloj.
 - **Helio Strap**: sensor de FC del 265 en carrera, medición de HRV matinal por Bluetooth desde el navegador e importación del export de Zepp.
-- **Readiness**: ajusta el entreno del día según HRV/FC reposo/sueño. Botón "No me encuentro al 100 %".
+- **Readiness 0–100**: HRV, sueño, FC en reposo, carga (forma/ACWR) y un check-in diario de dos toques (sensación y piernas). Si llegas fatigado propone suavizar el entreno de hoy (aceptas o mantienes) y el coach explica por qué. Botón "No me encuentro al 100 %".
+- **Reajuste del plan**: una sesión clave perdida se propone en el siguiente hueco sin juntar días duros (las suaves se dejan pasar); una carrera hecha uno o dos días tarde cuenta para la sesión perdida; "He estado parado N días" (enfermedad, lesión, viaje) cierra lo perdido, recalcula ritmos si hace falta y hace la vuelta progresiva.
 - **Análisis post-entreno**: cada serie real (vueltas de Garmin) frente a lo planificado; si 2 de las 3 últimas sesiones de calidad salen más fáciles o más duras, ajusta el VDOT ±0,5 automáticamente (como *Pace Insights*).
 - **Ajuste por calor**: previsión de Open-Meteo a tu hora de entreno → ritmos más lentos según temperatura + punto de rocío.
 - **Rutina diaria automática** (06:30 por defecto): sync Garmin → análisis → ritmos → calor → readiness → próximos 7 días al reloj (solo lo que cambió).
-- **Varios usuarios**: cada persona con su cuenta (por invitación), su plan, su Garmin, su coach y sus datos, aislados.
+- **Varios usuarios**: cada persona con su cuenta (por invitación), su plan, su Garmin, su coach y sus datos, aislados. Bienvenida guiada (perfil → Garmin o archivos → objetivo y plan con su nivel real) y límite diario de peticiones al coach IA por usuario.
+- **Sin Garmin**: sube carreras en .fit / .gpx / .tcx de cualquier reloj o el export de Strava; tienen mapa, gráficas, parciales y cuentan para el plan.
 - **App en el móvil** (PWA instalable) con **notificaciones push** propias: entreno del día, análisis de cada carrera al sincronizar y resumen semanal.
 - **Arrastrar y soltar** entrenos entre días en el plan (ratón o pulsación larga en el móvil): intercambia con lo que hubiera, reprograma el reloj y avisa si quedan dos días duros seguidos.
 - **Estrategia de carrera**: ritmo km a km a esfuerzo constante sobre el perfil real (GPX/TCX/KML o enlace; altitud del terreno si falta), salida prudente, calor previsto el día de la carrera, geles e hidratos, mapa, y entreno de carrera en el reloj con un paso por km. Perfil aproximado de la Behobia incluido.
