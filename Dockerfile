@@ -8,7 +8,7 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.13-slim
+FROM python:3.15-slim
 LABEL org.opencontainers.image.title="OpenRun" \
       org.opencontainers.image.description="Open-source, evidence-based running coach: plans, Garmin, HRV readiness and an AI coach" \
       org.opencontainers.image.source="https://github.com/mandel2000/openrun" \
