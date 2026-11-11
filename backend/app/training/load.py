@@ -138,7 +138,8 @@ def _score(out: Readiness, rows: list[dict], today: dt.date, load_today: dict | 
     if len(base) >= 14 and recent:
         mu, sd = statistics.mean(base), max(statistics.pstdev(base), 0.03)
         z = 0.5 * (statistics.mean(recent) - mu) / sd + 0.5 * (recent[-1] - mu) / sd
-        comps.append({"key": "hrv", "label": "HRV", "score": _clip(70 + 20 * z), "value": f"{math.exp(recent[-1]):.0f} ms"})
+        where = _("below your normal") if z < -0.5 else _("above your normal") if z > 0.5 else _("normal")
+        comps.append({"key": "hrv", "label": "HRV", "score": _clip(70 + 20 * z), "value": f"{math.exp(recent[-1]):.0f} ms · {where}"})
     elif last("hrv_status") in GARMIN_HRV:
         comps.append({"key": "hrv", "label": "HRV", "score": GARMIN_HRV[last("hrv_status")], "value": str(last("hrv_status")).lower()})
     if last("sleep_score") is not None:
@@ -149,13 +150,16 @@ def _score(out: Readiness, rows: list[dict], today: dt.date, load_today: dict | 
     rhr_base = [w["rest_hr"] for w in rows if w.get("rest_hr") and w["date"] >= (today - dt.timedelta(days=60)).isoformat()]
     if last("rest_hr") and len(rhr_base) >= 7:
         delta = last("rest_hr") - statistics.mean(rhr_base)
-        comps.append({"key": "rhr", "label": _("Resting HR"), "score": _clip(75 - 8 * delta), "value": f"{last('rest_hr'):.0f} " + _("bpm") + (f" ({round(delta):+d})" if round(delta) else "")})
+        comps.append({"key": "rhr", "label": _("Resting HR"), "score": _clip(75 - 8 * delta), "value": f"{last('rest_hr'):.0f} " + _("bpm") + (" · " + _("{n} above your usual", n=round(delta)) if round(delta) > 0
+                                                                     else " · " + _("{n} below your usual", n=-round(delta)) if round(delta) < 0 else " · " + _("normal"))})
     if load_today and load_today.get("tsb") is not None:
         tsb, acwr = load_today["tsb"], load_today.get("acwr")
         sc = 80 if tsb >= -5 else 75 + 2 * (tsb + 5)
         if acwr and acwr > 1.5:
             sc -= 15
-        comps.append({"key": "load", "label": _("Load"), "score": _clip(sc), "value": _("form") + f" {round(tsb):+d}" + (f" · ACWR {acwr:.2f}" if acwr else "")})
+        # plain words instead of TSB/ACWR: how hard the last days were compared with what you're used to
+        word = (_("rising fast") if acwr and acwr > 1.5 else _("fresh") if tsb >= -5 else _("normal") if tsb >= -20 else _("heavy"))
+        comps.append({"key": "load", "label": _("Recent training"), "score": _clip(sc), "value": word})
     feel = [w for w in rows if w["date"] == d0 and (w.get("feel") or w.get("legs"))]
     if feel:
         f = feel[-1]

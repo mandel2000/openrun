@@ -16,6 +16,12 @@ type View = {
 type WRow = { date: string; sleep_score?: number; rest_hr?: number; training_readiness?: number; body_battery?: number; hrv_rmssd?: number }
 
 const RLABEL = { green: t('Ready to train'), amber: t('Moderate fatigue'), red: t('Recover today'), unknown: t('Not enough data') }
+const RADVICE = {
+  green: t('You have recovered: train as planned.'),
+  amber: t('Some fatigue: do the session, but don’t push beyond the targets.'),
+  red: t('Your body needs to recover: go very easy or rest.'),
+  unknown: t('Sync your watch or do the check-in below to get a score.'),
+}
 const RICON = { green: 'check', amber: 'alert', red: 'x', unknown: 'heart' } as const
 const FEEL = [t('Awful'), t('Bad'), t('Normal'), t('Good'), t('Great')]
 const LEGS = [t('Very heavy'), t('Heavy'), t('Normal'), t('Fresh'), t('Very fresh')]
@@ -66,14 +72,14 @@ export default function ReadinessCard({ onChanged }: { onChanged: () => void }) 
 
   return (
     <div className="card">
-      <div className="card-head"><span className="micro">Readiness</span><a className="small" href="#ajustes">{t('Measure HRV')}</a></div>
+      <div className="card-head"><span className="micro">{t('How you are today')}</span><a className="small" href="#ajustes">{t('Measure HRV')}</a></div>
       <div className="row" style={{ gap: 14, flexWrap: 'nowrap' }}>
         <div className={`ring ready-${st}`} aria-label={r.score != null ? t('Score {n} out of 100', { n: r.score }) : undefined}>
           {r.score != null ? <b className="num" style={{ fontSize: 18 }}>{r.score}</b> : <Icon name={RICON[st]} size={24} />}
         </div>
         <div className="grow">
           <div style={{ fontWeight: 700, fontSize: 17 }} className={`ready-${st}`}>{RLABEL[st]}</div>
-          {r.hrv_7d && <div className="small muted num">HRV 7 d {r.hrv_7d} ms · {t('normal')} {r.swc_low}–{r.swc_high}</div>}
+          <div className="small text-2">{RADVICE[st]}</div>
         </div>
       </div>
 
@@ -127,11 +133,17 @@ export default function ReadinessCard({ onChanged }: { onChanged: () => void }) 
         </div>
       )}
 
-      {last && (
-        <div className="mini-stats" style={{ marginTop: 12, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-          <div><span className="micro">{t('Garmin readiness')}</span><b>{last.training_readiness ?? '–'}</b></div>
-          <div><span className="micro">Body Battery</span><b>{last.body_battery ?? '–'}</b></div>
-        </div>
+      {(last || r.hrv_7d) && (
+        <details className="details-plain" style={{ marginTop: 12 }}>
+          <summary className="small">{t('Details')}</summary>
+          {r.hrv_7d && <p className="small muted num" style={{ margin: '8px 0' }}>{t('HRV 7-day average {v} ms (your normal range {lo}–{hi} ms).', { v: r.hrv_7d, lo: r.swc_low ?? '–', hi: r.swc_high ?? '–' })}</p>}
+          {last && (
+            <div className="mini-stats" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+              <div><span className="micro">{t('Garmin readiness')}</span><b>{last.training_readiness ?? '–'}</b></div>
+              <div><span className="micro">Body Battery</span><b>{last.body_battery ?? '–'}</b></div>
+            </div>
+          )}
+        </details>
       )}
       <div className="row" style={{ marginTop: 12 }}>
         <button className="btn btn-sm btn-ghost" aria-expanded={more} onClick={() => setMore(!more)}>{t('Not feeling 100%?')}<Icon name="chevronDown" size={16} /></button>

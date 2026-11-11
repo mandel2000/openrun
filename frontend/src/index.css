@@ -435,3 +435,16 @@ body.dragging, body.dragging * { cursor: grabbing !important; -webkit-user-selec
 .choice { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px; text-align: left; border-radius: var(--r-md);
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
 .choice.on { border-color: var(--accent); background: var(--accent-soft); }
+
+/* activity rows: whole row opens the detail */
+.list-row.clickable { cursor: pointer; border-radius: var(--r-md); }
+.list-row.clickable:hover { background: var(--surface-2); }
+.list-row.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.act-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 2px; }
+.act-facts b { color: var(--text); }
+.mini-stats-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 520px) { .mini-stats-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.details-plain summary { cursor: pointer; color: var(--text-2); }
+.daycell .dkm { font-size: 11px; color: var(--text-2); min-height: 14px; white-space: nowrap; }
+.next-up { margin-top: 14px; width: 100%; text-align: left; background: var(--surface-2); border: 0; border-radius: var(--r-md); padding: 10px 12px; color: inherit; font: inherit; }
+.next-up .zbar { align-self: stretch; }

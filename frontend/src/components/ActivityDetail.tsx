@@ -9,7 +9,7 @@ const RouteMap = lazy(() => import('./RouteMap'))
 type Streams = Partial<Record<'t' | 'd' | 'hr' | 'speed' | 'gap' | 'ele' | 'cad' | 'power' | 'stride' | 'gct' | 'vo', (number | null)[]>>
 type Split = { km: number; distance_m: number; time_s: number; pace_s: number | null; hr: number | null; cad: number | null; gain_m: number }
 export type Detail = {
-  activity: { id: number; name?: string; distance_m?: number; duration_s?: number; avg_hr?: number; elevation_gain?: number }
+  activity: { id: number; name?: string; date?: string; start_time?: string; distance_m?: number; duration_s?: number; avg_hr?: number; max_hr?: number; elevation_gain?: number; avg_cadence?: number }
   has_streams: boolean; streams: Streams; coords: [number, number][]; splits: Split[]
   dynamics: { cadence: number | null; stride_cm: number | null; gct_ms: number | null; vertical_osc_cm: number | null; power_w: number | null }
 }
@@ -33,6 +33,36 @@ function smooth(v: (number | null)[], w = 5) {
   })
 }
 
+// total descent from the altitude stream, ignoring sub-metre GPS/baro jitter
+function descent(ele?: (number | null)[]) {
+  let down = 0, ref: number | null = null
+  for (const e of ele ?? []) {
+    if (e == null) continue
+    if (ref == null) { ref = e; continue }
+    if (e < ref - 1) { down += ref - e; ref = e } else if (e > ref + 1) ref = e
+  }
+  return Math.round(down)
+}
+
+function Summary({ d }: { d: Detail }) {
+  const a = d.activity
+  const pace = a.distance_m && a.duration_s ? a.duration_s / (a.distance_m / 1000) : null
+  const down = d.streams.ele ? descent(d.streams.ele) : 0
+  const cells: [string, React.ReactNode][] = [
+    [t('Distance'), a.distance_m ? <>{(a.distance_m / 1000).toFixed(2)} <small>km</small></> : '–'],
+    [t('Time'), fmtTime(a.duration_s)],
+    [t('Avg pace'), pace ? <>{fmtPace(pace)} <small>/km</small></> : '–'],
+    [t('Elevation gain'), a.elevation_gain != null || down ? <>↑{Math.round(a.elevation_gain ?? 0)}{down ? <small> ↓{down}</small> : null} <small>m</small></> : '–'],
+    [t('Avg HR'), a.avg_hr ? <>{Math.round(a.avg_hr)}{a.max_hr ? <small> / {Math.round(a.max_hr)} {t('max')}</small> : null}</> : '–'],
+    [t('Cadence'), a.avg_cadence ? <>{Math.round(a.avg_cadence)} <small>{t('spm')}</small></> : '–'],
+  ]
+  return (
+    <div className="mini-stats mini-stats-3">
+      {cells.map(([k, v]) => <div key={k}><span className="micro">{k}</span><b>{v}</b></div>)}
+    </div>
+  )
+}
+
 export default function ActivityDetail({ activityId }: { activityId: number }) {
   const [d, setD] = useState<Detail | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -54,7 +84,7 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
 
   if (err) return <Banner tone="bad">{err}</Banner>
   if (!d) return <div className="stack"><Skeleton h={220} /><Skeleton h={120} /></div>
-  if (!d.has_streams) return <Banner tone="info">{t('This activity has no detailed data (imported from a file or without GPS).')}</Banner>
+  if (!d.has_streams) return <div className="stack"><Summary d={d} /><Banner tone="info">{t('This activity has no detailed data (imported from a file or without GPS).')}</Banner></div>
 
   const n = Math.max(1, rows.length - 1)
   const coordIdx = hover != null && d.coords.length ? Math.round((hover / n) * (d.coords.length - 1)) : null
@@ -67,6 +97,7 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
 
   return (
     <div className="stack">
+      <Summary d={d} />
       {d.coords.length > 1 && (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <Suspense fallback={<Skeleton h={240} />}>
@@ -76,13 +107,19 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
           </Suspense>
         </div>
       )}
-      <div className="mini-stats">
-        {dy.cadence && <div><span className="micro">{t('Cadence')}</span><b>{Math.round(dy.cadence)} <small>{t('spm')}</small></b></div>}
-        {dy.stride_cm && <div><span className="micro">{t('Stride')}</span><b>{(dy.stride_cm / 100).toFixed(2)} <small>m</small></b></div>}
-        {dy.gct_ms && <div><span className="micro">{t('Ground contact')}</span><b>{Math.round(dy.gct_ms)} <small>ms</small></b></div>}
-        {dy.vertical_osc_cm && <div><span className="micro">{t('Vert. oscillation')}</span><b>{dy.vertical_osc_cm.toFixed(1)} <small>cm</small></b></div>}
-        {dy.power_w && <div><span className="micro">{t('Power')}</span><b>{Math.round(dy.power_w)} <small>W</small></b></div>}
-      </div>
+      {d.streams.ele && (
+        <div>
+          <div className="micro">{t('Elevation profile')}{d.activity.elevation_gain ? ` · ↑${Math.round(d.activity.elevation_gain)} m` : ''}</div>
+          <ResponsiveContainer width="100%" height={90}>
+            <AreaChart data={rows} {...common}>
+              {xAxis}
+              <YAxis stroke={c.muted} fontSize={11} tickLine={false} axisLine={false} width={44} domain={['dataMin - 5', 'dataMax + 5']} tickFormatter={(v) => `${Math.round(v)}`} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${Math.round(Number(v))} m`, t('Elevation')]} labelFormatter={(l) => `km ${l}`} />
+              <Area dataKey="ele" stroke={c.ele} fill={c.ele} fillOpacity={0.2} strokeWidth={1.5} isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
       <div>
         <div className="micro">{t('Pace')}</div>
         <ResponsiveContainer width="100%" height={120}>
@@ -101,29 +138,16 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
             <LineChart data={rows} {...common}>
               {xAxis}
               <YAxis stroke={c.muted} fontSize={11} tickLine={false} axisLine={false} width={44} domain={['dataMin - 5', 'dataMax + 5']} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v} ppm`, 'FC']} labelFormatter={(l) => `km ${l}`} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v} ${t('bpm')}`, t('HR')]} labelFormatter={(l) => `km ${l}`} />
               <Line dataKey="hr" stroke={c.hr} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
             </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-      {d.streams.ele && (
-        <div>
-          <div className="micro">{t('Elevation')}</div>
-          <ResponsiveContainer width="100%" height={90}>
-            <AreaChart data={rows} {...common}>
-              {xAxis}
-              <YAxis stroke={c.muted} fontSize={11} tickLine={false} axisLine={false} width={44} domain={['dataMin - 5', 'dataMax + 5']} tickFormatter={(v) => `${Math.round(v)}`} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${Math.round(Number(v))} m`, t('Elevation')]} labelFormatter={(l) => `km ${l}`} />
-              <Area dataKey="ele" stroke={c.ele} fill={c.ele} fillOpacity={0.2} strokeWidth={1.5} isAnimationActive={false} />
-            </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
       {d.splits.length > 0 && (
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Km</th><th className="n">{t('Pace')}</th><th></th><th className="n">{t('HR')}</th><th className="n hide-sm">{t('Cad.')}</th><th className="n">{t('Elev.')}</th></tr></thead>
+            <thead><tr><th>Km</th><th className="n">{t('Pace')}</th><th></th><th className="n">{t('HR')}</th><th className="n hide-sm">{t('Cad.')}</th><th className="n">{t('Climb')}</th></tr></thead>
             <tbody>
               {d.splits.map((x) => (
                 <tr key={x.km}>
@@ -139,6 +163,15 @@ export default function ActivityDetail({ activityId }: { activityId: number }) {
           </table>
         </div>
       )}
+      {(dy.stride_cm || dy.gct_ms || dy.vertical_osc_cm || dy.power_w) && (<div>
+        <div className="micro" style={{ marginBottom: 6 }}>{t('Running form')}</div>
+      <div className="mini-stats">
+                {dy.stride_cm && <div><span className="micro">{t('Stride')}</span><b>{(dy.stride_cm / 100).toFixed(2)} <small>m</small></b></div>}
+        {dy.gct_ms && <div><span className="micro">{t('Ground contact')}</span><b>{Math.round(dy.gct_ms)} <small>ms</small></b></div>}
+        {dy.vertical_osc_cm && <div><span className="micro">{t('Vert. oscillation')}</span><b>{dy.vertical_osc_cm.toFixed(1)} <small>cm</small></b></div>}
+        {dy.power_w && <div><span className="micro">{t('Power')}</span><b>{Math.round(dy.power_w)} <small>W</small></b></div>}
+      </div>
+      </div>)}
       <p className="small muted" style={{ margin: 0 }}>
         <Icon name="activity" size={13} /> {fmtTime(d.activity.duration_s)} · mapa © OpenStreetMap
       </p>
