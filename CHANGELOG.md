@@ -4,6 +4,16 @@ All notable changes to OpenRun are documented here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Changed
+- **Activities** is now its own section (it was the last tab of Progress), with 3 or 12 months of history and totals for distance, time and elevation gain. Each row shows distance, time, pace, climb and heart rate.
+- Every activity opens with a summary: distance, time, average pace, elevation gain and loss, average/max HR and cadence. The elevation profile comes right after the map.
+- Plain language instead of jargon: intensity words instead of Z1–Z6, *Fitness / Fatigue / Freshness / Load vs usual* instead of CTL / ATL / TSB / ACWR (with a one-line explanation), *How you are today* with advice instead of raw HRV numbers, and the plan header shows the estimated goal time instead of VDOT.
+- Today: on rest days the next workout is shown; the week strip shows the km of each day; *Send to watch* is hidden for past or completed workouts.
+- Mobile: Activities takes the Coach slot in the bottom bar; the coach is one tap away in the top bar.
+
+### Fixed
+- Today showed *Week 0/11* with no phase when there were workouts before the plan's first week.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added

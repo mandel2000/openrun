@@ -137,6 +137,9 @@ const ZONE_LEVEL: Record<string, number> = {
 }
 export const zoneLevel = (zone?: string | null) => (zone ? ZONE_LEVEL[zone] ?? 2 : 0)
 export const zoneVar = (lvl: number) => `var(--z${lvl})`
+// plain words for the intensity levels (instead of Z1…Z6)
+export const LEVEL_LABEL = [t('Strength'), t('Very easy'), t('Easy'), t('Steady'), t('Hard'), t('Very hard'), t('Sprint')]
+export const levelLabel = (lvl: number) => LEVEL_LABEL[lvl] ?? ''
 const TYPE_LEVEL: Record<string, number> = {
   recovery: 1, easy: 2, long: 2, strides: 2, shakeout: 1, progression: 3, hills: 5, tempo: 4, threshold: 4, cruise: 4,
   vo2max: 5, intervals: 5, reps: 6, repetition: 6, race_pace: 4, race: 5, strength: 0,

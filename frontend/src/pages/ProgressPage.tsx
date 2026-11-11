@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { api, daysBetween, DIST_LABEL, fmtDate, fmtPace, garminActivityUrl, iso, useApi, VERDICT } from '../api'
-import ActivityAnalysisSheet from '../components/ActivityAnalysis'
+import { api, daysBetween, DIST_LABEL, fmtDate, garminActivityUrl, iso, useApi, VERDICT } from '../api'
 import { Banner, Empty, Icon, Segmented, Skeleton, StatTile } from '../ui'
 import { t } from '../i18n'
 
-type Section = 'records' | 'pred' | 'load' | 'health' | 'acts'
+type Section = 'records' | 'pred' | 'load' | 'health'
 type PR = { time_s: number; time: string; pace: string; date: string; approx: boolean; name?: string; external_id?: string; source?: string }
 type Records = { records: Record<'all' | '1y' | '6m' | '1m', Record<string, PR>>; history_since: string | null; n_activities: number }
 type Times = Record<string, { seconds: number; time: string; pace: string }>
@@ -16,7 +15,6 @@ type Pred = {
 }
 type LoadPt = { date: string; load: number; ctl: number; atl: number; tsb: number; acwr: number | null }
 type WRow = { date: string; hrv_rmssd?: number; rest_hr?: number; sleep_score?: number }
-type Act = { id: number; date: string; name: string; sport: string; distance_m: number; duration_s: number; pace_s_km?: number; avg_hr?: number; trimp: number; training_effect?: number; external_id?: string; analysis?: { verdict: string | null } }
 
 const PR_KEYS = ['1k', 'mile', '5k', '10k', 'half', 'marathon']
 const PRED_KEYS = ['5k', '10k', 'half', 'marathon']
@@ -173,15 +171,23 @@ function LoadView() {
   const acwr = last?.acwr
   return (
     <div className="stack">
+      {last && (
+        <Banner tone={acwr && acwr > 1.5 ? 'bad' : acwr && acwr > 1.3 ? 'warn' : last.tsb < -20 ? 'warn' : 'info'}>
+          {acwr && acwr > 1.3 ? t('You have trained much more than usual this week. Watch for injury signs and keep the easy days easy.')
+            : last.tsb < -20 ? t('You are carrying quite a bit of fatigue. Normal in a hard block; make sure recovery weeks are respected.')
+              : last.tsb > 5 ? t('You are fresh: good for a race or a test. If it lasts weeks, you are losing fitness.')
+                : t('Load under control: you are building fitness without excess fatigue.')}
+        </Banner>
+      )}
       <div className="grid stats">
-        <StatTile label={t(t('Fitness (CTL 42 d)'))} value={last?.ctl ?? '–'} />
-        <StatTile label={t('Fatigue (ATL 7 d)')} value={last?.atl ?? '–'} />
-        <StatTile label={t('Form (TSB)')} value={last?.tsb ?? '–'} sub={t('−10 to +5: productive zone')} />
-        <StatTile label="ACWR 7:28" value={acwr ?? '–'} tone={acwr && acwr > 1.5 ? 'bad' : acwr && acwr > 1.3 ? 'warn' : ''} sub={t('Safe 0.8–1.3 (rough guide)')} />
-        <StatTile label={t('VDOT from HR')} value={est.data?.vdot ?? '–'} sub={est.data ? t('{n} runs · rough guide', { n: est.data.n_runs }) : t('Needs max/resting HR')} />
+        <StatTile label={t('Fitness')} value={last ? Math.round(last.ctl) : '–'} sub={t('Training of the last 6 weeks. Higher = fitter.')} />
+        <StatTile label={t('Fatigue')} value={last ? Math.round(last.atl) : '–'} sub={t('Training of the last 7 days.')} />
+        <StatTile label={t('Freshness')} value={last ? Math.round(last.tsb) : '–'} sub={t('Fitness − fatigue. Between −10 and +5 is ideal.')} />
+        <StatTile label={t('Load vs usual')} value={acwr ?? '–'} tone={acwr && acwr > 1.5 ? 'bad' : acwr && acwr > 1.3 ? 'warn' : ''} sub={t('Last week ÷ last 4 weeks. Safe: 0.8–1.3.')} />
+        <StatTile label={t('Level from your HR')} value={est.data?.vdot ?? '–'} sub={est.data ? t('VDOT estimated from {n} runs (rough guide)', { n: est.data.n_runs }) : t('Needs max/resting HR')} />
       </div>
       <div className="card">
-        <div className="card-head"><span className="micro">{t('Training load (TRIMP)')}</span></div>
+        <div className="card-head"><span className="micro">{t('Fitness, fatigue and freshness')}</span></div>
         {series.length === 0 ? <Empty icon="activity" title={t('No load yet')}>{t('Sync Garmin.')}</Empty> : (
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={series} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
@@ -191,9 +197,9 @@ function LoadView() {
               <ReferenceArea y1={-10} y2={5} fill={c.good} fillOpacity={0.08} />
               <Tooltip {...tip} />
               <Legend />
-              <Line dataKey="ctl" name={t(t('Fitness (CTL)'))} stroke={c.s2} strokeWidth={2} dot={false} />
-              <Line dataKey="atl" name={t('Fatigue (ATL)')} stroke={c.s1} strokeWidth={2} dot={false} />
-              <Line dataKey="tsb" name={t('Form (TSB)')} stroke={c.s3} strokeWidth={2} dot={false} />
+              <Line dataKey="ctl" name={t('Fitness')} stroke={c.s2} strokeWidth={2} dot={false} />
+              <Line dataKey="atl" name={t('Fatigue')} stroke={c.s1} strokeWidth={2} dot={false} />
+              <Line dataKey="tsb" name={t('Freshness')} stroke={c.s3} strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -245,76 +251,6 @@ function HealthView() {
   )
 }
 
-function UploadActivity({ onDone }: { onDone: (msg: string) => void }) {
-  const [busy, setBusy] = useState(false)
-  const upload = async (files: FileList) => {
-    setBusy(true)
-    const fd = new FormData()
-    Array.from(files).forEach((f) => fd.append('files', f))
-    try {
-      const { job } = await api.post<{ job: string }>('/api/import/history', fd)
-      for (let i = 0; i < 120; i++) {
-        await new Promise((r) => setTimeout(r, 600))
-        const j = await api.get<{ state: string; error: string | null; stats: { imported?: number; duplicates?: number } }>(`/api/import/history/${job}`)
-        if (j.state === 'error') throw new Error(j.error ?? t('Import failed'))
-        if (j.state === 'done') {
-          onDone(j.stats.imported ? (j.stats.imported > 1 ? t('{n} activities uploaded.', { n: j.stats.imported }) : t('1 activity uploaded.')) : j.stats.duplicates ? t('That activity was already there.') : t('No runs found in the file.'))
-          return
-        }
-      }
-    } catch (e) { onDone(`Error: ${(e as Error).message}`) } finally { setBusy(false) }
-  }
-  return (
-    <label className={`btn btn-sm${busy ? ' disabled' : ''}`} title={t('.fit, .gpx or .tcx files from any watch or app')}>
-      <Icon name="upload" size={16} />{busy ? t('Uploading…') : t('Upload activity')}
-      <input type="file" multiple accept=".fit,.gpx,.tcx,.gz,.zip" hidden disabled={busy} onChange={(e) => { if (e.target.files?.length) upload(e.target.files); e.target.value = '' }} />
-    </label>
-  )
-}
-
-function ActivitiesView() {
-  const { data, loading, reload } = useApi<Act[]>('/api/activities?days=120')
-  const [upMsg, setUpMsg] = useState<string | null>(null)
-  const [f, setF] = useState<'running' | 'strength_training' | 'all'>('running')
-  const [open, setOpen] = useState<Act | null>(null)
-  if (loading && !data) return <Skeleton h={320} />
-  const list = (data ?? []).filter((a) => f === 'all' || a.sport === f)
-  return (
-    <div className="card">
-      <div className="card-head">
-        <Segmented label={t('Type')} value={f} onChange={setF} options={[['running', t('Running')], ['strength_training', t('Strength')], ['all', t('All')]]} />
-        <UploadActivity onDone={(m) => { setUpMsg(m); reload() }} />
-      </div>
-      {upMsg && <div style={{ marginBottom: 10 }}><Banner tone={upMsg.startsWith('Error') ? 'bad' : 'ok'}>{upMsg}</Banner></div>}
-      {list.length === 0 ? <Empty icon="activity" title={t('Nothing yet')} /> : (
-        <div className="list">
-          {list.map((a) => {
-            const url = garminActivityUrl(a.external_id)
-            return (
-              <div key={a.id} className="list-row">
-                <Icon name={a.sport === 'running' ? 'activity' : a.sport.includes('strength') ? 'dumbbell' : 'heart'} className="muted" />
-                <div className="grow">
-                  {a.sport === 'running'
-                    ? <button className="title" style={{ background: 'none', border: 0, padding: 0, color: 'var(--link)', cursor: 'pointer', textAlign: 'left', font: 'inherit', fontWeight: 600 }} onClick={() => setOpen(a)}>{a.name}</button>
-                    : <div className="title">{a.name}</div>}
-                  {a.analysis?.verdict && <span className={`chip ${VERDICT[a.analysis.verdict][1]}`} style={{ height: 22, fontSize: 12, marginTop: 4 }}>{VERDICT[a.analysis.verdict][0]}</span>}
-                  <div className="meta num">
-                    {fmtDate(a.date)}{a.distance_m ? ` · ${(a.distance_m / 1000).toFixed(1)} km` : ''} · {Math.round(a.duration_s / 60)}′
-                    {a.pace_s_km && a.sport === 'running' ? ` · ${fmtPace(a.pace_s_km)}/km` : ''}{a.avg_hr ? ` · ${Math.round(a.avg_hr)} ppm` : ''}
-                    {a.training_effect ? ` · TE ${a.training_effect.toFixed(1)}` : ''}
-                  </div>
-                </div>
-                {url && <a className="btn btn-ghost btn-icon" href={url} target="_blank" rel="noreferrer" aria-label={t('View on Garmin Connect')}><Icon name="external" size={18} /></a>}
-              </div>
-            )
-          })}
-        </div>
-      )}
-      {open && <ActivityAnalysisSheet activityId={open.id} title={open.name} laps={!!open.analysis || !!open.external_id?.startsWith('garmin:')} onClose={() => setOpen(null)} />}
-    </div>
-  )
-}
-
 type Insights = { pending: { from: number; to: number; reason: string } | null; log: { date: string; from: number; to: number; reason: string }[]
   sessions: { date: string; verdict: string }[]; auto: boolean }
 
@@ -351,18 +287,17 @@ function PaceInsightsCard({ onApplied }: { onApplied: () => void }) {
 
 export default function ProgressPage() {
   const [sec, setSec] = useState<Section>(() => {
-    try { return (localStorage.getItem('progress-sec') as Section) || 'records' } catch { return 'records' }
+    try { const v = localStorage.getItem('progress-sec') as Section; return ['records', 'pred', 'load', 'health'].includes(v) ? v : 'records' } catch { return 'records' }
   })
   useEffect(() => { try { localStorage.setItem('progress-sec', sec) } catch { /* private mode */ } }, [sec])
   return (
     <div className="stack">
       <Segmented label={t('Section')} value={sec} onChange={setSec}
-        options={[['records', t('Records')], ['pred', t('Predictions')], ['load', t('Load')], ['health', t('Health')], ['acts', t('Activities')]]} />
+        options={[['records', t('Records')], ['pred', t('Predictions')], ['load', t('Load')], ['health', t('Health')]]} />
       {sec === 'records' && <RecordsView />}
       {sec === 'pred' && <PredictionsView />}
       {sec === 'load' && <LoadView />}
       {sec === 'health' && <HealthView />}
-      {sec === 'acts' && <ActivitiesView />}
     </div>
   )
 }

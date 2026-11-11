@@ -1696,7 +1696,7 @@ def _fallback_comment(f: dict) -> str:
         parts.append(_("You ran {km} km in {n} runs.", km=f["km"], n=f["carreras"]))
     c = f["carga"]
     if c.get("acwr"):
-        parts.append(_("Load is rising fast (ACWR > 1.3): prioritise sleep and don't add extras.") if c["acwr"] > 1.3
+        parts.append(_("You trained a lot more than usual this week: prioritise sleep and don't add extras.") if c["acwr"] > 1.3
                      else _("Stable load.") if c["acwr"] >= 0.8 else _("Easy week: a good time to absorb the training."))
     if f["proxima_semana"]["clave"]:
         parts.append(_("Next week, what matters: ") + ", ".join(f["proxima_semana"]["clave"]) + ".")

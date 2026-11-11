@@ -28,7 +28,7 @@ export function Steps({ steps, hl, prefix = '' }: { steps: Step[]; hl?: string |
           <li key={i} className={hl === path ? 'hl' : ''}>
             <span className="stepbar" style={{ ['--zc' as string]: zoneVar(lvl) }} />
             <div className="grow">
-              <div><strong>{KIND[s.kind]}</strong> · {dur(s)}{s.zone ? <span className="muted"> · {ZONE_LABEL[s.zone] ?? s.zone} (Z{lvl})</span> : null}</div>
+              <div><strong>{KIND[s.kind]}</strong> · {dur(s)}{s.zone ? <span className="muted"> · {ZONE_LABEL[s.zone] ?? s.zone}</span> : null}</div>
               {s.pace_slow && s.pace_fast ? <div className="num" style={{ fontWeight: 600 }}>{fmtPace(s.pace_slow)}–{fmtPace(s.pace_fast)} /km</div> : null}
               {s.note ? <div className="muted small">{s.note}</div> : null}
             </div>

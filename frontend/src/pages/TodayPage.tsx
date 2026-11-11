@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { addDays, api, DAY_NAMES, type Weather, daysBetween, fmtDate, fmtTime, iso, PHASE_LABEL, useApi, workoutLevel, zoneVar, type Plan, type Race, type Workout } from '../api'
+import { addDays, api, DAY_NAMES, type Weather, daysBetween, fmtDate, fmtTime, iso, levelLabel, PHASE_LABEL, useApi, workoutLevel, zoneVar, type Plan, type Race, type Workout } from '../api'
 import ActivityAnalysisSheet from '../components/ActivityAnalysis'
 import StepProfile from '../components/StepProfile'
 import WorkoutDetail, { Steps, WorkoutMeta } from '../components/WorkoutDetail'
@@ -41,7 +41,7 @@ function WeatherChip({ date, w, onAdjusted }: { date: string; w: Workout; onAdju
   )
 }
 
-function Hero({ w, date, onOpen, onPushed }: { w: Workout | null; date: string; onOpen: (w: Workout) => void; onPushed: () => void }) {
+function Hero({ w, date, next, onOpen, onPushed }: { w: Workout | null; date: string; next?: Workout | null; onOpen: (w: Workout) => void; onPushed: () => void }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [an, setAn] = useState(false)
@@ -53,6 +53,17 @@ function Hero({ w, date, onOpen, onPushed }: { w: Workout | null; date: string; 
         <div className="micro">{label}</div>
         <h2 style={{ marginTop: 6 }}>{t('Rest')}</h2>
         <p className="text-2" style={{ marginTop: 6 }}>{t('Sleeping well and eating enough is training too. Adaptation happens during recovery.')}</p>
+        {next && (
+          <button className="list-row next-up" onClick={() => onOpen(next)}>
+            <span className="zbar" style={{ ['--zc' as string]: zoneVar(workoutLevel(next)) }} />
+            <div className="grow">
+              <div className="micro">{t('Next')}: {cap(fmtDate(next.date, { weekday: 'long', day: 'numeric', month: 'short' }))}</div>
+              <div className="title">{next.title}</div>
+              <div className="meta"><WorkoutMeta w={next} /></div>
+            </div>
+            <Icon name="chevronRight" size={16} />
+          </button>
+        )}
       </div>
     )
   const lvl = workoutLevel(w)
@@ -67,7 +78,7 @@ function Hero({ w, date, onOpen, onPushed }: { w: Workout | null; date: string; 
         </div>
       </div>
       <h2 style={{ marginTop: 6, fontSize: 28, lineHeight: '34px' }}>{w.title}</h2>
-      <div className="text-2 num" style={{ marginTop: 4 }}><WorkoutMeta w={w} /> · Z{lvl}</div>
+      <div className="text-2 num" style={{ marginTop: 4 }}><WorkoutMeta w={w} />{w.sport === 'running' ? ` · ${levelLabel(lvl)}` : ''}</div>
       {w.sport === 'running' && <div style={{ marginTop: 16 }}><StepProfile steps={w.steps} /></div>}
       {w.status !== 'done' && date >= iso(new Date()) && daysBetween(iso(new Date()), date) <= 2 && <WeatherChip date={date} w={w} onAdjusted={onPushed} />}
       {w.note && <div style={{ marginTop: 12 }}><Banner>{w.note}</Banner></div>}
@@ -81,7 +92,7 @@ function Hero({ w, date, onOpen, onPushed }: { w: Workout | null; date: string; 
           ? <button className="btn btn-primary" onClick={() => setAn(true)}><Icon name="activity" />{t('Actual vs plan')}</button>
           : <button className="btn btn-primary" onClick={() => onOpen(w)}>{t('View details')}</button>}
         {w.status === 'done' && w.activity_id && <button className="btn" onClick={() => onOpen(w)}>{t('View workout')}</button>}
-        {w.sport === 'running' && (
+        {w.sport === 'running' && w.status !== 'done' && date >= today && (
           <button className="btn" disabled={busy} onClick={async () => {
             setBusy(true)
             setErr(null)
@@ -115,6 +126,7 @@ function WeekStrip({ monday, byDate, sel, onSel }: { monday: string; byDate: Map
             aria-label={`${fmtDate(d, { weekday: 'long', day: 'numeric' })}: ${ws.map((w) => w.title).join(', ') || t('rest')}`}>
             <span className="dname">{dn}</span>
             <span className="dnum">{+d.slice(8)}</span>
+            <span className="dkm num">{runs.length ? `${Math.round(runs.reduce((a, w) => a + (w.distance_km || 0), 0))} km` : ws.length ? t('Gym') : ''}</span>
             <span className="bars">
               {ws.map((w) => <span key={w.id} className={w.extra ? 'extra' : ''} style={{ ['--zc' as string]: zoneVar(workoutLevel(w)) }} />)}
             </span>
@@ -149,8 +161,8 @@ function WeeklyReviewCard() {
       <div className="mini-stats" style={{ marginTop: 10 }}>
         <div><span className="micro">Km</span><b>{f.km}{f.km_plan ? <small> / {f.km_plan}</small> : null}</b></div>
         <div><span className="micro">{t('Sessions')}</span><b>{f.sesiones_plan ? `${f.hechas}/${f.sesiones_plan}` : f.carreras}</b></div>
-        <div><span className="micro">{t('Fitness (CTL)')}</span><b>{f.carga.ctl ?? '–'}{f.carga.ctl_cambio ? <small> {f.carga.ctl_cambio > 0 ? '+' : ''}{f.carga.ctl_cambio}</small> : null}</b></div>
-        <div><span className="micro">ACWR</span><b>{f.carga.acwr ?? '–'}</b></div>
+        <div title={t('Fitness built over the last 6 weeks (CTL)')}><span className="micro">{t('Fitness')}</span><b>{f.carga.ctl_cambio == null ? '–' : f.carga.ctl_cambio > 0.5 ? t('↑ improving') : f.carga.ctl_cambio < -0.5 ? t('↓ dropping') : t('→ stable')}</b></div>
+        <div title={t('Last 7 days compared with your usual 4 weeks (ACWR {v})', { v: f.carga.acwr ?? '–' })}><span className="micro">{t('Load vs usual')}</span><b>{f.carga.acwr == null ? '–' : f.carga.acwr > 1.3 ? t('High') : f.carga.acwr >= 0.8 ? t('Normal') : t('Low')}</b></div>
       </div>
       <p className="text-2" style={{ marginTop: 12, marginBottom: 0, whiteSpace: 'pre-wrap' }}>{data.comment}</p>
       {data.ai && <div className="small muted" style={{ marginTop: 6 }}><Icon name="sparkles" size={13} /> {t('AI coach comment')}</div>}
@@ -192,6 +204,7 @@ export default function TodayPage({ plan, reload, go }: { plan: Plan | null | un
   const dayWs = (byDate.get(selDay) ?? []).filter((w) => w.status !== 'skipped')
   const heroW = dayWs.find((w) => w.sport === 'running') ?? dayWs[0] ?? null
   const otherWs = dayWs.filter((w) => w !== heroW)
+  const nextW = heroW ? null : all.filter((w) => w.date > selDay && w.sport === 'running' && w.status !== 'skipped' && w.status !== 'done').sort((a, b) => a.date.localeCompare(b.date))[0]
   const nextA = races.data?.find((r) => r.priority === 'A' && r.days_to_go >= 0)
   const nextRace = nextA ?? races.data?.find((r) => r.days_to_go >= 0)
 
@@ -200,7 +213,9 @@ export default function TodayPage({ plan, reload, go }: { plan: Plan | null | un
       <div className="row spread">
         <div>
           <div className="text-2" style={{ fontWeight: 600 }}>{cap(fmtDate(today, { weekday: 'long', day: 'numeric', month: 'long' }))}</div>
-          {weekNow && plan && <div className="small muted">{t('Week {n}/{total}', { n: weekNow.index, total: plan.weeks.length })} · {PHASE_LABEL[weekNow.phase] ?? weekNow.phase}{weekNow.is_recovery ? ` · ${t('recovery week')}` : ''}</div>}
+          {weekNow && plan && (weekNow.index >= 1
+            ? <div className="small muted">{t('Week {n}/{total}', { n: weekNow.index, total: plan.weeks.filter((x) => x.index >= 1).length })} · {PHASE_LABEL[weekNow.phase] ?? weekNow.phase}{weekNow.is_recovery ? ` · ${t('recovery week')}` : ''}</div>
+            : <div className="small muted">{t('Before the plan')}</div>)}
         </div>
         {nextRace && (
           <a href="#carreras" className="chip" style={{ textDecoration: 'none' }}>
@@ -236,7 +251,7 @@ export default function TodayPage({ plan, reload, go }: { plan: Plan | null | un
           )}
           <div className="grid-2">
             <div className="stack">
-              <Hero w={heroW} date={selDay} onOpen={setPick} onPushed={reload} />
+              <Hero w={heroW} date={selDay} next={nextW} onOpen={setPick} onPushed={reload} />
               {otherWs.map((w) => (
                 <button key={w.id} className="card list-row" style={{ padding: '12px 16px' }} onClick={() => setPick(w)}>
                   <Icon name={w.sport === 'strength' ? 'dumbbell' : 'activity'} />

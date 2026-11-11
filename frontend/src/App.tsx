@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, type Plan } from './api'
 import CoachPage from './pages/CoachPage'
+import ActivitiesPage from './pages/ActivitiesPage'
 import PlanPage from './pages/PlanPage'
 import ProgressPage from './pages/ProgressPage'
 import RacesPage from './pages/RacesPage'
@@ -11,16 +12,17 @@ import { REPO_URL } from './project'
 import { Banner, Icon, type IconName } from './ui'
 import { getLang, LANGS, setLang, t, type Lang } from './i18n'
 
-export type Tab = 'hoy' | 'plan' | 'carreras' | 'progreso' | 'coach' | 'ajustes'
+export type Tab = 'hoy' | 'plan' | 'actividades' | 'carreras' | 'progreso' | 'coach' | 'ajustes'
 const TABS: [Tab, string, IconName][] = [
   ['hoy', t('Today'), 'home'],
   ['plan', t('Plan'), 'calendar'],
+  ['actividades', t('Activities'), 'activity'],
   ['carreras', t('Races'), 'flag'],
   ['progreso', t('Progress'), 'trophy'],
   ['coach', t('Coach'), 'message'],
   ['ajustes', t('Settings'), 'settings'],
 ]
-const TITLES: Record<Tab, string> = { hoy: t('Today'), plan: t('Plan'), carreras: t('Races'), progreso: t('Progress'), coach: t('AI coach'), ajustes: t('Settings') }
+const TITLES: Record<Tab, string> = { hoy: t('Today'), plan: t('Plan'), actividades: t('Activities'), carreras: t('Races'), progreso: t('Progress'), coach: t('AI coach'), ajustes: t('Settings') }
 
 const readHash = (): Tab => {
   const h = window.location.hash.slice(1).split('/')[0] as Tab
@@ -193,6 +195,7 @@ export default function App() {
           <h1>{TITLES[tab]}</h1>
           <div className="row">
             {!me?.is_demo && <SyncChip st={gst} onSynced={synced} />}
+            <a href="#coach" className="btn btn-ghost btn-icon mobile-only" aria-label={t('AI coach')}><Icon name="message" /></a>
             <a href="#ajustes" className="btn btn-ghost btn-icon mobile-only" aria-label={t('Settings')}><Icon name="user" /></a>
           </div>
         </header>
@@ -203,6 +206,7 @@ export default function App() {
             ? <Onboarding name={me?.name || ''} onFinish={() => { setOnb({ ...onb, needed: false, done: true }); reload() }} />
             : <TodayPage plan={plan} reload={reload} go={go} />)}
           {tab === 'plan' && <PlanPage plan={plan} reload={reload} />}
+          {tab === 'actividades' && <ActivitiesPage />}
           {tab === 'carreras' && <RacesPage plan={plan ?? null} reload={reload} />}
           {tab === 'progreso' && <ProgressPage />}
           {tab === 'coach' && <CoachPage onChange={reload} />}
@@ -210,7 +214,7 @@ export default function App() {
         </main>
       </div>
       <nav className="bottombar" aria-label={t('Main')}>
-        {TABS.filter(([k]) => k !== 'ajustes').map(([k, l, ic]) => (
+        {TABS.filter(([k]) => k !== 'ajustes' && k !== 'coach').map(([k, l, ic]) => (
           <button key={k} className="tabbtn" aria-current={tab === k ? 'page' : undefined} onClick={() => go(k)}>
             <Icon name={ic} size={24} />{l}
           </button>

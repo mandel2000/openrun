@@ -215,7 +215,7 @@ function WeekRow({ w, open, current, toggle, onPick, onAdd, dnd }: {
           <div className="row small muted" style={{ marginTop: 6, flexWrap: 'nowrap' }}>
             <div className="progress grow" style={{ maxWidth: 220 }}><span style={{ width: `${pct}%` }} /></div>
             <span className="num">{w.done_km}/{w.planned_km} km</span>
-            <span className="num" style={{ whiteSpace: 'nowrap' }}>· {w.low_intensity_pct}% Z1–2</span>
+            <span className="num" style={{ whiteSpace: 'nowrap' }}>· {t('{pct}% easy', { pct: w.low_intensity_pct })}</span>
           </div>
         </div>
         <Icon name="chevronDown" size={20} className="muted" />
@@ -258,7 +258,7 @@ function AddRunSheet({ week, date, onClose, onDone }: { week: PlanWeek; date?: s
   const [err, setErr] = useState<string | null>(null)
   return (
     <Sheet title={t('Add an easy run')} onClose={onClose} labelledBy="addrun-title">
-      <p className="small text-2">{t('Optional run at easy pace (Z2): adds aerobic volume without breaking 80/20. You\'ll be warned if the week grows more than 10% or tomorrow is a key session.')}</p>
+      <p className="small text-2">{t('Optional run at easy pace: adds aerobic volume without breaking 80/20. You\'ll be warned if the week grows more than 10% or tomorrow is a key session.')}</p>
       {free.length === 0 ? <Banner tone="info">{t('No free days left this week.')}</Banner> : (
         <div className="form-grid">
           <label className="field">{t('Day')}
@@ -347,13 +347,15 @@ export default function PlanPage({ plan, reload }: { plan: Plan | null | undefin
           <div style={{ minWidth: 0 }}>
             <h2>{plan.name}</h2>
             <div className="row small muted" style={{ marginTop: 6 }}>
-              <span className="chip">{plan.goal.toUpperCase()}</span>
+              <span className="chip">{Object.fromEntries(GOALS)[plan.goal] ?? plan.goal}</span>
               <span>{fmtDate(plan.start_date, { day: 'numeric', month: 'short' })} → {plan.race_date ? fmtDate(plan.race_date, { day: 'numeric', month: 'short' }) : fmtDate(plan.weeks[plan.weeks.length - 1].end, { day: 'numeric', month: 'short' })}</span>
-              <span className="num">{t('Starting VDOT')} {plan.vdot_start}{plan.vdot_goal ? ` → ${plan.vdot_goal}` : ''}</span>
+              {plan.predictions_start?.[plan.goal] && plan.predictions_end?.[plan.goal]
+                ? <span className="num" title={`VDOT ${plan.vdot_start}${plan.vdot_goal ? ` → ${plan.vdot_goal}` : ''}`}>{t('Estimated time')} {plan.predictions_start[plan.goal].time} → <b>{plan.predictions_end[plan.goal].time}</b></span>
+                : <span className="num">{t('Starting VDOT')} {plan.vdot_start}{plan.vdot_goal ? ` → ${plan.vdot_goal}` : ''}</span>}
             </div>
           </div>
           <div className="row">
-            {firstUpcoming && <button className="btn btn-primary" disabled={busy} onClick={() => pushWeek(firstUpcoming)}><Icon name="watch" />{t('Send week {n} to watch', { n: firstUpcoming.index })}</button>}
+            {firstUpcoming && <button className="btn btn-primary" disabled={busy} onClick={() => pushWeek(firstUpcoming)}><Icon name="watch" />{firstUpcoming.index >= 1 ? t('Send week {n} to watch', { n: firstUpcoming.index }) : t('Send this week to watch')}</button>}
             <button className="btn" onClick={() => setCreating(true)}>{t('New plan')}</button>
           </div>
         </div>
