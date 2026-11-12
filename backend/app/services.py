@@ -1089,6 +1089,7 @@ DEFAULT_SETTINGS = {
     "notify_morning": True,  # push: today's session after the morning routine
     "notify_analysis": True,  # push: post-run analysis when a run syncs
     "notify_weekly": True,   # push: Monday weekly review
+    "tour_seen": False,      # the app tour (frontend) was shown
 }
 
 

@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { api, fmtDate, useApi } from '../api'
 import type { Me } from '../App'
 import { DONATE_URL, REPO_URL } from '../project'
-import { Banner, Icon, Segmented, type IconName } from '../ui'
+import { Banner, Icon, Segmented, Sheet, type IconName } from '../ui'
 import { getLang, LANGS, locale, setLang, t, type Lang } from '../i18n'
+import { isIOS, isStandalone } from '../device'
+import PrivacySheet from '../components/Privacy'
+import { InstallGuide } from '../components/Tour'
 
 type Athlete = { name: string; sex: string; age: number | null; max_hr: number | null; rest_hr: number | null; lthr: number | null; vdot: number | null; vdot_source: string | null; hr_zones?: { zone: number; low: number; high: number }[] }
 type GStatus = { connected: boolean; name?: string; needs_mfa?: boolean; error?: string; last_sync?: string | null }
@@ -88,6 +91,7 @@ export function GarminCard({ onChange, demo }: { onChange: () => void; demo?: bo
           </>
         ) : st?.needs_mfa ? (
           <form className="row" style={{ alignItems: 'flex-end' }} onSubmit={(e) => { e.preventDefault(); go(() => api.post('/api/garmin/mfa', { code })) }}>
+            <p className="small text-2" style={{ width: '100%', margin: 0 }}>{t('Garmin has sent a code to your email (check spam). Type it here:')}</p>
             <label className="field" style={{ maxWidth: 200 }}>{t('Verification code')}
               <input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} />
             </label>
@@ -95,13 +99,14 @@ export function GarminCard({ onChange, demo }: { onChange: () => void; demo?: bo
           </form>
         ) : (
           <form onSubmit={(e) => { e.preventDefault(); go(() => api.post('/api/garmin/login', { email, password: pw })) }}>
+            <p className="small text-2" style={{ marginTop: 0 }}>{t('Use the same email and password as in the Garmin Connect app. If Garmin sends you a code by email, you\'ll enter it in the next step.')}</p>
             <p className="small muted">{t('Your password is not stored: only the session tokens, in the server\'s data folder. Unofficial Garmin API.')}</p>
             <div className="form-grid">
               <label className="field">{t('Garmin Connect email')}
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" data-1p-ignore data-lpignore="true" required />
               </label>
               <label className="field">{t('Password')}
-                <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" />
+                <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="off" data-1p-ignore data-lpignore="true" required />
               </label>
             </div>
             <button className="btn btn-primary" style={{ marginTop: 12 }} disabled={busy}>{busy ? t('Connecting…') : t('Connect')}</button>
@@ -383,7 +388,7 @@ function CopyBlock({ text }: { text: string }) {
   )
 }
 
-function CoachCard() {
+function CoachCard({ admin }: { admin: boolean }) {
   const { data } = useApi<CoachInfo>('/api/coach/info')
   const [tab, setTab] = useState<'mcp' | 'nvidia' | 'gemini' | 'ollama' | 'api' | null>(null)
   const [token, setToken] = useState<string | null>(null)
@@ -399,6 +404,22 @@ function CoachCard() {
       : { command: `${t('<path to repo>')}/backend/.venv/bin/python`, args: ['-m', 'app.mcp_server'],
           env: { PYTHONPATH: `${t('<path to repo>')}/backend`, OPENRUN_URL: data.mcp.url, OPENRUN_API_TOKEN: tk } }
   const claudeCfg = JSON.stringify({ mcpServers: { openrun: server } }, null, 2)
+  if (!admin)
+    return (
+      <div className="card">
+        <ConnHead icon="sparkles" title={t('AI coach')} status={data.configured ? t('ready') : t('not configured')} tone={data.configured ? 'good' : 'warn'} />
+        <p className="small text-2" style={{ marginTop: 10 }}>{t('Ask the coach in the Coach tab. It knows your plan, your runs and how you are, and can change workouts for you.')}</p>
+        <details>
+          <summary className="small">{t('Advanced: use your data from Claude Desktop or Gemini CLI (MCP)')}</summary>
+          <div className="small" style={{ marginTop: 8 }}>
+            <p className="muted">{t('OpenRun runs on a server: the MCP server runs on your computer and talks to it with your personal token.')}</p>
+            <McpToken onToken={setToken} />
+            {data.mcp.remote && <><Segmented label={t('How to run the MCP server')} value={how} onChange={setHow} options={[['docker', t('With Docker (nothing else to install)')], ['clone', t('From a clone of the repo')]]} /><div style={{ height: 10 }} /></>}
+            <CopyBlock text={claudeCfg} />
+          </div>
+        </details>
+      </div>
+    )
   return (
     <div className="card">
       <ConnHead icon="sparkles" title={t('AI coach')} status={`${data.provider} · ${data.configured ? t('ready') : t('not configured')}`} tone={data.configured ? 'good' : 'warn'} />
@@ -474,7 +495,7 @@ function summarize(step: { step: string; ok: boolean; result?: unknown; error?: 
   return 'ok'
 }
 
-function AutomationCard() {
+function AutomationCard({ selfHost }: { selfHost: boolean }) {
   const { data: st, setData } = useApi<Settings>('/api/settings')
   const log = useApi<DailyLog>('/api/daily/log')
   const [busy, setBusy] = useState(false)
@@ -487,8 +508,10 @@ function AutomationCard() {
   return (
     <div className="card">
       <ConnHead icon="zap" title={t('Daily automation')} status={st.auto_sync ? t('Daily at {time}', { time: st.sync_time }) : t('Off')} tone={st.auto_sync ? 'good' : 'warn'} />
-      <p className="small text-2" style={{ marginTop: 10 }}>{t('Every morning: sync Garmin → analyse your workouts → adjust paces → adapt for heat and readiness → send the next 7 days to the watch (only what changed). If the computer was off at that time, it runs when OpenRun starts.')}</p>
-      <Toggle label={t('Daily routine')} help={t('Needs OpenRun running (see “Start automatically” below).')} checked={st.auto_sync} onChange={(v) => save({ auto_sync: v })} />
+      <p className="small text-2" style={{ marginTop: 10 }}>{selfHost
+        ? t('Every morning: sync Garmin → analyse your workouts → adjust paces → adapt for heat and readiness → send the next 7 days to the watch (only what changed). If the computer was off at that time, it runs when OpenRun starts.')
+        : t('Every morning the server syncs Garmin, analyses your workouts, adjusts paces to the heat and to how you are, and sends the next 7 days to your watch. You don\'t need to do anything.')}</p>
+      <Toggle label={t('Daily routine')} help={selfHost ? t('Needs OpenRun running (see “Start automatically” below).') : t('Runs on the server at this time, even with your phone off.')} checked={st.auto_sync} onChange={(v) => save({ auto_sync: v })} />
       <div className="row" style={{ paddingLeft: 32, marginBottom: 6 }}>
         <label className="field" style={{ width: 140 }}>{t('Routine time')}<input type="time" value={st.sync_time} onChange={(e) => e.target.value && save({ sync_time: e.target.value })} /></label>
         <label className="field" style={{ width: 160 }}>{t('You usually train at')}
@@ -524,25 +547,27 @@ function AutomationCard() {
         </ul>
       )}
       {msg && <div style={{ marginTop: 10 }}><Banner tone={msg.tone}>{msg.text}</Banner></div>}
-      <details style={{ marginTop: 10 }}>
+      {selfHost && <details style={{ marginTop: 10 }}>
         <summary className="small">{t('Start automatically at login (macOS)')}</summary>
         <p className="small text-2" style={{ marginTop: 6 }}>{t('For the routine to run every day, OpenRun has to be running. This script registers it with launchd so it starts at login:')}</p>
         <CopyBlock text={t('scripts/install-autostart.sh\n# with access from your phone:\nOPENRUN_PIN=your-pin scripts/install-autostart.sh --lan')} />
         <p className="small muted">{t('Status, restart, PIN change and uninstall: docs/es/arranque-y-movil.md in the repository.')}</p>
-      </details>
+      </details>}
     </div>
   )
 }
 
-function MobileCard() {
-  const { data } = useApi<{ lan_enabled: boolean; pin_enabled: boolean; urls: string[]; local: boolean; public?: boolean }>('/api/network')
+type Net = { lan_enabled: boolean; pin_enabled: boolean; urls: string[]; local: boolean; public?: boolean }
+
+function MobileCard({ data, selfHost }: { data: Net | null; selfHost: boolean }) {
   if (!data) return null
-  if (data.public)
+  if (data.public || !selfHost)
     return (
-      <div className="card">
-        <ConnHead icon="watch" title={t('OpenRun on your phone')} status={t('On the internet (HTTPS)')} />
-        <p className="small text-2" style={{ marginTop: 10 }}>{t('Open this address on your phone, sign in and add it to the home screen:')}</p>
-        {data.urls.map((u) => <CopyBlock key={u} text={u} />)}
+      <div className="card stack">
+        <ConnHead icon="smartphone" title={t('OpenRun on your phone')} status={isStandalone() ? t('Installed') : null} />
+        <p className="small text-2" style={{ margin: 0 }}>{t('Add it to your home screen: it opens like any other app, full screen, and can send you notifications.')}</p>
+        <InstallGuide />
+        {!isStandalone() && <CopyBlock text={window.location.origin} />}
       </div>
     )
   return (
@@ -569,8 +594,6 @@ const b64ToBytes = (b64: string) => {
   const s = atob((b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'))
   return Uint8Array.from(s, (ch) => ch.charCodeAt(0))
 }
-const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
-const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent)
 
 function NotificationsCard() {
   const { data: st, setData } = useApi<Settings>('/api/settings')
@@ -636,7 +659,37 @@ function NotificationsCard() {
   )
 }
 
+function DeleteAccount({ onClose }: { onClose: () => void }) {
+  const [pw, setPw] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  return (
+    <Sheet title={t('Delete my account')} onClose={onClose} labelledBy="del-title">
+      <form className="stack" onSubmit={async (e) => {
+        e.preventDefault()
+        setBusy(true)
+        setErr(null)
+        try { await api.post('/api/account/delete', { password: pw }); window.location.hash = ''; window.location.reload() } catch (x) { setErr((x as Error).message); setBusy(false) }
+      }}>
+        <Banner tone="bad">{t('Your plan, activities, health data, races and coach chat will be deleted. This cannot be undone.')}</Banner>
+        <p className="small text-2" style={{ margin: 0 }}>{t('Tip: download your data first.')}</p>
+        <label className="field">{t('Your password, to confirm')}
+          <input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required autoFocus />
+        </label>
+        <div className="row">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>{t('Cancel')}</button>
+          <span className="grow" />
+          <button className="btn btn-danger" disabled={!pw || busy}><Icon name="trash" size={16} />{t('Delete for good')}</button>
+        </div>
+        {err && <Banner tone="bad">{err}</Banner>}
+      </form>
+    </Sheet>
+  )
+}
+
 function AccountCard({ me, onMe }: { me: Me; onMe: () => void }) {
+  const [privacy, setPrivacy] = useState(false)
+  const [del, setDel] = useState(false)
   const acc = useApi<{ ai?: { count: number; limit: number | null } }>('/api/account')
   const [name, setName] = useState(me.name)
   const [cur, setCur] = useState('')
@@ -660,26 +713,55 @@ function AccountCard({ me, onMe }: { me: Me; onMe: () => void }) {
         <label className="field grow">{t('Name')}<input value={name} onChange={(e) => setName(e.target.value)} /></label>
         <button className="btn btn-sm" disabled={!name.trim() || name === me.name} onClick={() => save({ name }, t('Name saved'))}>{t('Save')}</button>
       </div>
-      <form className="stack" onSubmit={(e) => { e.preventDefault(); save({ current_password: cur, new_password: pw }, t('Password changed. Your other devices will have to sign in again.')) }}>
+      <details>
+      <summary className="small">{t('Change password')}</summary>
+      <form className="stack" style={{ marginTop: 8 }} onSubmit={(e) => { e.preventDefault(); save({ current_password: cur, new_password: pw }, t('Password changed. Your other devices will have to sign in again.')) }}>
         <input type="text" autoComplete="username" value={me.username} readOnly hidden />
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
           <label className="field">{t('Current password')}<input type="password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} /></label>
           <label className="field">{t('New password')}<input type="password" autoComplete="new-password" minLength={10} value={pw} onChange={(e) => setPw(e.target.value)} /></label>
         </div>
         <div className="row">
-          <button className="btn btn-sm" disabled={!pw}>{t('Change password')}</button>
-          <span className="grow" />
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => api.post('/api/auth/logout').then(() => { window.location.hash = ''; window.location.reload() })}>{t('Sign out')}</button>
+          <button className="btn btn-sm" disabled={!pw || !cur}>{t('Change password')}</button>
         </div>
       </form>
+      </details>
       </>)}
       {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
+      <hr style={{ margin: '4px 0' }} />
+      <div className="row" style={{ gap: 6 }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => window.dispatchEvent(new Event('openrun:tour'))}><Icon name="help" size={16} />{t('App tour')}</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPrivacy(true)}><Icon name="shield" size={16} />{t('Privacy')}</button>
+        <a className="btn btn-ghost btn-sm" href="/api/account/export" download><Icon name="download" size={16} />{t('Download my data')}</a>
+        {!me.is_demo && <button type="button" className="btn btn-ghost btn-sm" onClick={() => api.post('/api/auth/logout').then(() => { window.location.hash = ''; window.location.reload() })}><Icon name="external" size={16} />{t('Sign out')}</button>}
+        {!me.is_admin && !me.is_demo && <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--bad)' }} onClick={() => setDel(true)}><Icon name="trash" size={16} />{t('Delete my account')}</button>}
+      </div>
+      {privacy && <PrivacySheet onClose={() => setPrivacy(false)} />}
+      {del && <DeleteAccount onClose={() => setDel(false)} />}
     </div>
   )
 }
 
 type Invite = { code: string; note: string | null; expires_at: string }
-type UserRow = Me & { created_at: string; activities: number; ai_today: number; ai_limit: number | null; ai_limit_custom: boolean }
+type UserRow = Me & { created_at: string; activities: number; ai_today: number; ai_limit: number | null; ai_limit_custom: boolean
+  last_seen_at?: string | null; garmin?: boolean; garmin_synced_at?: string | null }
+type Backup = { last: string | null; offsite: boolean; last_offsite: string | null; error: string | null }
+
+const since = (iso?: string | null) => {
+  if (!iso) return t('never')
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  return m < 60 ? t('{n} min ago', { n: Math.max(1, m) }) : m < 1440 ? t('{n} h ago', { n: Math.round(m / 60) }) : t('{n} d ago', { n: Math.round(m / 1440) })
+}
+
+function ShareLink({ url, text }: { url: string; text: string }) {
+  const share = (navigator as { share?: (d: object) => Promise<void> }).share
+  return (
+    <div className="stack" style={{ gap: 4 }}>
+      <CopyBlock text={url} />
+      {share && <button className="btn btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => share.call(navigator, { title: 'OpenRun', text, url }).catch(() => {})}><Icon name="share" size={16} />{t('Send')}</button>}
+    </div>
+  )
+}
 
 function AiLimit({ u, def, onSaved }: { u: UserRow; def: number; onSaved: () => void }) {
   const [v, setV] = useState(u.ai_limit_custom ? String(u.ai_limit ?? '') : '')
@@ -694,9 +776,10 @@ function AiLimit({ u, def, onSaved }: { u: UserRow; def: number; onSaved: () => 
 }
 
 function UsersCard({ me }: { me: Me }) {
-  const { data, reload } = useApi<{ users: UserRow[]; invites: Invite[]; ai_default_limit: number }>('/api/users')
+  const { data, reload } = useApi<{ users: UserRow[]; invites: Invite[]; ai_default_limit: number; backup?: Backup }>('/api/users')
   const [note, setNote] = useState('')
   const [err, setErr] = useState<string | null>(null)
+  const [reset, setReset] = useState<{ user: string; url: string } | null>(null)
   const link = (c: string) => `${window.location.origin}/#invitacion=${c}`
   if (!data) return null
   return (
@@ -715,20 +798,25 @@ function UsersCard({ me }: { me: Me }) {
           <div className="row small"><b className="grow">{i.note || t('Invitation')}</b><span className="muted">{t('expires {date}', { date: fmtDate(i.expires_at.slice(0, 10)) })}</span>
             <button className="btn btn-ghost btn-icon btn-sm" aria-label={t('Revoke invitation')} onClick={() => api.del(`/api/users/invites/${i.code}`).then(reload)}><Icon name="trash" size={16} /></button>
           </div>
-          <CopyBlock text={link(i.code)} />
+          <ShareLink url={link(i.code)} text={t('I\'m inviting you to OpenRun, the app I use to plan my runs. Open this link to create your account:')} />
         </div>
       ))}
       <div className="table-wrap">
         <table className="table">
-          <thead><tr><th>{t('User')}</th><th className="hide-sm">{t('Joined')}</th><th className="hide-sm">{t('Activities')}</th><th>{t('AI today / limit')}</th><th /></tr></thead>
+          <thead><tr><th>{t('User')}</th><th className="hide-sm">{t('Last seen')}</th><th className="hide-sm">Garmin</th><th className="hide-sm">{t('Activities')}</th><th>{t('AI today / limit')}</th><th /></tr></thead>
           <tbody>
             {data.users.map((u) => (
               <tr key={u.id}>
-                <td><b>{u.name || u.username}</b><div className="small muted">{u.username}{u.is_admin ? ' · admin' : ''}</div></td>
-                <td className="hide-sm">{u.created_at ? fmtDate(u.created_at.slice(0, 10)) : '—'}</td>
+                <td><b>{u.name || u.username}</b><div className="small muted">{u.username}{u.is_admin ? ' · admin' : ''}{u.created_at ? ` · ${t('since {date}', { date: fmtDate(u.created_at.slice(0, 10)) })}` : ''}</div></td>
+                <td className="hide-sm small">{u.is_demo ? '—' : since(u.last_seen_at)}</td>
+                <td className="hide-sm small">{u.is_demo ? '—' : u.garmin ? <span title={t('Last sync')}>{t('sync {when}', { when: since(u.garmin_synced_at) })}</span> : <span className="muted">{t('not connected')}</span>}</td>
                 <td className="hide-sm">{u.activities}</td>
                 <td><AiLimit u={u} def={data.ai_default_limit} onSaved={reload} /></td>
-                <td>{u.id !== me.id && (
+                <td style={{ whiteSpace: 'nowrap' }}>{u.id !== me.id && !u.is_demo && (
+                  <button className="btn btn-ghost btn-icon btn-sm" aria-label={t('Password reset link for {user}', { user: u.username })} title={t('Password reset link')} onClick={async () => {
+                    try { const r = await api.post<Invite>(`/api/users/${u.id}/reset-link`); setReset({ user: u.name || u.username, url: `${window.location.origin}/#restablecer=${r.code}` }) } catch (e) { setErr((e as Error).message) }
+                  }}><Icon name="key" size={16} /></button>
+                )}{u.id !== me.id && (
                   <button className="btn btn-ghost btn-icon btn-sm" aria-label={t('Delete {user}', { user: u.username })} onClick={async () => {
                     if (!confirm(t('Delete the account of {user} and ALL their data? This cannot be undone.', { user: u.username }))) return
                     try { await api.del(`/api/users/${u.id}`); reload() } catch (e) { setErr((e as Error).message) }
@@ -739,6 +827,21 @@ function UsersCard({ me }: { me: Me }) {
           </tbody>
         </table>
       </div>
+      {reset && (
+        <div className="stack" style={{ gap: 4 }}>
+          <div className="row small"><b className="grow">{t('Password reset link for {user}', { user: reset.user })}</b>
+            <button className="btn btn-ghost btn-icon btn-sm" aria-label={t('Close')} onClick={() => setReset(null)}><Icon name="x" size={16} /></button></div>
+          <ShareLink url={reset.url} text={t('Open this link to choose a new OpenRun password:')} />
+          <p className="small muted" style={{ margin: 0 }}>{t('Works once and expires in 3 days. Send it privately: whoever opens it can set the password.')}</p>
+        </div>
+      )}
+      {data.backup && (
+        <div className="small text-2">
+          <Icon name="shield" size={14} /> {t('Backup')}: {data.backup.last ? new Date(data.backup.last).toLocaleString(locale()) : t('not yet')}
+          {' · '}{data.backup.offsite ? (data.backup.last_offsite ? t('off-site copy OK') : t('off-site copy pending')) : t('no off-site copy (see docs)')}
+          {data.backup.error && <div className="bad">{data.backup.error}</div>}
+        </div>
+      )}
       <p className="small muted" style={{ margin: 0 }}>{t('AI limit: daily requests to the coach (chat, weekly summary, explanations). Empty = default ({n}/day; administrators unlimited). Protects the provider’s free quota.', { n: data.ai_default_limit })}</p>
       {err && <Banner tone="bad">{err}</Banner>}
     </div>
@@ -781,22 +884,32 @@ function SupportCard() {
   )
 }
 
+function Section({ title }: { title: string }) {
+  return <h2 className="micro" style={{ margin: '12px 0 -4px', letterSpacing: '.06em' }}>{title}</h2>
+}
+
 export default function SettingsPage({ onChange, me, onMe }: { onChange: () => void; me: Me | null; onMe: () => void }) {
+  const net = useApi<Net>('/api/network')
+  const admin = !!me?.is_admin
+  const selfHost = admin && !!net.data && !net.data.public
   return (
     <div className="stack" style={{ maxWidth: 820 }}>
       {me && <AccountCard me={me} onMe={onMe} />}
+      <Section title={t('Your data')} />
       <GarminCard onChange={onChange} demo={!!me?.is_demo} />
-      <HelioCard />
-      <AutomationCard />
-      <NotificationsCard />
-      <MobileCard />
-      <CoachCard />
       <HistoryImportCard />
-      <ProfileCard />
       <ImportCard />
+      <HelioCard />
+      <Section title={t('Training')} />
+      <ProfileCard />
+      <AutomationCard selfHost={selfHost} />
+      <CoachCard admin={admin} />
+      <Section title={t('App')} />
+      <MobileCard data={net.data ?? null} selfHost={selfHost} />
+      <NotificationsCard />
       <ThemeCard />
       <SupportCard />
-      {me?.is_admin && <UsersCard me={me} />}
+      {me?.is_admin && <><Section title={t('Administration')} /><UsersCard me={me} /></>}
       <p className="small muted">OpenRun · {t('only you can see your data')} · {fmtDate(new Date().toISOString().slice(0, 10), { year: 'numeric' })}</p>
     </div>
   )

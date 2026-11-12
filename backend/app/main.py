@@ -513,6 +513,7 @@ class SettingsIn(BaseModel):
     notify_morning: bool | None = None
     notify_analysis: bool | None = None
     notify_weekly: bool | None = None
+    tour_seen: bool | None = None
 
 
 @app.get("/api/settings")
