@@ -281,15 +281,39 @@ def login(request: Request, username: str, password: str):
     return user, None
 
 
-def check_invite(request: Request, code: str):
-    """Same throttle as logins: invite codes must not be brute-forceable."""
+def check_invite(request: Request, code: str, kind: str = "invite"):
+    """Same throttle as logins: invite and reset codes must not be brute-forceable.
+    kind="invite" accepts only invitations, kind="reset" only password-reset links."""
     from .db import Invite
     ip, recent, err = _throttled(request)
     if err:
         return None, err
     with _db() as s:
         inv = s.get(Invite, code.strip())
-        if not inv or inv.used_by or inv.expires_at < time.strftime("%Y-%m-%dT%H:%M:%S"):
+        bad = (not inv or inv.used_by or inv.expires_at < time.strftime("%Y-%m-%dT%H:%M:%S")
+               or (inv.reset_user is not None) != (kind == "reset"))
+        if bad:
             _fail(ip, recent)
-            return None, _("Invalid or expired invitation")
+            return None, (_("Invalid or expired link") if kind == "reset" else _("Invalid or expired invitation"))
         return inv, None
+
+
+_seen: dict[int, float] = {}
+
+
+def touch(uid: int) -> None:
+    """Record the user's last activity (for the admin panel); writes at most every 5 minutes per user."""
+    now = time.time()
+    if now - _seen.get(uid, 0) < 300:
+        return
+    _seen[uid] = now
+    from .db import User
+    try:
+        with _db() as s:
+            u = s.get(User, uid)
+            if u:
+                u.last_seen_at = time.strftime("%Y-%m-%dT%H:%M:%S")
+                s.add(u)
+                s.commit()
+    except Exception:  # noqa: BLE001 - never break a request for this
+        pass

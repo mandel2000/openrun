@@ -39,6 +39,8 @@ class User(SQLModel, table=True):
     api_token_hash: str | None = Field(default=None, index=True)  # personal token (MCP), sha256
     lang: str | None = None  # "en" | "es"; None = browser / OPENRUN_LANG (see app/i18n.py)
     is_demo: bool | None = None  # shared demo account (app/demo.py): read-mostly, rebuilt daily
+    privacy_accepted_at: str | None = None  # when the user accepted the privacy notice (registration)
+    last_seen_at: str | None = None  # last authenticated request (minute precision), for the admin panel
 
 
 class Invite(SQLModel, table=True):
@@ -48,6 +50,7 @@ class Invite(SQLModel, table=True):
     expires_at: str
     used_by: int | None = None
     note: str | None = None
+    reset_user: int | None = None  # set = password-reset link for that user instead of an invitation
 
 
 class PushSubscription(SQLModel, table=True):

@@ -9,6 +9,10 @@ OpenRun is configured with environment variables. Copy [`.env.example`](../.env.
 | `OPENRUN_PASSWORD` | – | **Required on a server.** Initial password of the admin account, 12+ characters (the server refuses to start with a shorter one). Only used to create the account; change it later in *Settings › Your account*. `OPENRUN_PIN` is an older alias. |
 | `OPENRUN_ADMIN_USER` | `admin` | Username of the admin account, created on first start. |
 | `OPENRUN_OPEN_SIGNUP` | `0` | `1` lets anyone sign up; `0` requires an invitation link. |
+| `OPENRUN_BACKUP_B2_KEY_ID` / `OPENRUN_BACKUP_B2_KEY` | — | Backblaze B2 application key for encrypted off-site backups (see [self-hosting](self-hosting.md#off-site-copies-backblaze-b2)). |
+| `OPENRUN_BACKUP_B2_BUCKET` | — | B2 bucket name. |
+| `OPENRUN_BACKUP_PASSPHRASE` | — | Passphrase that encrypts the off-site copies. Keep a copy elsewhere. |
+| `OPENRUN_BACKUP_B2_KEEP` | `30` | Off-site copies to keep. |
 | `OPENRUN_PUBLIC_URL` | – | Public address on a server (`https://run.example.com`). Shown in Settings and used for the MCP configuration. |
 | `OPENRUN_API_TOKEN` | – | Server-wide bearer token (32+ characters) that acts as the admin. Optional: every user can create a personal token in *Settings › Coach*. |
 | `OPENRUN_TRUST_LOCAL` | `1` (`0` in the image) | Trust requests from the same machine without a password. Must be `0` behind a reverse proxy. |

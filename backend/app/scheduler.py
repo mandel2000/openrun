@@ -13,10 +13,12 @@ from . import demo
 from . import services as S
 from .db import User, engine
 from .i18n import _
+from .integrations import garmin as G
 from .tenancy import as_user
 
 log = logging.getLogger("openrun.scheduler")
 _lock = threading.Lock()
+PER_TICK = 2  # routines/syncs per minute: spreads Garmin calls when many users share one time
 STATE: dict = {"running": False, "last_tick": None, "last_backup": None, "backup_error": None}
 
 
@@ -39,6 +41,8 @@ def tick() -> dict | None:
     out: dict = {}
     try:
         for uid in user_ids():
+            if len(out) >= PER_TICK or G.cooling_down():
+                break  # the rest are still due: next tick
             if demo.is_demo(uid):  # no routine: its data is rebuilt each day instead
                 try:
                     if demo.seeded_on(uid) != dt.date.today().isoformat():
@@ -55,8 +59,9 @@ def tick() -> dict | None:
                 log.exception("daily routine failed for user %s", uid)
         if out or _backup_due():
             try:
-                S.backup_db()
-                STATE.update(last_backup=dt.datetime.now().isoformat(timespec="seconds"), backup_error=None)
+                res = S.backup_db() or {}
+                STATE.update(last_backup=dt.datetime.now().isoformat(timespec="seconds"), backup_error=None,
+                             last_offsite=(res.get("offsite") or {}).get("file") or STATE.get("last_offsite"))
             except Exception as e:  # noqa: BLE001
                 log.exception("backup failed")
                 if STATE.get("backup_error") is None:
@@ -104,15 +109,19 @@ def intraday(_ran: dict) -> None:
     now = dt.datetime.now()
     if not 9 <= now.hour < 22:
         return
+    done = 0
     for uid in user_ids():
-        if time.time() - _last_intraday.get(uid, 0) < INTRADAY_EVERY_S:
+        if done >= PER_TICK or G.cooling_down():
+            return
+        if time.time() - _last_intraday.get(uid, 0) < INTRADAY_EVERY_S or demo.is_demo(uid):
             continue
         _last_intraday[uid] = time.time()
         try:
             with as_user(uid), Session(engine) as s:
-                if S.get_settings(s).get("auto_sync"):
-                    S.intraday_sync(s)
-        except Exception:  # noqa: BLE001
+                if S.get_settings(s).get("auto_sync") and S.intraday_sync(s).get("skipped") != "garmin":
+                    done += 1
+        except Exception as e:  # noqa: BLE001
+            G.note_error(e)
             log.exception("intraday sync failed for user %s", uid)
 
 

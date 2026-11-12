@@ -34,6 +34,14 @@ const PATHS: Record<string, string> = {
   user: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   alert: 'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01',
   sparkles: 'M12 3l1.9 5.8L19.7 10.7l-5.8 1.9L12 18.4l-1.9-5.8L4.3 10.7l5.8-1.9zM5 3v4M19 17v4M3 5h4M17 19h4',
+  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  eyeOff: 'M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a13.2 13.2 0 0 1-1.67 2.68M6.61 6.61A13.5 13.5 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.39-1.61M2 2l20 20',
+  download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  smartphone: 'M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM12 18h.01',
+  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  key: 'M2.59 18.41A2 2 0 0 0 2 19.83V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1.17a2 2 0 0 0 1.41-.59l.81-.81A6.5 6.5 0 1 0 6.5 11.5zM16.5 7.5h.01',
+  help: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01',
+  share: 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13',
   link: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
 }
 export type IconName = keyof typeof PATHS
@@ -50,13 +58,16 @@ export function Icon({ name, size = 20, className, label }: { name: IconName; si
 
 export function Sheet({ title, onClose, children, labelledBy }: { title?: ReactNode; onClose: () => void; children: ReactNode; labelledBy?: string }) {
   const ref = useRef<HTMLDivElement>(null)
+  const opener = useRef(document.activeElement as HTMLElement | null)  // read on first render, before any autoFocus
+  const close = useRef(onClose)
+  useEffect(() => { close.current = onClose }, [onClose])
   useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null
+    const prev = opener.current
     const el = ref.current
     const focusables = () => el?.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])') ?? []
-    focusables()[0]?.focus()
+    if (!el?.contains(document.activeElement)) focusables()[0]?.focus()  // keep a child's autoFocus
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') close.current()
       if (e.key === 'Tab') {
         const f = Array.from(focusables()).filter((x) => !x.hasAttribute('disabled'))
         if (!f.length) return
@@ -67,7 +78,7 @@ export function Sheet({ title, onClose, children, labelledBy }: { title?: ReactN
     document.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; prev?.focus() }
-  }, [onClose])
+  }, [])
   return (
     <div className="sheet-bg" onClick={onClose}>
       <div className="sheet" ref={ref} role="dialog" aria-modal="true" aria-labelledby={labelledBy} onClick={(e) => e.stopPropagation()}>

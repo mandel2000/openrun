@@ -86,6 +86,37 @@ def workout_to_garmin(workout: dict) -> dict:
 
 # ---------------------------------------------------------------- client
 
+# Garmin throttles per IP: every user of this server shares it. After a 429 the scheduler
+# backs off for a while instead of hammering the API (which can lead to longer blocks).
+COOLDOWN_S = 30 * 60
+_cooldown = {"until": 0.0}
+
+
+def is_rate_limit(e: BaseException) -> bool:
+    return type(e).__name__ == "GarminConnectTooManyRequestsError" or "429" in str(e) or "too many requests" in str(e).lower()
+
+
+def note_error(e: BaseException) -> None:
+    import time
+    if is_rate_limit(e):
+        _cooldown["until"] = time.time() + COOLDOWN_S
+        log.warning("garmin rate limit hit: pausing automatic syncs for %s min", COOLDOWN_S // 60)
+
+
+def cooling_down() -> bool:
+    import time
+    return time.time() < _cooldown["until"]
+
+
+def _secure(path: Path) -> None:
+    """Tokens are plain files (the library needs them so): keep them readable by this user only."""
+    try:
+        path.chmod(0o700)
+        for f in path.glob("*.json"):
+            f.chmod(0o600)
+    except OSError:
+        pass
+
 
 class GarminError(RuntimeError):
     pass
@@ -114,7 +145,7 @@ class GarminService:
         return {"connected": False}
 
     def login(self, email: str, password: str) -> dict:
-        self.token_dir.mkdir(parents=True, exist_ok=True)
+        self.token_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         g = self._new(email, password)
         status, state = g.login(str(self.token_dir))
         if status == "needs_mfa":
@@ -131,6 +162,7 @@ class GarminService:
             g.client.dump(str(self.token_dir))
         except Exception:  # noqa: BLE001 - token persistence is best effort
             log.warning("could not persist garmin tokens", exc_info=True)
+        _secure(self.token_dir)
         if not getattr(g, "full_name", None) and hasattr(g, "_load_profile_and_settings"):
             try:
                 g._load_profile_and_settings()
@@ -165,6 +197,7 @@ class GarminService:
                 raise GarminError(_("Garmin is not connected"))
             g = self._new()
             g.login(str(self.token_dir))
+            _secure(self.token_dir)
             self._client = g
         return self._client
 

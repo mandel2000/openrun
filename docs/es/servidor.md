@@ -37,6 +37,7 @@ El contenedor corre sin root (uid 1000), con `TZ=Europe/Madrid` y healthcheck en
 | `ANTHROPIC_API_KEY` / `OPENRUN_PROVIDER` / `GEMINI_API_KEY` / `NVIDIA_API_KEY` / `OPENRUN_MODEL` | No | Coach IA dentro de la app (`OPENRUN_PROVIDER=nvidia` para el plan gratuito de NVIDIA) |
 | `OPENRUN_MODEL_FALLBACKS` / `OPENRUN_REASONING_EFFORT` | No | Modelos de respaldo (separados por comas) y nivel de razonamiento; con NVIDIA por defecto `openai/gpt-oss-20b` y `low` (primera palabra en ~5 s en vez de 15–70 s) |
 | `OPENRUN_AI_DAILY_LIMIT` | No | Peticiones diarias al coach IA por usuario (por defecto 40; los administradores sin límite). Se cambia por usuario en *Ajustes › Usuarios* |
+| `OPENRUN_BACKUP_B2_KEY_ID`, `OPENRUN_BACKUP_B2_KEY`, `OPENRUN_BACKUP_B2_BUCKET`, `OPENRUN_BACKUP_PASSPHRASE` | No | Copias cifradas en Backblaze B2 (ver [Copias fuera del servidor](#copias-fuera-del-servidor-backblaze-b2)) |
 | `OPENRUN_DATABASE_URL` | No | Base de datos externa (p. ej. `postgresql+psycopg://…`); por defecto SQLite en `/data` |
 
 En la imagen ya vienen `OPENRUN_TRUST_LOCAL=0` (detrás de un proxy nada es «local») y `OPENRUN_TRUST_PROXY=1` (IP real y HTTPS desde las cabeceras de Traefik).
@@ -48,12 +49,42 @@ python3 -c "import secrets; print(secrets.token_urlsafe(24))"   # contraseña
 python3 -c "import secrets; print(secrets.token_urlsafe(40))"   # API token
 ```
 
+## Copias fuera del servidor (Backblaze B2)
+
+La copia diaria de `/data/backups/` está en el mismo disco: protege de errores, no de perder el servidor. Con estas variables, cada copia diaria se comprime, se cifra con AES-256-GCM (clave derivada con scrypt de tu frase) y se sube a un bucket de Backblaze B2. Backblaze solo ve datos cifrados. Se guardan las 30 últimas.
+
+1. En Backblaze, crea un bucket **privado** y una application key limitada a ese bucket (lectura y escritura).
+2. Configura y reinicia:
+
+| Variable | Valor |
+|---|---|
+| `OPENRUN_BACKUP_B2_KEY_ID` | keyID de la application key |
+| `OPENRUN_BACKUP_B2_KEY` | applicationKey |
+| `OPENRUN_BACKUP_B2_BUCKET` | nombre del bucket |
+| `OPENRUN_BACKUP_PASSPHRASE` | frase larga. **Guárdala también fuera del servidor**: sin ella las copias no se pueden descifrar |
+| `OPENRUN_BACKUP_B2_KEEP` | copias a conservar (por defecto `30`) |
+
+*Ajustes › Usuarios* muestra la última copia local y la externa. Si falla la subida, los administradores reciben un push y `/api/health?deep=1` responde 503.
+
+**Restaurar** (con las mismas variables, por ejemplo dentro del contenedor):
+
+```bash
+python -m app.offsite list
+python -m app.offsite download latest /data/restaurada.db
+```
+
+Para la app, sustituye `openrun.db` por el fichero restaurado (borra también `openrun.db-wal` y `openrun.db-shm`) y vuelve a arrancarla. `python -m app.offsite decrypt <fichero> <salida.db>` descifra una copia descargada desde la web de B2.
+
 ## Usuarios
 
 - Cada usuario tiene sus propios datos: plan, entrenos, actividades, salud, carreras, chat del coach, ajustes y cuenta de Garmin. Toda tabla de datos lleva `user_id` y el filtro se aplica en el ORM (`app/tenancy.py`): una consulta sin usuario en contexto falla en vez de devolver datos de otro.
 - Al actualizar desde la versión de un solo usuario, el primer arranque crea el administrador (usuario 1, `OPENRUN_ADMIN_USER`) y le asigna todos los datos existentes. Antes guarda una copia completa en `/data/openrun-pre-multiuser.db`, y la migración va en una sola transacción.
 - **Invitar a alguien**: *Ajustes › Usuarios › Crear invitación* → copia el enlace (`https://…/#invitacion=…`) y envíaselo. Sirve una sola vez y caduca en 14 días. Al abrirlo, la persona elige usuario y contraseña (mínimo 10 caracteres) y conecta su Garmin en *Ajustes*.
-- El administrador puede borrar cuentas (con todos sus datos).
+- **¿Alguien ha olvidado la contraseña?** *Ajustes › Usuarios* › icono de llave junto a su nombre → envíale el enlace (`https://…/#restablecer=…`). Sirve una vez y caduca en 3 días; no hace falta correo.
+- Al registrarse, cada persona acepta un aviso de privacidad en lenguaje claro (qué se guarda, dónde, qué se envía a la IA). Desde *Ajustes › Tu cuenta* puede descargar todos sus datos (JSON) o borrar su cuenta con su contraseña.
+- El administrador puede borrar cuentas (con todos sus datos) y ve, por usuario, la última conexión, si tiene Garmin conectado y su última sincronización.
+- Garmin limita las peticiones por IP y todos los usuarios comparten la del servidor: la rutina diaria y la sincronización intradía procesan como mucho 2 usuarios por minuto, y tras un error 429 se pausan 30 minutos. Los tokens de Garmin se guardan con permisos 0700/0600 (la librería necesita leerlos en claro).
+- Un usuario nuevo ve la bienvenida guiada y después un tutorial de un minuto (se puede repetir desde *Ajustes › Tu cuenta › Tutorial*), con instrucciones para instalar la app en su móvil.
 - El coach IA (y su API key) es común: cada usuario habla con él sobre sus propios datos. Con NVIDIA gratis el límite es de ~40 peticiones por minuto entre todos. Cada usuario tiene un máximo diario de peticiones (chat, resumen semanal, explicaciones de readiness): `OPENRUN_AI_DAILY_LIMIT`, editable por usuario en *Ajustes › Usuarios*.
 - Un usuario nuevo ve una bienvenida guiada en *Hoy* hasta que crea su plan o la salta.
 - Cada usuario genera su propio token para el MCP en *Ajustes › Coach › Fuera de la app (MCP)*: solo da acceso a sus datos y se puede regenerar o revocar. `OPENRUN_API_TOKEN` actúa como el administrador.

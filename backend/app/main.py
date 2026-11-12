@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from . import auth, demo, i18n, scheduler, tenancy
+from . import auth, demo, i18n, offsite, scheduler, tenancy
 from . import services as S
 from .ai import coach
 from .db import get_session, init_db
@@ -63,6 +63,8 @@ async def access_control(request: Request, call_next):
         resp = JSONResponse({"detail": _("Not available in the demo")}, status_code=403, headers=SECURITY_HEADERS)
         i18n.reset_request_lang(ltok)
         return resp
+    if uid is not None:
+        auth.touch(uid)
     tok = tenancy.set_user(uid)
     try:
         resp = await call_next(request)
@@ -158,6 +160,12 @@ class RegisterIn(BaseModel):
     username: str
     name: str = ""
     password: str
+    privacy: bool = False  # accepted the privacy notice
+
+
+class ResetIn(BaseModel):
+    code: str
+    password: str
 
 
 USERNAME_RE = re.compile(r"^[a-z0-9._-]{3,30}$")
@@ -178,6 +186,8 @@ def auth_register(body: RegisterIn, request: Request):
     from .db import Invite, User, engine
 
     inv = None
+    if not body.privacy:
+        raise HTTPException(400, _("Please accept the privacy notice"))
     if not auth.OPEN_SIGNUP or body.code:
         inv, err = auth.check_invite(request, body.code)
         if not inv:
@@ -191,7 +201,8 @@ def auth_register(body: RegisterIn, request: Request):
         raise HTTPException(409, _("That username already exists"))
     with _S(engine) as s:
         user = User(username=username, name=body.name.strip() or username, password_hash=auth.hash_password(body.password),
-                    created_at=dt.datetime.now().isoformat(timespec="seconds"), lang=i18n.request_lang())
+                    created_at=dt.datetime.now().isoformat(timespec="seconds"), lang=i18n.request_lang(),
+                    privacy_accepted_at=dt.datetime.now().isoformat(timespec="seconds"))
         s.add(user)
         s.commit()
         s.refresh(user)
@@ -202,6 +213,43 @@ def auth_register(body: RegisterIn, request: Request):
             s.add(inv)
             s.commit()
         return _with_session(user, request, {"authed": True, "user": _me(user.id)})
+
+
+@app.get("/api/auth/reset/{code}")
+def reset_check(code: str, request: Request):
+    inv, err = auth.check_invite(request, code, kind="reset")
+    if not inv:
+        raise HTTPException(404, err)
+    u = auth.get_user(inv.reset_user)
+    if not u:
+        raise HTTPException(404, _("Invalid or expired link"))
+    return {"ok": True, "username": u.username, "name": u.name}
+
+
+@app.post("/api/auth/reset")
+def reset_password(body: ResetIn, request: Request):
+    """Set a new password with a one-time link created by an administrator (no email needed)."""
+    from sqlmodel import Session as _S
+
+    from .db import Invite, User, engine
+
+    inv, err = auth.check_invite(request, body.code, kind="reset")
+    if not inv:
+        raise HTTPException(403, err)
+    if problem := auth.password_problem(body.password):
+        raise HTTPException(400, problem)
+    with _S(engine) as s:
+        u = s.get(User, inv.reset_user)
+        if not u:
+            raise HTTPException(404, _("Invalid or expired link"))
+        u.password_hash = auth.hash_password(body.password)
+        s.add(u)
+        row = s.get(Invite, inv.code)
+        row.used_by = u.id
+        s.add(row)
+        s.commit()
+        s.refresh(u)
+        return _with_session(u, request, {"authed": True, "user": _me(u.id)})
 
 
 # ---------------------------------------------------------------- account & users (admin)
@@ -270,6 +318,37 @@ def account_put(body: AccountIn, request: Request):
         return _with_session(u, request, _me(uid)) if body.new_password else _me(uid)
 
 
+@app.get("/api/account/export")
+def account_export(s: Session = DB):
+    import json
+
+    from fastapi.responses import Response
+
+    data = S.export_user(s, tenancy.current_user_id())
+    name = f"openrun-{data['account']['username']}-{dt.date.today().isoformat()}.json"
+    return Response(json.dumps(data, ensure_ascii=False, indent=1, default=str), media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+class DeleteAccountIn(BaseModel):
+    password: str = ""
+
+
+@app.post("/api/account/delete")
+def account_delete(body: DeleteAccountIn):
+    """Delete my account and all my data. Administrators can't (they own the server)."""
+    uid = tenancy.current_user_id()
+    u = auth.get_user(uid)
+    if u.is_admin or u.is_demo:
+        raise HTTPException(403, _("This account can't be deleted from here"))
+    if not auth.verify_password(body.password, u.password_hash):
+        raise HTTPException(400, _("The current password is not correct"))
+    S.delete_user(uid)
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(auth.COOKIE)
+    return resp
+
+
 @app.get("/api/users")
 def users_list():
     from sqlmodel import Session as _S
@@ -285,14 +364,20 @@ def users_list():
             counts[a.user_id] = counts.get(a.user_id, 0) + 1
         now = dt.datetime.now().isoformat(timespec="seconds")
         invites = [i.model_dump() for i in s.exec(select(Invite).order_by(Invite.created_at.desc())).all()
-                   if not i.used_by and i.expires_at > now]
+                   if not i.used_by and i.expires_at > now and i.reset_user is None]
+        syncs = {m.user_id: m.value.get("synced_at") for m in
+                 s.exec(select(Meta).where(Meta.key == "garmin_metrics").execution_options(all_users=True)).all()}
         today = dt.date.today().isoformat()
         used = {m.user_id: m.value.get("count", 0) for m in s.exec(select(Meta).where(Meta.key == "ai_usage").execution_options(all_users=True)).all()
                 if m.value.get("date") == today}
         return {"users": [{**_me(u.id), "created_at": u.created_at, "activities": counts.get(u.id, 0),
+                           "last_seen_at": u.last_seen_at, "garmin": (garmin.for_user(u.id).token_dir / "garmin_tokens.json").exists(),
+                           "garmin_synced_at": syncs.get(u.id),
                            "ai_today": used.get(u.id, 0), "ai_limit": S.ai_limit(u.id), "ai_limit_custom": u.ai_daily_limit is not None}
                           for u in users],
-                "invites": invites, "ai_default_limit": S.AI_DEFAULT_LIMIT}
+                "invites": invites, "ai_default_limit": S.AI_DEFAULT_LIMIT,
+                "backup": {"last": scheduler.STATE.get("last_backup"), "offsite": offsite.enabled(),
+                           "last_offsite": scheduler.STATE.get("last_offsite"), "error": scheduler.STATE.get("backup_error")}}
 
 
 class UserLimitIn(BaseModel):
@@ -335,6 +420,33 @@ def invite_create(body: InviteIn):
                  created_at=now.isoformat(timespec="seconds"),
                  expires_at=(now + dt.timedelta(days=max(1, min(body.days, 60)))).isoformat(timespec="seconds"))
     with _S(engine) as s:
+        s.add(inv)
+        s.commit()
+        s.refresh(inv)
+        return inv.model_dump()
+
+
+@app.post("/api/users/{uid}/reset-link")
+def user_reset_link(uid: int):
+    """One-time link (valid 3 days) to set a new password; the admin sends it to the user."""
+    import secrets
+
+    from sqlmodel import Session as _S
+    from sqlmodel import select
+
+    from .db import Invite, User, engine
+
+    _require_admin()
+    now = dt.datetime.now()
+    with _S(engine) as s:
+        u = s.get(User, uid)
+        if not u or u.is_demo:
+            raise HTTPException(404, _("User does not exist"))
+        for old in s.exec(select(Invite).where(Invite.reset_user == uid, Invite.used_by.is_(None))).all():
+            s.delete(old)
+        inv = Invite(code=secrets.token_urlsafe(16), created_by=tenancy.current_user_id(), reset_user=uid,
+                     created_at=now.isoformat(timespec="seconds"),
+                     expires_at=(now + dt.timedelta(days=3)).isoformat(timespec="seconds"))
         s.add(inv)
         s.commit()
         s.refresh(inv)
@@ -401,6 +513,7 @@ class SettingsIn(BaseModel):
     notify_morning: bool | None = None
     notify_analysis: bool | None = None
     notify_weekly: bool | None = None
+    tour_seen: bool | None = None
 
 
 @app.get("/api/settings")

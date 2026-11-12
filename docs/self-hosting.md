@@ -122,18 +122,53 @@ Everything lives in the data folder (`/data` in the container, `~/.openrun/` loc
 | `secret.key` | Key that signs sessions (generated) |
 | `vapid.pem` | Push notification key (generated; if deleted, every device has to re-enable notifications) |
 
-The daily snapshots protect against mistakes, not against losing the disk: copy the data folder somewhere else if your data matters to you.
+The daily snapshots protect against mistakes, not against losing the disk. For that, turn on **encrypted off-site copies**.
+
+### Off-site copies (Backblaze B2)
+
+Each daily snapshot is gzipped, encrypted with AES-256-GCM (key derived with scrypt from your passphrase) and uploaded to a Backblaze B2 bucket. The provider only ever sees ciphertext. The last 30 copies are kept.
+
+1. In Backblaze, create a **private** bucket and an application key restricted to that bucket (read and write).
+2. Set these variables and restart:
+
+| Variable | Value |
+|---|---|
+| `OPENRUN_BACKUP_B2_KEY_ID` | keyID of the application key |
+| `OPENRUN_BACKUP_B2_KEY` | applicationKey |
+| `OPENRUN_BACKUP_B2_BUCKET` | bucket name |
+| `OPENRUN_BACKUP_PASSPHRASE` | long passphrase. **Keep a copy outside the server**: without it the copies can't be decrypted |
+| `OPENRUN_BACKUP_B2_KEEP` | copies to keep (default `30`) |
+
+*Settings › Users* shows the last local and off-site backup. A failed upload sends a push to admins and makes `/api/health?deep=1` answer 503.
+
+**Restore** (with the same variables set, e.g. inside the container):
+
+```bash
+python -m app.offsite list
+python -m app.offsite download latest /data/restored.db
+```
+
+Stop the app, replace `openrun.db` with the restored file (and delete `openrun.db-wal` / `openrun.db-shm`), and start it again. `python -m app.offsite decrypt <file> <out.db>` decrypts a copy you downloaded from the B2 web UI.
 
 **Upgrading**: `docker compose pull && docker compose up -d` (or `git pull` and restart `run.sh`). Database migrations run automatically on start, and the first start after a structural migration keeps a full copy of the old database next to it.
 
 **SQLite or Postgres?** SQLite in the volume is enough for a household or a group of friends: zero maintenance and no extra RAM. For more, set `OPENRUN_DATABASE_URL` (e.g. `postgresql+psycopg://…`) and add the `psycopg[binary]` driver to the image.
 
+## Sharing the server with friends
+
+- **Invite**: *Settings › Users › Create invitation* and send the link (single use, expires in 14 days). On a phone, *Send* opens the share sheet.
+- **Forgotten password**: the key icon next to a user creates a one-time reset link (`/#restablecer=…`, expires in 3 days). No email server needed.
+- **Privacy**: sign-up requires accepting a plain-language privacy notice. Each user can download all their data (JSON) or delete their account from *Settings › Your account*.
+- **Admin overview**: last seen, Garmin connection and last sync per user, AI usage, and backup status.
+- **Garmin rate limits**: every user shares the server's IP. The daily routine and intraday sync handle at most 2 users per minute, and pause for 30 minutes after a 429. Token folders are `0700` (files `0600`).
+- **First run**: a guided welcome, then a one-minute tour (replayable from *Settings › Your account*) that ends with install-on-phone instructions for the device in hand.
+
 ## Security
 
-- The whole API requires a session (username and password) or an API token; only `/api/health`, login and invitation sign-up are public.
+- The whole API requires a session (username and password) or an API token; only `/api/health`, login, invitation sign-up and password-reset links are public.
 - Passwords are hashed with scrypt. Sessions are HMAC-signed, expire after 90 days and are bound to the password: changing it signs out every other device.
 - Personal API tokens are random 256-bit values stored as SHA-256 hashes; regenerating or revoking one invalidates the old one.
-- At most 10 failed attempts (login or invitation codes) per real client IP every 10 minutes.
+- At most 10 failed attempts (login, invitation or reset codes) per real client IP every 10 minutes. Invitation and reset codes can't be used for each other.
 - Importing a course by URL only fetches `https://` from public addresses, at most 8 MB. Push notifications are only sent to the Google, Mozilla, Apple and Microsoft push services.
 - `Secure` + `HttpOnly` cookies, HSTS and anti-clickjacking headers.
 

@@ -164,6 +164,7 @@ def _fresh_users(monkeypatch, password):
     monkeypatch.setattr(auth, "PASSWORD", password)
     monkeypatch.setattr(auth.time, "sleep", lambda _: None)
     monkeypatch.setattr(auth, "_fails", {})
+    monkeypatch.setattr(auth, "_seen", {})
     auth.ensure_admin()
     return auth
 
@@ -219,7 +220,7 @@ def test_personal_api_tokens(monkeypatch):
     admin.put("/api/athlete", json={"name": "Admin"})
     inv = admin.post("/api/users/invites", json={}).json()
     friend = TestClient(main.app)
-    friend.post("/api/auth/register", json={"code": inv["code"], "username": "bea", "password": "bea password 1"})
+    friend.post("/api/auth/register", json={"code": inv["code"], "username": "bea", "password": "bea password 1", "privacy": True})
     friend.put("/api/athlete", json={"name": "Bea"})
     assert friend.get("/api/account").json()["has_token"] is False
     tok = friend.post("/api/account/token").json()["token"]
@@ -246,11 +247,11 @@ def test_multi_user_isolation(monkeypatch):
     # invitations: only admins, single use, brute force throttled
     inv = admin.post("/api/users/invites", json={"note": "amigo"}).json()
     friend = TestClient(main.app)
-    assert friend.post("/api/auth/register", json={"code": "nope", "username": "x1x", "password": "y" * 12}).status_code == 403
-    assert friend.post("/api/auth/register", json={"code": inv["code"], "username": "ana", "password": "corta"}).status_code == 400
-    r = friend.post("/api/auth/register", json={"code": inv["code"], "username": "Ana", "name": "Ana", "password": "ana password 1"})
+    assert friend.post("/api/auth/register", json={"code": "nope", "username": "x1x", "password": "y" * 12, "privacy": True}).status_code == 403
+    assert friend.post("/api/auth/register", json={"code": inv["code"], "username": "ana", "password": "corta", "privacy": True}).status_code == 400
+    r = friend.post("/api/auth/register", json={"code": inv["code"], "username": "Ana", "name": "Ana", "password": "ana password 1", "privacy": True})
     assert r.status_code == 200 and r.json()["user"]["username"] == "ana"
-    assert TestClient(main.app).post("/api/auth/register", json={"code": inv["code"], "username": "eve", "password": "e" * 12}).status_code == 403
+    assert TestClient(main.app).post("/api/auth/register", json={"code": inv["code"], "username": "eve", "password": "e" * 12, "privacy": True}).status_code == 403
     # each user sees only their own data
     assert friend.get("/api/athlete").json()["name"] == "Atleta"
     assert friend.get("/api/races").json() == []
@@ -414,3 +415,57 @@ def test_today_message(monkeypatch):
         s.commit()
         title, body = S.today_message(s)
         assert title == "Today: Series 6×800" and "9 km" in body and "heat" in body and "Fuerza general" in body
+
+
+def test_reset_link_export_and_self_delete(monkeypatch):
+    """Admin reset links (no email), privacy consent, data export and self-service account deletion."""
+    auth = _fresh_users(monkeypatch, "admin password 1")
+    monkeypatch.setattr(auth, "TRUST_LOCAL", False)
+    admin = TestClient(main.app)
+    admin.post("/api/auth", json={"username": "admin", "password": "admin password 1"})
+    inv = admin.post("/api/users/invites", json={}).json()
+    friend = TestClient(main.app)
+    assert friend.post("/api/auth/register", json={"code": inv["code"], "username": "leo", "password": "leo password 1"}).status_code == 400
+    r = friend.post("/api/auth/register", json={"code": inv["code"], "username": "leo", "password": "leo password 1", "privacy": True})
+    uid = r.json()["user"]["id"]
+    friend.put("/api/athlete", json={"name": "Leo"})
+    # reset link: not usable as an invitation, single use, logs in with the new password
+    link = admin.post(f"/api/users/{uid}/reset-link").json()
+    assert TestClient(main.app).get(f"/api/auth/invite/{link['code']}").status_code == 404
+    assert TestClient(main.app).get(f"/api/auth/reset/{inv['code']}").status_code == 404
+    assert TestClient(main.app).get(f"/api/auth/reset/{link['code']}").json()["username"] == "leo"
+    other = TestClient(main.app)
+    assert other.post("/api/auth/reset", json={"code": link["code"], "password": "nueva clave larga"}).status_code == 200
+    assert other.get("/api/athlete").json()["name"] == "Leo"
+    assert friend.get("/api/athlete").status_code == 401  # old session invalidated
+    assert TestClient(main.app).post("/api/auth/reset", json={"code": link["code"], "password": "otra clave larga"}).status_code == 403
+    users = admin.get("/api/users").json()
+    assert users["invites"] == [] and users["users"][1]["last_seen_at"]
+    # export only has my data
+    data = other.get("/api/account/export").json()
+    assert data["account"]["username"] == "leo" and data["account"]["privacy_accepted_at"]
+    assert [a["name"] for a in data["athlete"]] == ["Leo"]
+    # delete: needs the password; admins can't
+    assert admin.post("/api/account/delete", json={"password": "admin password 1"}).status_code == 403
+    assert other.post("/api/account/delete", json={"password": "wrong"}).status_code == 400
+    assert other.post("/api/account/delete", json={"password": "nueva clave larga"}).status_code == 200
+    assert [u["username"] for u in admin.get("/api/users").json()["users"]] == ["admin"]
+
+
+def test_scheduler_spreads_users_and_backs_off_on_garmin_429(monkeypatch):
+    from app import scheduler
+    from app.integrations import garmin as G
+
+    ran: list[int] = []
+    monkeypatch.setattr(scheduler, "user_ids", lambda: [1, 2, 3, 4, 5])
+    monkeypatch.setattr(scheduler, "due", lambda *a: True)
+    monkeypatch.setattr(scheduler.demo, "is_demo", lambda uid: False)
+    monkeypatch.setattr(scheduler.S, "daily_routine", lambda s: ran.append(1) or {})
+    monkeypatch.setattr(scheduler.S, "backup_db", lambda: None)
+    monkeypatch.setattr(scheduler, "_HOOKS", [])
+    monkeypatch.setattr(G, "_cooldown", {"until": 0.0})
+    assert len(scheduler.tick()) == scheduler.PER_TICK
+    G.note_error(RuntimeError("500 Server Error"))
+    assert not G.cooling_down()
+    G.note_error(type("GarminConnectTooManyRequestsError", (Exception,), {})("slow down"))
+    assert G.cooling_down() and scheduler.tick() == {}
