@@ -154,12 +154,21 @@ Stop the app, replace `openrun.db` with the restored file (and delete `openrun.d
 
 **SQLite or Postgres?** SQLite in the volume is enough for a household or a group of friends: zero maintenance and no extra RAM. For more, set `OPENRUN_DATABASE_URL` (e.g. `postgresql+psycopg://…`) and add the `psycopg[binary]` driver to the image.
 
+## Sharing the server with friends
+
+- **Invite**: *Settings › Users › Create invitation* and send the link (single use, expires in 14 days). On a phone, *Send* opens the share sheet.
+- **Forgotten password**: the key icon next to a user creates a one-time reset link (`/#restablecer=…`, expires in 3 days). No email server needed.
+- **Privacy**: sign-up requires accepting a plain-language privacy notice. Each user can download all their data (JSON) or delete their account from *Settings › Your account*.
+- **Admin overview**: last seen, Garmin connection and last sync per user, AI usage, and backup status.
+- **Garmin rate limits**: every user shares the server's IP. The daily routine and intraday sync handle at most 2 users per minute, and pause for 30 minutes after a 429. Token folders are `0700` (files `0600`).
+- **First run**: a guided welcome, then a one-minute tour (replayable from *Settings › Your account*) that ends with install-on-phone instructions for the device in hand.
+
 ## Security
 
-- The whole API requires a session (username and password) or an API token; only `/api/health`, login and invitation sign-up are public.
+- The whole API requires a session (username and password) or an API token; only `/api/health`, login, invitation sign-up and password-reset links are public.
 - Passwords are hashed with scrypt. Sessions are HMAC-signed, expire after 90 days and are bound to the password: changing it signs out every other device.
 - Personal API tokens are random 256-bit values stored as SHA-256 hashes; regenerating or revoking one invalidates the old one.
-- At most 10 failed attempts (login or invitation codes) per real client IP every 10 minutes.
+- At most 10 failed attempts (login, invitation or reset codes) per real client IP every 10 minutes. Invitation and reset codes can't be used for each other.
 - Importing a course by URL only fetches `https://` from public addresses, at most 8 MB. Push notifications are only sent to the Google, Mozilla, Apple and Microsoft push services.
 - `Secure` + `HttpOnly` cookies, HSTS and anti-clickjacking headers.
 

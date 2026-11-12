@@ -899,7 +899,7 @@ export default function SettingsPage({ onChange, me, onMe }: { onChange: () => v
       <GarminCard onChange={onChange} demo={!!me?.is_demo} />
       <HistoryImportCard />
       <ImportCard />
-      <HelioCard />
+      {'bluetooth' in navigator && <HelioCard />}
       <Section title={t('Training')} />
       <ProfileCard />
       <AutomationCard selfHost={selfHost} />
