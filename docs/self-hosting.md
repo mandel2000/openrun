@@ -122,7 +122,33 @@ Everything lives in the data folder (`/data` in the container, `~/.openrun/` loc
 | `secret.key` | Key that signs sessions (generated) |
 | `vapid.pem` | Push notification key (generated; if deleted, every device has to re-enable notifications) |
 
-The daily snapshots protect against mistakes, not against losing the disk: copy the data folder somewhere else if your data matters to you.
+The daily snapshots protect against mistakes, not against losing the disk. For that, turn on **encrypted off-site copies**.
+
+### Off-site copies (Backblaze B2)
+
+Each daily snapshot is gzipped, encrypted with AES-256-GCM (key derived with scrypt from your passphrase) and uploaded to a Backblaze B2 bucket. The provider only ever sees ciphertext. The last 30 copies are kept.
+
+1. In Backblaze, create a **private** bucket and an application key restricted to that bucket (read and write).
+2. Set these variables and restart:
+
+| Variable | Value |
+|---|---|
+| `OPENRUN_BACKUP_B2_KEY_ID` | keyID of the application key |
+| `OPENRUN_BACKUP_B2_KEY` | applicationKey |
+| `OPENRUN_BACKUP_B2_BUCKET` | bucket name |
+| `OPENRUN_BACKUP_PASSPHRASE` | long passphrase. **Keep a copy outside the server**: without it the copies can't be decrypted |
+| `OPENRUN_BACKUP_B2_KEEP` | copies to keep (default `30`) |
+
+*Settings › Users* shows the last local and off-site backup. A failed upload sends a push to admins and makes `/api/health?deep=1` answer 503.
+
+**Restore** (with the same variables set, e.g. inside the container):
+
+```bash
+python -m app.offsite list
+python -m app.offsite download latest /data/restored.db
+```
+
+Stop the app, replace `openrun.db` with the restored file (and delete `openrun.db-wal` / `openrun.db-shm`), and start it again. `python -m app.offsite decrypt <file> <out.db>` decrypts a copy you downloaded from the B2 web UI.
 
 **Upgrading**: `docker compose pull && docker compose up -d` (or `git pull` and restart `run.sh`). Database migrations run automatically on start, and the first start after a structural migration keeps a full copy of the old database next to it.
 

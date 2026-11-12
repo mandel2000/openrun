@@ -1259,6 +1259,8 @@ def daily_routine(s: Session, force: bool = False) -> dict:
             out = fn()
             log["steps"].append({"step": name, "ok": True, "result": out})
         except Exception as e:  # noqa: BLE001 - keep going, report
+            from .integrations import garmin as G
+            G.note_error(e)
             log["steps"].append({"step": name, "ok": False, "error": str(e)})
 
     connected = garmin.status().get("connected")
@@ -1387,7 +1389,10 @@ def backup_db(keep: int = 14) -> dict | None:
     old = sorted(folder.glob("openrun-*.db"))[:-keep]
     for f in old:
         f.unlink()
-    return {"file": dest.name, "kept": min(keep, len(list(folder.glob('openrun-*.db'))))}
+    from . import offsite
+
+    remote = offsite.upload_backup(dest)  # encrypted copy off the server (Backblaze B2), when configured
+    return {"file": dest.name, "kept": min(keep, len(list(folder.glob('openrun-*.db')))), "offsite": remote}
 
 
 def delete_user(uid: int) -> None:
@@ -1407,6 +1412,19 @@ def delete_user(uid: int) -> None:
         s.commit()
     garmin.forget(uid)
     i18n.forget_user(uid)
+
+
+def export_user(s: Session, uid: int) -> dict:
+    """Everything stored for this user, as JSON (GDPR-style self-service export)."""
+    from .db import User
+    from .tenancy import TENANT_MODELS
+
+    u = s.get(User, uid)
+    out: dict = {"exported_at": dt.datetime.now().isoformat(timespec="seconds"),
+                 "account": {k: getattr(u, k) for k in ("username", "name", "created_at", "lang", "privacy_accepted_at")}}
+    for m in TENANT_MODELS:
+        out[m.__tablename__] = [r.model_dump(exclude={"user_id"}) for r in s.exec(select(m)).all()]
+    return out
 
 
 # ---------------------------------------------------------------- race-day strategy

@@ -48,6 +48,32 @@ python3 -c "import secrets; print(secrets.token_urlsafe(24))"   # contraseña
 python3 -c "import secrets; print(secrets.token_urlsafe(40))"   # API token
 ```
 
+## Copias fuera del servidor (Backblaze B2)
+
+La copia diaria de `/data/backups/` está en el mismo disco: protege de errores, no de perder el servidor. Con estas variables, cada copia diaria se comprime, se cifra con AES-256-GCM (clave derivada con scrypt de tu frase) y se sube a un bucket de Backblaze B2. Backblaze solo ve datos cifrados. Se guardan las 30 últimas.
+
+1. En Backblaze, crea un bucket **privado** y una application key limitada a ese bucket (lectura y escritura).
+2. Configura y reinicia:
+
+| Variable | Valor |
+|---|---|
+| `OPENRUN_BACKUP_B2_KEY_ID` | keyID de la application key |
+| `OPENRUN_BACKUP_B2_KEY` | applicationKey |
+| `OPENRUN_BACKUP_B2_BUCKET` | nombre del bucket |
+| `OPENRUN_BACKUP_PASSPHRASE` | frase larga. **Guárdala también fuera del servidor**: sin ella las copias no se pueden descifrar |
+| `OPENRUN_BACKUP_B2_KEEP` | copias a conservar (por defecto `30`) |
+
+*Ajustes › Usuarios* muestra la última copia local y la externa. Si falla la subida, los administradores reciben un push y `/api/health?deep=1` responde 503.
+
+**Restaurar** (con las mismas variables, por ejemplo dentro del contenedor):
+
+```bash
+python -m app.offsite list
+python -m app.offsite download latest /data/restaurada.db
+```
+
+Para la app, sustituye `openrun.db` por el fichero restaurado (borra también `openrun.db-wal` y `openrun.db-shm`) y vuelve a arrancarla. `python -m app.offsite decrypt <fichero> <salida.db>` descifra una copia descargada desde la web de B2.
+
 ## Usuarios
 
 - Cada usuario tiene sus propios datos: plan, entrenos, actividades, salud, carreras, chat del coach, ajustes y cuenta de Garmin. Toda tabla de datos lleva `user_id` y el filtro se aplica en el ORM (`app/tenancy.py`): una consulta sin usuario en contexto falla en vez de devolver datos de otro.
