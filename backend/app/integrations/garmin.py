@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from ..i18n import _
+from ..training.vdot import fmt_pace
 
 log = logging.getLogger(__name__)
 
@@ -22,6 +23,12 @@ TOKEN_DIR = Path(os.getenv("OPENRUN_GARMIN_TOKENS", Path.home() / ".openrun" / "
 STEP_TYPES = {"warmup": (1, "warmup"), "cooldown": (2, "cooldown"), "run": (3, "interval"),
               "recovery": (4, "recovery"), "rest": (5, "rest"), "repeat": (6, "repeat")}
 END_CONDITIONS = {"open": (1, "lap.button"), "time": (2, "time"), "distance": (3, "distance")}
+# Easy-effort steps go to the watch without a pace target, so it doesn't beep every time you drift
+# out of a narrow band on a relaxed run: easy pace is a ceiling, not a target to hit (Seiler 2010).
+# The range stays in the step's note as a guide. Bump GARMIN_FORMAT when the conversion changes so
+# workouts already on the watch are sent again.
+NO_ALERT_ZONES = {"recovery", "easy", "long"}
+GARMIN_FORMAT = 2
 
 
 # ---------------------------------------------------------------- workout conversion
@@ -53,12 +60,16 @@ def _step_to_garmin(step: dict, order: list[int], child_id: int | None) -> dict:
         "endConditionValue": float(step.get("duration_value") or 0) if cid != 1 else None,
         "description": (step.get("note") or "")[:500] or None,
     }
-    if step.get("pace_slow") and step.get("pace_fast"):
+    easy = step.get("zone") in NO_ALERT_ZONES
+    if easy and step.get("pace_slow") and step.get("pace_fast"):
+        guide = _("Guide pace {slow}-{fast}/km", slow=fmt_pace(step["pace_slow"]), fast=fmt_pace(step["pace_fast"]))
+        out["description"] = " · ".join(x for x in (out["description"], guide) if x)[:500]
+    if step.get("pace_slow") and step.get("pace_fast") and not easy:
         # Garmin pace targets are speeds in m/s; slower pace = lower limit (targetValueOne)
         out["targetType"] = {"workoutTargetTypeId": 6, "workoutTargetTypeKey": "pace.zone", "displayOrder": 6}
         out["targetValueOne"] = _speed(step["pace_slow"])
         out["targetValueTwo"] = _speed(step["pace_fast"])
-    elif step.get("hr_low") and step.get("hr_high"):
+    elif step.get("hr_low") and step.get("hr_high") and not easy:
         out["targetType"] = {"workoutTargetTypeId": 4, "workoutTargetTypeKey": "heart.rate.zone", "displayOrder": 4}
         out["targetValueOne"] = float(step["hr_low"])
         out["targetValueTwo"] = float(step["hr_high"])

@@ -76,6 +76,22 @@ def test_garmin_json_shape():
     assert len(orders) == len(set(orders))
 
 
+def test_garmin_easy_steps_have_no_pace_alert():
+    plan = generate_plan(PlanRequest(goal="10k", start_date=dt.date(2026, 11, 2), days_per_week=5, current_weekly_km=40))
+    ws = [x for wk in plan["weeks"] for x in wk["workouts"] if x["sport"] == "running"]
+
+    def leaves(ss):
+        for s in ss:
+            yield from leaves(s.get("workoutSteps", [])) if s["type"] == "RepeatGroupDTO" else [s]
+    easy = workout_to_garmin(next(x for x in ws if x["type"] == "easy"))
+    (step,) = leaves(easy["workoutSegments"][0]["workoutSteps"])
+    assert step["targetType"]["workoutTargetTypeKey"] == "no.target"
+    assert "/km" in step["description"]  # the range stays as a guide
+    tempo = workout_to_garmin(next(x for x in ws if x["type"] in ("tempo", "intervals")))
+    keys = [s["targetType"]["workoutTargetTypeKey"] for s in leaves(tempo["workoutSegments"][0]["workoutSteps"])]
+    assert keys[0] == "no.target" and "pace.zone" in keys  # easy warm-up silent, hard part keeps its alert
+
+
 def test_readiness_hrv():
     base = [{"date": (dt.date(2026, 10, 1) + dt.timedelta(days=i)).isoformat(), "hrv_rmssd": 60 + (i % 5)} for i in range(20)]
     low = [{"date": (dt.date(2026, 10, 21) + dt.timedelta(days=i)).isoformat(), "hrv_rmssd": 40} for i in range(5)]
