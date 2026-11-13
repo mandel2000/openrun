@@ -44,7 +44,7 @@ Nota: un reportaje del WSJ (febrero 2026) citado por the5krunner recogía fisiot
   - Cuestas: sprints de 8–10 s, 60 s, 90 s, cuestas largas de 2′30–3′; como mucho una semana sí y otra no. Barnes et al. 2013: todos los formatos en cuesta mejoraron el 5K. Sin cuestas cerca, se cambian por fartlek.
   - Fartlek: 1′/1′, pirámide 1-2-3-2-1′, "Mona" (90-60-30-15 s).
   - Umbral: intervalos cruise, tempo continuo, 2–3 bloques largos, tempo progresivo (Daniels).
-  - VO₂máx: 800–1200 m, series de 3′, pirámide 400-800-1200-800-400, series 30/30 s. Las series largas y las cortas mejoran el VO₂máx (Billat 2001; Rønnestad et al. 2015; Wen et al. 2019, meta-análisis).
+  - VO₂máx: 800–1200 m, series de 3′, pirámide 400-800-1200-800-400, 4×4 noruego (4′ al 90–95 % de la FC máx. / 3′ de recuperación activa; Helgerud et al. 2007), series 30/30 s. Las series largas y las cortas mejoran el VO₂máx (Billat 2001; Rønnestad et al. 2015; Wen et al. 2019, meta-análisis).
   - Tiradas largas: suave, con rectas, con cambios de 1′, progresiva o con final a ritmo objetivo (pico de media/maratón).
 - La poca variación de un día a otro ("monotonía") se asocia a enfermedad y estancamiento (Foster 1998).
 

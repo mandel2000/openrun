@@ -44,7 +44,7 @@ A February 2026 WSJ report cited by the5krunner described physiotherapists seein
   - Hills: 8–10 s sprints, 60 s, 90 s, 2′30–3′ long hills; at most every other week. Barnes et al. 2013: every uphill format improved 5K performance. Without hills nearby they become fartlek.
   - Fartlek: 1′/1′, pyramid 1-2-3-2-1′, "Mona" (90-60-30-15 s).
   - Threshold: cruise intervals, continuous tempo, 2–3 long blocks, progressive tempo (Daniels).
-  - VO₂max: 800–1200 m, 3′ reps, 400-800-1200-800-400 pyramid, 30/30 s sets. Long and short intervals both raise VO₂max (Billat 2001; Rønnestad et al. 2015; Wen et al. 2019 meta-analysis).
+  - VO₂max: 800–1200 m, 3′ reps, 400-800-1200-800-400 pyramid, Norwegian 4×4 (4′ at 90–95 % HRmax / 3′ active recovery; Helgerud et al. 2007), 30/30 s sets. Long and short intervals both raise VO₂max (Billat 2001; Rønnestad et al. 2015; Wen et al. 2019 meta-analysis).
   - Long runs: easy, + strides, with 1′ surges, progressive, or with a goal-pace finish (half/marathon peak).
 - Low day-to-day variation ("monotony") goes with illness and staleness (Foster 1998).
 

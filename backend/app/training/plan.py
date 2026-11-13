@@ -16,7 +16,8 @@ Principles (see docs/science.md for full references):
   sustainable weekly volume and a larger long-run share.
 - Variety: each stimulus (hills, fartlek, threshold, VO2max, speed, race pace) has several formats
   that rotate without repeating within ~2 weeks. Any uphill format works (Barnes et al. 2013) and
-  short or long intervals both raise VO2max (Billat 2001; Rønnestad 2015); low day-to-day
+  short or long intervals both raise VO2max (Billat 2001; Rønnestad 2015;
+  Norwegian 4x4: Helgerud et al. 2007); low day-to-day
   variation ("monotony") is linked to illness and staleness (Foster 1998).
 - Strength is optional, 1-3x/week on the days the athlete picks. Run first when both fall on the
   same day; heavy legs blunt a hard run for 24-72 h (Doma et al. 2017/2019), so the day before
@@ -270,6 +271,7 @@ def _families(c: _Ctx) -> dict[str, list[tuple[str, Builder]]]:
         "vo2": [
             ("vo2_dist", lambda k, s: W.vo2_intervals(P, n(c.i_km * 1000 / [800, 1000, 1200][k % 3], s, 3), [800, 1000, 1200][k % 3])),
             ("vo2_time", lambda k, s: W.vo2_time(P, max(3, min(6, round(i_total_s * s / 180))), 3)),
+            ("norwegian_4x4", lambda k, s: W.norwegian_4x4(P, 4 if i_total_s * s >= 14 * 60 else 3)),
             ("short_30_30", lambda k, s: W.short_intervals(P, 2 if c.i_km < 4 else 3, max(6, min(10, round(c.i_km * 1000 * s / (30 / i_pace * 1000) / 2))))),
         ],
         "speed": [

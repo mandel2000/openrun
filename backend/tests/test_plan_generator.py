@@ -110,3 +110,11 @@ def test_strength_is_optional_and_on_chosen_days():
     # Wednesday strength comes before Thursday's quality session: lighter, and it says why (Doma 2017)
     assert any("Tomorrow is a key session" in x["description"] for x in sessions if _weekday(x) == 2)
     assert on["strength_days"] == [0, 2]
+
+
+def test_norwegian_4x4_shows_up():
+    found = set()
+    for seed in range(6):
+        p = generate_plan(PlanRequest(goal="10k", start_date=START, days_per_week=5, current_weekly_km=40, seed=seed))
+        found |= {x["title"] for w in p["weeks"] for x in w["workouts"] if x["title"].startswith("Norwegian")}
+    assert found <= {"Norwegian 4×4′", "Norwegian 3×4′"} and found

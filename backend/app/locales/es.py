@@ -368,4 +368,8 @@ ES = {
     'Walk down, full recovery': 'Baja andando, recuperación completa',
     'With {n} running day(s) a week the plan stays conservative: for a {goal} at least 3 days are recommended.': 'Con {n} día(s) de carrera a la semana el plan es conservador: para una {goal} se recomiendan al menos 3 días.',
     'Your weekly limit ({km} km) is low for this goal: the plan respects it, but expect a more modest result.': 'Tu límite semanal ({km} km) es bajo para este objetivo: el plan lo respeta, pero el resultado será más modesto.',
+    'Norwegian {reps}×4′': 'Noruego {reps}×4′',
+    'The Norwegian 4×4 (Helgerud et al. 2007): 4′ hard at 90-95% of max HR with 3′ active recovery. Raised VO2max more than steady or threshold running in that study. Hard but controlled: you should finish the last rep, not collapse.': 'El 4×4 noruego (Helgerud et al. 2007): 4′ fuerte al 90-95 % de la FC máxima con 3′ de recuperación activa. En ese estudio mejoró el VO2máx más que el rodaje continuo o el umbral. Duro pero controlado: debes acabar la última serie entero, no reventado.',
+    '90-95% max HR, the last minute should feel hard': '90-95 % de la FC máx., el último minuto debe costar',
+    'Active recovery, ~70% max HR': 'Recuperación activa, ~70 % de la FC máx.',
 }

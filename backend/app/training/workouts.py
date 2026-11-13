@@ -312,6 +312,17 @@ def vo2_time(paces: TrainingPaces, reps: int, minutes: int = 3) -> Workout:
                 _cd(paces, 2)], "high")
 
 
+def norwegian_4x4(paces: TrainingPaces, reps: int = 4) -> Workout:
+    return _mk("intervals", _("Norwegian {reps}×4′", reps=reps),
+               _("The Norwegian 4×4 (Helgerud et al. 2007): 4′ hard at 90-95% of max HR with 3′ active recovery. "
+                 "Raised VO2max more than steady or threshold running in that study. Hard but controlled: "
+                 "you should finish the last rep, not collapse."),
+               [_wu(paces, 2.5), Step("repeat", repeat=reps, steps=[
+                   _pace_step("run", paces, "interval", seconds=240, note=_("90-95% max HR, the last minute should feel hard")),
+                   _pace_step("recovery", paces, "easy", seconds=180, note=_("Active recovery, ~70% max HR"))]),
+                _cd(paces, 2)], "high")
+
+
 def vo2_pyramid(paces: TrainingPaces, top_m: int = 1200) -> Workout:
     legs = [400, 800, top_m, 800, 400]
     steps = []
