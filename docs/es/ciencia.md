@@ -32,10 +32,26 @@ Nota: un reportaje del WSJ (febrero 2026) citado por the5krunner recogía fisiot
 ### Distribución de intensidad
 - ~80 % baja / ~20 % moderada-alta; máximo 2 sesiones de calidad por semana. Seiler & Kjerland 2006; Seiler 2010; Stöggl & Sperlich 2014 (polarizado > umbral/volumen); Casado et al. 2022 (pirámide en fondistas de élite).
 - Si la tirada larga lleva bloque a ritmo de carrera, la 2ª sesión de calidad pasa a suave + progresivos.
+- Piramidal en base/desarrollo (más umbral) y más polarizado cerca de la carrera (VO₂máx y ritmo de carrera). Filipas et al. 2022: piramidal → polarizado dio la mayor mejora en 5K en 16 semanas.
 
 ### Volumen por sesión (Daniels)
 - Umbral ≤ 10 % del volumen semanal; I ≤ min(10 km, 8 %), repeticiones de 3–5 min con recuperación ≈ igual; R ≤ min(8 km, 5 %), recuperación completa.
-- Tirada larga ≤ 25–33 % del volumen semanal (hasta 42 % en el pico de maratón) y con tope de tiempo; +2 km/semana como máximo.
+- Tirada larga ≤ 25–33 % del volumen semanal (hasta 42 % en el pico de maratón) y con tope de tiempo.
+- Ninguna salida más de ~10 % más larga que la más larga hasta la fecha. Frandsen et al. 2025 (BJSM, 5.205 corredores con datos de Garmin): los picos de una sola sesión > 10 % sobre la salida más larga de los 30 días previos aumentaron las lesiones por sobrecarga (+64 % con 10–30 %, ×2,3 por encima del 100 %); el cambio semanal no.
+
+### Variedad de sesiones
+- Cada estímulo tiene varios formatos que rotan (primero el menos usado, nunca el mismo en 2 semanas si se puede evitar). El orden se baraja por atleta: dos amigos con los mismos datos reciben planes distintos pero estables.
+  - Cuestas: sprints de 8–10 s, 60 s, 90 s, cuestas largas de 2′30–3′; como mucho una semana sí y otra no. Barnes et al. 2013: todos los formatos en cuesta mejoraron el 5K. Sin cuestas cerca, se cambian por fartlek.
+  - Fartlek: 1′/1′, pirámide 1-2-3-2-1′, "Mona" (90-60-30-15 s).
+  - Umbral: intervalos cruise, tempo continuo, 2–3 bloques largos, tempo progresivo (Daniels).
+  - VO₂máx: 800–1200 m, series de 3′, pirámide 400-800-1200-800-400, 4×4 noruego (4′ al 90–95 % de la FC máx. / 3′ de recuperación activa; Helgerud et al. 2007), series 30/30 s. Las series largas y las cortas mejoran el VO₂máx (Billat 2001; Rønnestad et al. 2015; Wen et al. 2019, meta-análisis).
+  - Tiradas largas: suave, con rectas, con cambios de 1′, progresiva o con final a ritmo objetivo (pico de media/maratón).
+- La poca variación de un día a otro ("monotonía") se asocia a enfermedad y estancamiento (Foster 1998).
+
+### Días de carrera (1–7)
+- El atleta elige los días de la semana y el de la tirada larga. Los días de calidad se separan lo máximo posible y nunca la víspera de la tirada larga si se puede evitar; con 6–7 días, el día después de la tirada larga es regenerativo.
+- Menos días → menos volumen sostenible (35 % del pico típico con 1 día, 55 % con 2, 70 % con 3, 85 % con 4) y más peso de la tirada larga. 1 día: la tirada larga lleva el estímulo (cambios, progresiva). 2–3 días: una sesión de calidad que alterna estímulos cada semana. Los planes de media o maratón con 1–2 días avisan de ello.
+- Límite opcional de km semanales: el volumen nunca lo supera; las sesiones de calidad se recortan para caber (≤ ~25 % de la semana cada una).
 
 ### Progresión y carga
 - ≤ +8 %/semana con semana de descarga (−25 %) cada 4 semanas (cada 3 en principiantes y > 50 años). Nielsen et al. 2014 (lesión en noveles con incrementos > 30 %/2 sem); Gabbett 2016 (ACWR 0,8–1,3).
@@ -56,7 +72,8 @@ Nota: un reportaje del WSJ (febrero 2026) citado por the5krunner recogía fisiot
 - Medición propia con la Helio Strap: 3 min tumbado, se descartan los primeros 30 s; filtro de artefactos (>20 % de cambio entre RR).
 
 ### Fuerza
-- Fuerza pesada + pliometría 2×/semana mejora la economía de carrera 2–8 % sin perjudicar el VO₂máx. Blagrove et al. 2018 (revisión sistemática); Støren 2008. Mismo día que la calidad ("días duros duros").
+- Fuerza pesada + pliometría 2×/semana mejora la economía de carrera 2–8 % sin perjudicar el VO₂máx. Blagrove et al. 2018 (revisión sistemática); Støren 2008; Llanos-Lagos et al. 2024 (meta-análisis: cargas ≥ 80 % 1RM, la mejora más clara).
+- Opcional, 1–3 días a la semana en los días que elija el atleta (por defecto, los de calidad). Primero correr y después fuerza (Doma & Deakin 2013). La fuerza de piernas empeora la carrera intensa durante 24–72 h (Doma et al. 2017), así que la víspera de una sesión de calidad o de la tirada larga la sesión es de mantenimiento, más ligera.
 
 ### Estimación de forma por FC
 - %FCR ≈ %VO₂R (Swain 1997): `VO2max ≈ (VO2(v) − 3,5) / %FCR + 3,5` en rodajes continuos > 20 min al 60–90 % FCR; se usa la mediana de ≥ 3 rodajes. Es orientativa (deriva cardiaca, desnivel, calor).

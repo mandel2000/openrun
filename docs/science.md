@@ -32,10 +32,26 @@ A February 2026 WSJ report cited by the5krunner described physiotherapists seein
 ### Intensity distribution
 - ~80 % low / ~20 % moderate-high, at most 2 quality sessions per week. Seiler & Kjerland 2006; Seiler 2010; Stöggl & Sperlich 2014 (polarised > threshold/volume); Casado et al. 2022 (pyramidal distribution in elite distance runners).
 - When the long run has a race-pace block, the second quality session becomes easy + strides.
+- Pyramidal in base/build (more threshold), more polarised near the race (VO₂max and race pace). Filipas et al. 2022: pyramidal → polarised gave the best 5K gains over 16 weeks.
 
 ### Volume per session (Daniels)
 - Threshold ≤ 10 % of weekly volume; I ≤ min(10 km, 8 %), 3–5 min repetitions with about equal recovery; R ≤ min(8 km, 5 %), full recovery.
-- Long run ≤ 25–33 % of weekly volume (up to 42 % at a marathon peak) with a time cap; at most +2 km per week.
+- Long run ≤ 25–33 % of weekly volume (up to 42 % at a marathon peak) with a time cap.
+- No single run more than ~10 % longer than the longest run so far. Frandsen et al. 2025 (BJSM, 5,205 runners with Garmin data): single-session spikes > 10 % over the longest run of the previous 30 days raised overuse-injury rates (+64 % for 10–30 %, ×2.3 above 100 %), while week-to-week change did not.
+
+### Variety of sessions
+- Each stimulus has several formats that rotate (least used first, never the same one within 2 weeks if avoidable). The order is shuffled per athlete, so two friends with the same inputs get different but stable plans.
+  - Hills: 8–10 s sprints, 60 s, 90 s, 2′30–3′ long hills; at most every other week. Barnes et al. 2013: every uphill format improved 5K performance. Without hills nearby they become fartlek.
+  - Fartlek: 1′/1′, pyramid 1-2-3-2-1′, "Mona" (90-60-30-15 s).
+  - Threshold: cruise intervals, continuous tempo, 2–3 long blocks, progressive tempo (Daniels).
+  - VO₂max: 800–1200 m, 3′ reps, 400-800-1200-800-400 pyramid, Norwegian 4×4 (4′ at 90–95 % HRmax / 3′ active recovery; Helgerud et al. 2007), 30/30 s sets. Long and short intervals both raise VO₂max (Billat 2001; Rønnestad et al. 2015; Wen et al. 2019 meta-analysis).
+  - Long runs: easy, + strides, with 1′ surges, progressive, or with a goal-pace finish (half/marathon peak).
+- Low day-to-day variation ("monotony") goes with illness and staleness (Foster 1998).
+
+### Running days (1–7)
+- The athlete picks the weekdays and the long-run day. Quality days are spread as far apart as possible, never the day before the long run if it can be avoided; with 6–7 days the day after the long run is a recovery run.
+- Fewer days → lower sustainable volume (35 % of the typical peak with 1 day, 55 % with 2, 70 % with 3, 85 % with 4) and a bigger long-run share. 1 day: the long run carries the stimulus (surges, progressive). 2–3 days: one quality session that alternates stimuli week to week. Plans for a half or marathon on 1–2 days come with a warning.
+- Optional weekly km ceiling: volume never goes above it; quality sessions are trimmed to fit (≤ ~25 % of the week each).
 
 ### Progression and load
 - ≤ +8 % per week with a recovery week (−25 %) every 4 weeks (every 3 for beginners and runners over 50). Nielsen et al. 2014 (injuries in novices with > 30 % increases over 2 weeks); Gabbett 2016 (ACWR 0.8–1.3).
@@ -52,7 +68,7 @@ A February 2026 WSJ report cited by the5krunner described physiotherapists seein
 ### Strength and mobility
 - Heavy (≥ 80 % 1RM) and explosive/plyometric work twice a week improves running economy by 2–8 % without hurting VO₂max. Blagrove et al. 2018 (systematic review); Balsalobre-Fernández et al. 2016 (meta-analysis); Støren et al. 2008.
 - Calf-soleus capacity (the soleus takes ~6–8× body weight per stride): loaded bent-knee calf raises (Dorn et al. 2012). Hip abductor strength and single-leg control relate to injury risk (Willy & Davis 2011). Copenhagen adduction lowers groin injuries (Harøy 2019).
-- Same day as quality runs, after them ("hard days hard"), maintenance volume at the peak and none in race week (Beattie 2014).
+- Optional, 1–3 days a week on the days the athlete picks (by default the quality days). Run first, then lift: strength before running hurts the run more (Doma & Deakin 2013). Heavy leg work blunts hard running for 24–72 h (Doma et al. 2017), so a strength day before a quality session or long run gets a lighter maintenance session. Maintenance volume at the peak and none in race week (Beattie 2014). High loads (≥ 80 % 1RM) give the clearest gains (Llanos-Lagos et al. 2024, two meta-analyses).
 - No static stretching before running (no injury prevention, can blunt power); a dynamic warm-up does help (Behm 2016). Post-run mobility is short and gentle.
 
 ## Readiness

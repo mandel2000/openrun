@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session
 
 from . import auth, demo, i18n, offsite, scheduler, tenancy
@@ -718,16 +718,27 @@ class PlanIn(BaseModel):
     start_date: str | None = None
     race_date: str | None = None
     weeks: int | None = None
-    days_per_week: int = 4
-    long_run_day: int = 6
+    days_per_week: int = Field(4, ge=1, le=7)
+    run_days: list[int] | None = Field(None, min_length=1, max_length=7)
+    long_run_day: int = Field(6, ge=0, le=6)
+    max_weekly_km: float | None = Field(None, gt=0, le=300)
+    hills: bool = True
+    strength_days: list[int] | None = Field(None, max_length=3)
     current_weekly_km: float = 20
     longest_recent_run_km: float = 10
     level: str = "intermediate"
     recent_race_distance: str | None = None
     recent_race_time: str | None = None
     goal_time: str | None = None
-    include_strength: bool = True
+    include_strength: bool = False
     name: str | None = None
+
+    @field_validator("run_days", "strength_days")
+    @classmethod
+    def _weekdays(cls, v: list[int] | None) -> list[int] | None:
+        if v is not None and any(d < 0 or d > 6 for d in v):
+            raise ValueError("weekdays are 0 (Monday) .. 6 (Sunday)")
+        return sorted(set(v)) if v is not None else None
 
 
 @app.post("/api/plan")
