@@ -84,6 +84,7 @@ Nota: un reportaje del WSJ (febrero 2026) citado por the5krunner recogía fisiot
 - La API oficial de Garmin es solo para empresas aprobadas. OpenRun usa [python-garminconnect](https://github.com/cyberjunky/python-garminconnect) (≥ 0.3, ya sin garth): login SSO móvil con MFA, tokens guardados en `~/.openrun/garmin`, auto-refresh.
 - Datos: actividades, HRV nocturna, sueño, FC en reposo, body battery, training readiness, LTHR, VO₂máx, predicciones.
 - Entrenos: `upload_workout` (JSON de pasos con objetivos de ritmo en m/s) + `schedule_workout` → calendario de Connect → el 265 los descarga al sincronizar.
+- Los pasos suaves (rodaje, recuperación, ritmo de tirada larga, calentamiento y enfriamiento) van sin objetivo: el reloj no pita en los rodajes; el rango de ritmo va en la nota del paso como guía. Series, tempo, ritmo de carrera y finales rápidos mantienen la alerta de ritmo.
 - Es una API no oficial: Garmin puede cambiarla sin aviso.
 
 ### Amazfit Helio Strap

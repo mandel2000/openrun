@@ -5,7 +5,7 @@
 Garmin's official API is only for approved companies, so OpenRun uses [python-garminconnect](https://github.com/cyberjunky/python-garminconnect) (mobile SSO login with MFA, auto-refreshed tokens). Tested with a Forerunner 265; any watch that syncs with Garmin Connect and supports structured workouts should work.
 
 - **In**: activities (with laps and detailed series for maps and charts), overnight HRV, sleep, resting HR, Body Battery, Training Readiness, LTHR, VO₂max, Garmin's race predictions and personal records.
-- **Out**: structured workouts (steps with pace targets in m/s) uploaded and scheduled in the Garmin Connect calendar; the watch downloads them on its next sync. Only new or changed workouts are pushed.
+- **Out**: structured workouts (steps with pace targets in m/s) uploaded and scheduled in the Garmin Connect calendar; the watch downloads them on its next sync. Only new or changed workouts are pushed. Easy-effort steps (easy, recovery and long-run pace, warm-ups and cool-downs) carry no target, so the watch doesn't beep on relaxed runs; their pace range goes in the step note as a guide. Intervals, tempo, race pace and fast finishes keep their pace alerts.
 - **Connect**: *Settings › Garmin*, email and password (the password is not stored, only the session tokens). Each user connects their own account; tokens live in the data folder.
 - It is an unofficial API: Garmin can change it without notice. Logging in from a datacenter IP can trigger extra verification; logging in at home and copying the tokens to the server avoids it ([self-hosting.md](self-hosting.md#moving-from-your-computer-to-a-server)).
 

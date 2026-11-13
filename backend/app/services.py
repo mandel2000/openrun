@@ -13,7 +13,7 @@ from sqlmodel import Session, select
 from . import i18n
 from .db import Activity, Athlete, Meta, Plan, PlannedWorkout, Race, Wellness, engine
 from .i18n import N_, _, language_name
-from .integrations.garmin import garmin
+from .integrations.garmin import GARMIN_FORMAT, garmin
 from .training import adapt, load
 from .training import records as R
 from .training import workouts as W
@@ -1247,13 +1247,13 @@ def push_changed(s: Session, days: int = 7) -> list[dict]:
     for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.date >= today.isoformat(),
                                                    PlannedWorkout.date <= (today + dt.timedelta(days=days)).isoformat(),
                                                    PlannedWorkout.status.in_(["planned", "modified"]))).all():
-        if pw.data.get("sport") == "running" and (not pw.garmin_workout_id or hashes.get(str(pw.id)) != _hash({**pw.data, "date": pw.date})):
+        if pw.data.get("sport") == "running" and (not pw.garmin_workout_id or hashes.get(str(pw.id)) != _hash({**pw.data, "date": pw.date, "garmin_format": GARMIN_FORMAT})):
             ids.append(pw.id)
     res = push_to_garmin(s, ids) if ids else []
     for r in res:
         if r["ok"]:
             pw = s.get(PlannedWorkout, r["id"])
-            hashes[str(r["id"])] = _hash({**pw.data, "date": pw.date})
+            hashes[str(r["id"])] = _hash({**pw.data, "date": pw.date, "garmin_format": GARMIN_FORMAT})
     meta_set(s, "push_hashes", hashes)
     return res
 
