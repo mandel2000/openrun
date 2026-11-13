@@ -31,7 +31,7 @@ En español e inglés (cada usuario lo elige en *Ajustes*).
 
 ## Funciones
 
-- **Planes** de 5K, 10K, media, maratón y forma general: periodización (base → desarrollo → específico → afinamiento), ritmos VDOT de Daniels, ~80/20 de intensidad, progresión ≤ 10 % con descargas, fuerza y movilidad.
+- **Planes** de 5K, 10K, media, maratón y forma general: periodización (base → desarrollo → específico → afinamiento), ritmos VDOT de Daniels, ~80/20 de intensidad, progresión ≤ 10 % con descargas y sin picos en una sola salida, de 1 a 7 días de carrera en los días que elijas, límite opcional de km semanales, formatos de sesión que rotan (cuestas, fartlek, umbral, VO₂máx, ritmo de carrera) y fuerza opcional en los días que elijas.
 - **Garmin** (probado con un Forerunner 265): descarga actividades, HRV, sueño y FC en reposo; envía entrenos estructurados con objetivos de ritmo al calendario de Garmin Connect, que se sincroniza con el reloj.
 - **¿Sin Garmin?** Sube `.fit`, `.gpx` o `.tcx` de cualquier reloj o app, o tu exportación completa de Strava. Tienen mapa, gráficas y parciales y cuentan para el plan.
 - **Readiness 0–100** con HRV, sueño, FC en reposo, carga (forma/ACWR) y un check-in diario de dos toques. Si llegas cansado propone suavizar el entreno de hoy; tú aceptas o mantienes el plan, y el coach explica por qué.

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api, fmtDate, fmtKm, fmtTime, iso, useApi, type Plan, type Race } from '../api'
 import { Banner, Empty, Icon, Segmented, Sheet, Skeleton } from '../ui'
-import { PlanForm } from './PlanPage'
+import { PlanForm, planPrefs } from './PlanPage'
 import RaceStrategy from '../components/RaceStrategy'
 import { t } from '../i18n'
 
@@ -251,7 +251,7 @@ export default function RacesPage({ plan, reload }: { plan: Plan | null; reload:
         <Sheet title={t('Plan for {name}', { name: planFor.name })} onClose={() => setPlanFor(null)} labelledBy="pf-title">
           <Banner tone="info">{t('This replaces your active plan')}{plan ? ` (“${plan.name}”)` : ''}.</Banner>
           <div style={{ marginTop: 12 }}>
-            <PlanForm initial={{ goal: goalFor(planFor.distance_m), race_date: planFor.date }} onCreated={() => { setPlanFor(null); changed() }} onCancel={() => setPlanFor(null)} />
+            <PlanForm initial={{ ...planPrefs(plan), goal: goalFor(planFor.distance_m), race_date: planFor.date }} onCreated={() => { setPlanFor(null); changed() }} onCancel={() => setPlanFor(null)} />
           </div>
         </Sheet>
       )}

@@ -155,6 +155,11 @@ def _mk(type_, title, desc, steps, intensity, paces=None) -> Workout:
     return recompute(Workout(type_, title, desc, steps, intensity))
 
 
+def _fmt_min(seconds: int) -> str:
+    m, sec = divmod(int(seconds), 60)
+    return f"{m}′{sec:02d}″" if sec else f"{m}′"
+
+
 def _round_km(x: float, step: float = 0.5) -> float:
     return max(step, round(x / step) * step)
 
@@ -187,14 +192,59 @@ def easy_with_strides(paces: TrainingPaces, km: float, n: int = 6) -> Workout:
                                                 Step("recovery", "time", 60, note=_("Walk / very easy jog"))])], "low")
 
 
-def hills(paces: TrainingPaces, reps: int = 8) -> Workout:
-    return _mk("hills", _("Hills {reps}×60 s", reps=reps),
+def hills(paces: TrainingPaces, reps: int = 8, seconds: int = 60) -> Workout:
+    return _mk("hills", _("Hills {reps}×{sec} s", reps=reps, sec=seconds),
                _("Short hills at ~5K effort: specific strength, power and economy with less impact "
                  "than on the flat (Barnes et al. 2013). Jog down as recovery."),
                [_wu(paces, 2.5),
-                Step("repeat", repeat=reps, steps=[Step("run", "time", 60, "interval", note=_("4-8% hill, hard, RPE 8")),
-                                                   Step("recovery", "time", 90, note=_("Jog down"))]),
+                Step("repeat", repeat=reps, steps=[Step("run", "time", seconds, "interval", note=_("4-8% hill, hard, RPE 8")),
+                                                   Step("recovery", "time", round(seconds * 1.5), note=_("Jog down"))]),
                 _cd(paces, 2)], "moderate")
+
+
+def hill_sprints(paces: TrainingPaces, km: float, reps: int = 8) -> Workout:
+    km = _round_km(max(km - 1, 3))
+    return _mk("hills", _("Easy {km} km + {n} hill sprints", km=f"{km:g}", n=reps),
+               _("Maximal 8-10 s sprints up a steep hill with full recovery: recruits fast fibres and builds power "
+                 "and tendon stiffness with almost no fatigue (neuromuscular work, Barnes 2013; Paavolainen 1999)."),
+               [_pace_step("run", paces, "easy", meters=km * 1000),
+                Step("repeat", repeat=reps, steps=[Step("run", "time", 10, "repetition", note=_("Steep hill (6-10%), all out but relaxed")),
+                                                   Step("recovery", "time", 120, note=_("Walk down, full recovery"))])], "moderate")
+
+
+def long_hills(paces: TrainingPaces, reps: int = 5, seconds: int = 150) -> Workout:
+    return _mk("hills", _("Long hills {reps}×{min}", reps=reps, min=_fmt_min(seconds)),
+               _("Longer climbs at ~10K/threshold effort: aerobic power and leg strength on gentle grades "
+                 "(Barnes et al. 2013: every uphill format improved 5K time). Jog down easy."),
+               [_wu(paces, 2.5),
+                Step("repeat", repeat=reps, steps=[Step("run", "time", seconds, "threshold", note=_("Gentle hill (3-6%), strong and steady, RPE 7")),
+                                                   Step("recovery", "time", seconds, note=_("Jog down"))]),
+                _cd(paces, 2)], "moderate")
+
+
+def fartlek(paces: TrainingPaces, style: str = "classic", reps: int = 8) -> Workout:
+    """Unstructured-feeling speed play; no track or hills needed (Swedish fartlek)."""
+    if style == "pyramid":
+        mins = [1, 2, 3, 2, 1]
+        body = [Step("repeat", repeat=1, steps=[x for m in mins for x in (
+            _pace_step("run", paces, "ten_k", seconds=m * 60), Step("recovery", "time", m * 30, note=_("Float, easy jog")))])]
+        title = _("Pyramid fartlek 1-2-3-2-1′")
+        if reps > 1:
+            body[0].repeat = 2
+            title = _("Pyramid fartlek 2× (1-2-3-2-1′)")
+    elif style == "mona":
+        body = [Step("repeat", repeat=n, steps=[_pace_step("run", paces, "ten_k" if sec >= 60 else "five_k", seconds=sec),
+                                                 _pace_step("recovery", paces, "marathon", seconds=sec, note=_("Steady float, don't stop"))])
+                for n, sec in ((2, 90), (4, 60), (4, 30), (4, 15))]
+        title = _("Mona fartlek (20′)")
+    else:
+        body = [Step("repeat", repeat=reps, steps=[_pace_step("run", paces, "ten_k", seconds=60),
+                                                    Step("recovery", "time", 60, note=_("Float, easy jog"))])]
+        title = _("Fartlek {n}×(1′ fast / 1′ easy)", n=reps)
+    return _mk("fartlek", title,
+               _("Speed play by feel: changes of pace at ~10K effort without a track. Builds speed and "
+                 "aerobic power with low mental cost, ideal to break up the routine."),
+               [_wu(paces), *body, _cd(paces)], "moderate")
 
 
 def progression_run(paces: TrainingPaces, km: float) -> Workout:
@@ -213,6 +263,24 @@ def tempo(paces: TrainingPaces, minutes: int) -> Workout:
                _("Continuous run at T pace (~1-hour race pace, 'comfortably hard'): raises the lactate threshold. "
                  "Daniels caps continuous T at ~20-30 min."),
                [_wu(paces), _pace_step("run", paces, "threshold", seconds=minutes * 60), _cd(paces)], "moderate")
+
+
+def split_tempo(paces: TrainingPaces, reps: int, minutes: int) -> Workout:
+    return _mk("threshold", _("Threshold {reps}×{min}′", reps=reps, min=minutes),
+               _("Long threshold blocks with 2-3′ jog between them: lots of time at T pace with controlled fatigue "
+                 "(Daniels' cruise intervals; the basis of the 'Norwegian' threshold approach)."),
+               [_wu(paces), Step("repeat", repeat=reps, steps=[_pace_step("run", paces, "threshold", seconds=minutes * 60),
+                                                             Step("recovery", "time", 120 if minutes < 12 else 180, note=_("Easy jog"))]),
+                _cd(paces)], "moderate")
+
+
+def progressive_tempo(paces: TrainingPaces, minutes: int) -> Workout:
+    half = max(6, minutes // 2)
+    return _mk("tempo", _("Progressive tempo {min}′", min=half * 2),
+               _("Starts at marathon pace and finishes at threshold: a gentle way into threshold work, "
+                 "and practice at pacing by feel."),
+               [_wu(paces), _pace_step("run", paces, "marathon", seconds=half * 60),
+                _pace_step("run", paces, "threshold", seconds=half * 60), _cd(paces)], "moderate")
 
 
 def cruise_intervals(paces: TrainingPaces, reps: int, rep_m: int) -> Workout:
@@ -235,6 +303,36 @@ def vo2_intervals(paces: TrainingPaces, reps: int, rep_m: int) -> Workout:
                 _cd(paces, 2)], "high")
 
 
+def vo2_time(paces: TrainingPaces, reps: int, minutes: int = 3) -> Workout:
+    return _mk("intervals", _("VO2max {reps}×{min}′", reps=reps, min=minutes),
+               _("Time-based intervals at I pace (3-4′) with jog recoveries a bit shorter than the work: "
+                 "near-maximal oxygen uptake for long enough to drive adaptation (Billat 2001; Midgley 2006)."),
+               [_wu(paces, 2.5), Step("repeat", repeat=reps, steps=[_pace_step("run", paces, "interval", seconds=minutes * 60),
+                                                                  Step("recovery", "time", round(minutes * 60 * 0.66 / 10) * 10, note=_("Jog"))]),
+                _cd(paces, 2)], "high")
+
+
+def vo2_pyramid(paces: TrainingPaces, top_m: int = 1200) -> Workout:
+    legs = [400, 800, top_m, 800, 400]
+    steps = []
+    for m in legs:
+        steps += [_pace_step("run", paces, "interval", meters=m),
+                  Step("recovery", "time", round(m / 1000 * paces.interval.mid() * 0.7 / 10) * 10, note=_("Jog"))]
+    return _mk("intervals", _("VO2max pyramid 400-800-{top}-800-400 m", top=top_m),
+               _("Pyramid at I pace: varied rep lengths keep it engaging while accumulating time near VO2max."),
+               [_wu(paces, 2.5), *steps[:-1], _cd(paces, 2)], "high")
+
+
+def short_intervals(paces: TrainingPaces, sets: int = 2, reps: int = 8) -> Workout:
+    return _mk("intervals", _("Short intervals {sets}×{reps}×30/30 s", sets=sets, reps=reps),
+               _("30 s fast / 30 s jog in sets: many minutes close to VO2max with less strain per rep than long "
+                 "intervals (Billat 2000; Rønnestad 2015). Same aerobic stimulus, different format."),
+               [_wu(paces, 2.5)] + [x for i in range(sets) for x in (
+                   Step("repeat", repeat=reps, steps=[_pace_step("run", paces, "interval", seconds=30, note=_("Fast, a bit quicker than I pace")),
+                                                      Step("recovery", "time", 30, note=_("Easy jog"))]),
+                   *([Step("recovery", "time", 180, note=_("Easy jog between sets"))] if i < sets - 1 else []))] + [_cd(paces, 2)], "high")
+
+
 def repetitions(paces: TrainingPaces, reps: int, rep_m: int) -> Workout:
     return _mk("reps", _("R reps {reps}×{m} m", reps=reps, m=f"{rep_m:g}"),
                _("Fast repetitions at R pace with full recovery: speed and running economy."),
@@ -252,8 +350,30 @@ def race_pace_intervals(paces: TrainingPaces, zone: str, reps: int, rep_m: int, 
                 _cd(paces)], "high" if zone in ("five_k", "ten_k") else "moderate")
 
 
-def long_run(paces: TrainingPaces, km: float, fast_finish_km: float = 0, fast_zone: str = "marathon") -> Workout:
+def long_run(paces: TrainingPaces, km: float, fast_finish_km: float = 0, fast_zone: str = "marathon", style: str = "easy") -> Workout:
     km = _round_km(km)
+    if style == "progressive":
+        a, b = _round_km(km * 0.6), _round_km(km * 0.25)
+        c = max(_round_km(km - a - b), 0.5)
+        return _mk("long", _("Progressive long run {km} km", km=f"{km:g}"),
+                   _("Long run that speeds up: easy, then steady, and the last kilometres at marathon pace. "
+                     "Endurance plus pacing practice on tired legs."),
+                   [_pace_step("run", paces, "long", meters=a * 1000), _pace_step("run", paces, "easy", meters=b * 1000),
+                    _pace_step("run", paces, "marathon", meters=c * 1000)], "moderate")
+    if style == "surges":
+        n = max(3, min(8, int(km / 2.5)))
+        seg = round(km / (n + 1) * 20) / 20  # 50 m steps; 1' surge replaces part of each block
+        return _mk("long", _("Long run {km} km with {n} surges", km=f"{km:g}", n=n),
+                   _("Easy long run with 1′ surges at half-marathon effort every ~10′: breaks the monotony and "
+                     "adds some speed without turning it into a hard day."),
+                   [_pace_step("run", paces, "long", meters=seg * 1000),
+                    Step("repeat", repeat=n, steps=[_pace_step("run", paces, "half", seconds=60),
+                                                    _pace_step("run", paces, "long", meters=round(max(seg - 60 / paces.half.mid(), 0.5) * 20) / 20 * 1000)])], "low")
+    if style == "strides":
+        return _mk("long", _("Long run {km} km + 4 strides", km=f"{km:g}"),
+                   _("Aerobic endurance with 4 relaxed strides at the end to keep some leg speed."),
+                   [_pace_step("run", paces, "long", meters=_round_km(km - 0.8) * 1000),
+                    Step("repeat", repeat=4, steps=[_pace_step("run", paces, "repetition", seconds=20), Step("recovery", "time", 60)])], "low")
     if fast_finish_km <= 0:
         return _mk("long", _("Long run {km} km", km=f"{km:g}"),
                    _("Aerobic endurance, fat use, musculoskeletal adaptation. Steady easy pace; "

@@ -80,6 +80,13 @@ def create_plan(s: Session, params: dict) -> dict:
         p["vdot"] = a.vdot
     if not p.get("age") and a.age:
         p["age"] = a.age
+    if p.get("seed") is None:  # different session formats per athlete, stable for the same request
+        from .tenancy import current_user_id
+        try:
+            uid = current_user_id()
+        except Exception:  # noqa: BLE001 - scripts/tests without a user context
+            uid = 0
+        p["seed"] = uid * 100_003 + p["start_date"].toordinal()
     req = PlanRequest(**{k: v for k, v in p.items() if k in PlanRequest.__dataclass_fields__})
     summary = generate_plan(req)
     if not a.vdot or p.get("recent_race_distance"):
@@ -90,7 +97,8 @@ def create_plan(s: Session, params: dict) -> dict:
         s.add(old)
         for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.plan_id == old.id, PlannedWorkout.status == "planned")).all():
             s.delete(pw)
-    plan = Plan(name=summary["name"], goal=summary["goal"], request={k: str(v) for k, v in params.items()},
+    plan = Plan(name=summary["name"], goal=summary["goal"],
+                request={k: v if v is None or isinstance(v, (bool, int, float, list)) else str(v) for k, v in params.items()},
                 summary={k: v for k, v in summary.items() if k != "weeks"})
     s.add(plan)
     s.commit()

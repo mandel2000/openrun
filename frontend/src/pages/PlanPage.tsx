@@ -10,24 +10,56 @@ import { t } from '../i18n'
 const GOALS = [['5k', '5K'], ['10k', '10K'], ['half', t('Half marathon')], ['marathon', t('Marathon')], ['base', t('Base / general fitness')]]
 const DIST = [['5k', '5K'], ['10k', '10K'], ['half', t('Half')], ['marathon', t('Marathon')], ['mile', t('Mile')], ['3k', '3K']]
 
+const DEFAULT_RUN_DAYS = [1, 3, 5, 6] // Tue, Thu, Sat, Sun
+
+function DayPicker({ value, onChange, max, label }: { value: number[]; onChange: (v: number[]) => void; max?: number; label: string }) {
+  const toggle = (d: number) => {
+    if (value.includes(d)) onChange(value.filter((x) => x !== d))
+    else if (!max || value.length < max) onChange([...value, d].sort((a, b) => a - b))
+  }
+  return (
+    <div className="seg seg-multi" role="group" aria-label={label} style={{ display: 'flex', width: '100%' }}>
+      {DAY_NAMES.map((n, i) => (
+        <button key={n} type="button" aria-pressed={value.includes(i)} style={{ flex: 1, minWidth: 0 }} onClick={() => toggle(i)}>{n}</button>
+      ))}
+    </div>
+  )
+}
+
+/** The athlete's preferences from the active plan, to pre-fill a new one. */
+export function planPrefs(plan?: Plan | null): Record<string, unknown> | undefined {
+  if (!plan?.run_days) return undefined
+  return {
+    run_days: plan.run_days, long_run_day: plan.long_run_day ?? 6, max_weekly_km: plan.max_weekly_km ?? '',
+    include_strength: !!plan.strength_days?.length, strength_days: plan.strength_days ?? [], hills: plan.hills ?? true,
+  }
+}
+
 export function PlanForm({ onCreated, onCancel, initial }: { onCreated: () => void; onCancel?: () => void; initial?: Record<string, unknown> }) {
   const [f, setF] = useState(() => ({
-    goal: 'half', race_date: '', weeks: '', days_per_week: 4, long_run_day: 6, current_weekly_km: 25,
+    goal: 'half', race_date: '', weeks: '', run_days: DEFAULT_RUN_DAYS, long_run_day: 6, current_weekly_km: 25,
     longest_recent_run_km: 12, level: 'intermediate', recent_race_distance: '10k', recent_race_time: '', goal_time: '',
-    include_strength: true, ...initial,
+    max_weekly_km: '' as number | string, hills: true, include_strength: false, strength_days: [] as number[], ...initial,
   }))
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const set = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }))
+  const runDays = f.run_days as number[]
+  const longDay = runDays.includes(f.long_run_day as number) ? f.long_run_day as number : runDays[runDays.length - 1]
+  const strengthDays = f.strength_days as number[]
+  const beforeKey = f.include_strength && strengthDays.some((d) => (d + 1) % 7 === longDay)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!runDays.length) { setErr(t('Pick at least one day to run.')); return }
     setBusy(true)
     setErr(null)
-    const body: Record<string, unknown> = { ...f, weeks: f.weeks ? +f.weeks : undefined }
+    const body: Record<string, unknown> = { ...f, long_run_day: longDay, weeks: f.weeks ? +f.weeks : undefined,
+      max_weekly_km: f.max_weekly_km ? +f.max_weekly_km : undefined }
     for (const k of ['race_date', 'recent_race_time', 'goal_time']) if (!body[k]) delete body[k]
     if (!f.recent_race_time) delete body.recent_race_distance
     if (f.goal === 'base') delete body.goal_time
+    if (!f.include_strength || !strengthDays.length) delete body.strength_days
     try {
       await api.post('/api/plan', body)
       onCreated()
@@ -55,11 +87,21 @@ export function PlanForm({ onCreated, onCancel, initial }: { onCreated: () => vo
         <label className="field">{t('Goal time (optional)')}
           <input placeholder="1:45:00" value={f.goal_time} onChange={(e) => set('goal_time', e.target.value)} />
         </label>
-        <label className="field">{t('Days per week')}
-          <select value={f.days_per_week} onChange={(e) => set('days_per_week', +e.target.value)}>{[3, 4, 5, 6, 7].map((d) => <option key={d}>{d}</option>)}</select>
-        </label>
+        <div className="field" style={{ gridColumn: '1 / -1' }}>
+          <span>{t('Running days')} <span className="muted">· {t('{n} per week', { n: runDays.length })}</span></span>
+          <DayPicker value={runDays} onChange={(v) => set('run_days', v)} label={t('Running days')} />
+          {runDays.length <= 2 && runDays.length > 0 && (
+            <span className="small muted">{t('With 1–2 days the plan is built around a long run (and one quality session with 2 days). It works, but progress is slower.')}</span>
+          )}
+        </div>
         <label className="field">{t('Long run day')}
-          <select value={f.long_run_day} onChange={(e) => set('long_run_day', +e.target.value)}>{DAY_NAMES.map((d, i) => <option key={d} value={i}>{d}</option>)}</select>
+          <select value={longDay} onChange={(e) => set('long_run_day', +e.target.value)} disabled={!runDays.length}>
+            {runDays.map((i) => <option key={i} value={i}>{DAY_NAMES[i]}</option>)}
+          </select>
+        </label>
+        <label className="field">{t('Max km per week (optional)')}
+          <input type="number" min={5} max={300} inputMode="numeric" placeholder={t('No limit')} value={f.max_weekly_km}
+            onChange={(e) => set('max_weekly_km', e.target.value)} />
         </label>
         <label className="field">{t('Current km/week')}
           <input type="number" value={f.current_weekly_km} onChange={(e) => set('current_weekly_km', +e.target.value)} />
@@ -72,18 +114,36 @@ export function PlanForm({ onCreated, onCancel, initial }: { onCreated: () => vo
             <option value="beginner">{t('Beginner')}</option><option value="intermediate">{t('Intermediate')}</option><option value="advanced">{t('Advanced')}</option>
           </select>
         </label>
+        <label className="field">{t('Hills nearby?')}
+          <select value={f.hills ? '1' : '0'} onChange={(e) => set('hills', e.target.value === '1')}>
+            <option value="1">{t('Yes')}</option><option value="0">{t('No (swap hill sessions for fartlek)')}</option>
+          </select>
+        </label>
         <label className="field">{t('Recent race: distance')}
           <select value={f.recent_race_distance} onChange={(e) => set('recent_race_distance', e.target.value)}>{DIST.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         </label>
         <label className="field">{t('Recent race: time')}
           <input placeholder="45:30" value={f.recent_race_time} onChange={(e) => set('recent_race_time', e.target.value)} />
         </label>
-        <label className="field">{t('Strength 2×/week')}
-          <select value={f.include_strength ? '1' : '0'} onChange={(e) => set('include_strength', e.target.value === '1')}><option value="1">{t('Yes')}</option><option value="0">No</option></select>
-        </label>
+        <div className="field" style={{ gridColumn: '1 / -1' }}>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <input type="checkbox" checked={!!f.include_strength} onChange={(e) => set('include_strength', e.target.checked)} />
+            <span>{t('Add strength training')}</span>
+          </label>
+          {f.include_strength && (
+            <>
+              <DayPicker value={strengthDays} onChange={(v) => set('strength_days', v)} max={3} label={t('Strength days')} />
+              <span className="small muted">
+                {strengthDays.length ? t('Strength days: {n} per week (max 3).', { n: strengthDays.length }) : t('No days picked: it goes on your quality days, after running.')}
+                {' '}{t('Best on a hard running day, after the run. The day before a key session it is lighter.')}
+              </span>
+              {beforeKey && <span className="small" style={{ color: 'var(--warn)' }}>{t('One strength day is the day before your long run: that session will be lighter.')}</span>}
+            </>
+          )}
+        </div>
       </div>
       <div className="row" style={{ marginTop: 14 }}>
-        <button className="btn btn-primary" disabled={busy}>{busy ? t('Generating…') : t('Generate plan')}</button>
+        <button className="btn btn-primary" disabled={busy || !runDays.length}>{busy ? t('Generating…') : t('Generate plan')}</button>
         {err && <span className="err" role="alert">{err}</span>}
       </div>
     </form>
@@ -318,7 +378,7 @@ export default function PlanPage({ plan, reload }: { plan: Plan | null | undefin
   }, [toast])
 
   if (plan === undefined) return <div className="stack"><Skeleton h={120} /><Skeleton h={160} /><Skeleton h={64} /><Skeleton h={64} /></div>
-  if (!plan || creating) return <PlanForm onCreated={() => { setCreating(false); reload() }} onCancel={plan ? () => setCreating(false) : undefined} />
+  if (!plan || creating) return <PlanForm initial={planPrefs(plan)} onCreated={() => { setCreating(false); reload() }} onCancel={plan ? () => setCreating(false) : undefined} />
 
   const firstUpcoming = plan.weeks.find((w) => w.end >= today)
   const pushWeek = async (week: PlanWeek) => {

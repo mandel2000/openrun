@@ -118,7 +118,8 @@ def _seed(s: Session, today: dt.date, rng: random.Random) -> None:
     S.create_plan(s, {"goal": "half", "start_date": start.isoformat(), "race_date": race_day.isoformat(),
                       "days_per_week": 4, "long_run_day": 6, "current_weekly_km": 32, "longest_recent_run_km": 15,
                       "level": "intermediate", "recent_race_distance": "10k", "recent_race_time": "47:30",
-                      "goal_time": "1:42:00", "name": _("Half marathon in {weeks} weeks", weeks=14)})
+                      "goal_time": "1:42:00", "include_strength": True, "strength_days": [0, 3],
+                      "name": _("Half marathon in {weeks} weeks", weeks=14)})
     goal = S.add_race(s, _("City Half Marathon"), race_day.isoformat(), 21097.5, "A", goal_time_s=6120)
     S.set_race_course(s, goal["id"], "city-half.gpx", _course_gpx())
     tune = race_day - dt.timedelta(weeks=4)

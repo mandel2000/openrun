@@ -136,7 +136,12 @@ TOOLS: list[dict[str, Any]] = [
      "input_schema": {"type": "object", "properties": {
          "goal": {"type": "string", "enum": ["5k", "10k", "half", "marathon", "base"]},
          "start_date": {"type": "string"}, "race_date": {"type": "string"}, "weeks": {"type": "integer"},
-         "days_per_week": {"type": "integer", "minimum": 3, "maximum": 7}, "long_run_day": {"type": "integer", "description": "0=lunes..6=domingo"},
+         "days_per_week": {"type": "integer", "minimum": 1, "maximum": 7},
+         "run_days": {"type": "array", "items": {"type": "integer"}, "description": "Weekdays to run, 0=Monday..6=Sunday (overrides days_per_week)"},
+         "long_run_day": {"type": "integer", "description": "0=Monday..6=Sunday"},
+         "max_weekly_km": {"type": "number", "description": "Athlete's weekly km ceiling (optional)"},
+         "hills": {"type": "boolean", "description": "Has hills nearby (default true)"},
+         "strength_days": {"type": "array", "items": {"type": "integer"}, "description": "Weekdays for strength (with include_strength)"},
          "current_weekly_km": {"type": "number"}, "longest_recent_run_km": {"type": "number"},
          "level": {"type": "string", "enum": ["beginner", "intermediate", "advanced"]},
          "recent_race_distance": {"type": "string", "enum": list(RACE_DISTANCES_M)}, "recent_race_time": {"type": "string"},

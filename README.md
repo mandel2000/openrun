@@ -31,7 +31,7 @@
 
 ## Features
 
-- **Training plans** for 5K, 10K, half, marathon and general fitness: periodisation (base → build → specific → taper), Daniels VDOT paces, ~80/20 intensity, ≤ 10 % weekly progression with recovery weeks, strength and mobility.
+- **Training plans** for 5K, 10K, half, marathon and general fitness: periodisation (base → build → specific → taper), Daniels VDOT paces, ~80/20 intensity, ≤ 10 % weekly progression with recovery weeks and no single-run spikes, 1–7 running days on the weekdays you choose, an optional weekly km ceiling, rotating session formats (hills, fartlek, threshold, VO₂max, race pace) and optional strength on chosen days.
 - **Garmin** (tested with a Forerunner 265): pulls activities, HRV, sleep and resting HR; pushes structured workouts with pace targets to the Garmin Connect calendar, which syncs to the watch.
 - **No Garmin? No problem**: upload `.fit`, `.gpx` or `.tcx` files from any watch or app, or your whole Strava export. Uploaded runs get maps, charts and splits and count for the plan.
 - **Readiness 0–100** from HRV, sleep, resting HR, training load (form/ACWR) and a two-tap daily check-in. When you are tired it proposes a softer version of today's session; you accept or keep the plan, and the coach explains why.

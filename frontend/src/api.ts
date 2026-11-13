@@ -68,6 +68,12 @@ export type Plan = {
   predictions_end: Record<string, Prediction>
   warnings: string[]
   weeks: PlanWeek[]
+  days_per_week?: number
+  run_days?: number[]
+  long_run_day?: number
+  strength_days?: number[] | null
+  max_weekly_km?: number | null
+  hills?: boolean
 }
 
 export type Readiness = {
@@ -141,7 +147,7 @@ export const zoneVar = (lvl: number) => `var(--z${lvl})`
 export const LEVEL_LABEL = [t('Strength'), t('Very easy'), t('Easy'), t('Steady'), t('Hard'), t('Very hard'), t('Sprint')]
 export const levelLabel = (lvl: number) => LEVEL_LABEL[lvl] ?? ''
 const TYPE_LEVEL: Record<string, number> = {
-  recovery: 1, easy: 2, long: 2, strides: 2, shakeout: 1, progression: 3, hills: 5, tempo: 4, threshold: 4, cruise: 4,
+  recovery: 1, easy: 2, long: 2, strides: 2, shakeout: 1, progression: 3, hills: 5, fartlek: 4, tempo: 4, threshold: 4, cruise: 4,
   vo2max: 5, intervals: 5, reps: 6, repetition: 6, race_pace: 4, race: 5, strength: 0,
 }
 export const workoutLevel = (w: Pick<Workout, 'type' | 'intensity' | 'sport'>) =>
