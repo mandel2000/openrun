@@ -62,7 +62,7 @@ def _step_to_garmin(step: dict, order: list[int], child_id: int | None) -> dict:
     }
     easy = step.get("zone") in NO_ALERT_ZONES
     if easy and step.get("pace_slow") and step.get("pace_fast"):
-        guide = _("Guide pace {slow}-{fast}/km", slow=fmt_pace(step["pace_slow"]), fast=fmt_pace(step["pace_fast"]))
+        guide = _("Guide pace {fast}-{slow}/km", fast=fmt_pace(step["pace_fast"]), slow=fmt_pace(step["pace_slow"]))
         out["description"] = " · ".join(x for x in (out["description"], guide) if x)[:500]
     if step.get("pace_slow") and step.get("pace_fast") and not easy:
         # Garmin pace targets are speeds in m/s; slower pace = lower limit (targetValueOne)
