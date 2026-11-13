@@ -372,5 +372,5 @@ ES = {
     'The Norwegian 4×4 (Helgerud et al. 2007): 4′ hard at 90-95% of max HR with 3′ active recovery. Raised VO2max more than steady or threshold running in that study. Hard but controlled: you should finish the last rep, not collapse.': 'El 4×4 noruego (Helgerud et al. 2007): 4′ fuerte al 90-95 % de la FC máxima con 3′ de recuperación activa. En ese estudio mejoró el VO2máx más que el rodaje continuo o el umbral. Duro pero controlado: debes acabar la última serie entero, no reventado.',
     '90-95% max HR, the last minute should feel hard': '90-95 % de la FC máx., el último minuto debe costar',
     'Active recovery, ~70% max HR': 'Recuperación activa, ~70 % de la FC máx.',
-    'Guide pace {slow}-{fast}/km': 'Ritmo orientativo {slow}-{fast}/km',
+    'Guide pace {fast}-{slow}/km': 'Ritmo orientativo {fast}-{slow}/km',
 }
