@@ -365,6 +365,8 @@ class _Picker:
         if family == "hills" and c.hills and week - self.hill_week < 2:
             family = "fartlek"
         variants = dict(fams[family])
+        if avoid:  # never the look-alike of a session already in this week, if there is anything else
+            variants = {k: v for k, v in variants.items() if k not in avoid} or variants
         if week - self.hill_week < 2 and len(variants) > 1:  # hills at most every other week, whatever the family
             variants = {k: v for k, v in variants.items() if k not in _HILLY} or variants
         if family not in self.order:
@@ -373,7 +375,9 @@ class _Picker:
             self.order[family] = o
         order = [x for x in self.order[family] if x in variants] + [x for x in variants if x not in self.order[family]]
         recent = {x for w, x in self.recent if week - w <= 2} | {_SAME.get(x, x) for x in (avoid or set())}
-        name = min(order, key=lambda x: (_SAME.get(x, x) in recent, self.uses[x], order.index(x)))
+        last = {x: w for w, x in self.recent}  # when everything is recent, take the one used longest ago
+        name = min(order, key=lambda x: (_SAME.get(x, x) in recent, last.get(_SAME.get(x, x), -99) if _SAME.get(x, x) in recent else 0,
+                                         self.uses[x], order.index(x)))
         k = self.uses[name]
         self.uses[name] += 1
         self.recent.append((week, _SAME.get(name, name)))
@@ -635,6 +639,7 @@ def generate_plan(req: PlanRequest) -> dict:
 
     weeks: list[PlanWeek] = []
     phase_counter: dict[str, int] = {}
+    quality_counter: dict[str, int] = {}
     longs = [max(req.longest_recent_run_km or 0, 3.0)]  # longest run of each previous week
     n_easy_runs = 0
     for wi, (phase, vol, is_rec) in enumerate(zip(phases, vols, recov)):
@@ -665,7 +670,11 @@ def generate_plan(req: PlanRequest) -> dict:
         n_q = n_q_default
         # a quality session never outgrows the spike limit nor ~a quarter of the week
         ctx = _Ctx(req.goal, paces, vol, max(min(spike_cap, vol * 0.25), 6.0), req.hills)
-        quality = _quality_sessions(picker, ctx, phase, wk_in_phase, n_q, req.level, is_rec, wi)
+        # the rotation of stimuli skips recovery weeks, so a short peak still gets its race-pace session
+        q_ix = quality_counter.get(phase, 0)
+        if not is_rec:
+            quality_counter[phase] = q_ix + 1
+        quality = _quality_sessions(picker, ctx, phase, q_ix, n_q, req.level, is_rec, wi)
         q_km = sum(q.distance_km for q in quality)
         n_easy = sum(1 for r in roles.values() if r in ("E", "R")) + max(0, n_q - len(quality))
         if not n_easy and n_days > 1:  # nowhere else to put the volume: the long run takes it (within its caps)
@@ -706,7 +715,7 @@ def generate_plan(req: PlanRequest) -> dict:
             if light_slot and not is_race_week and not is_rec and len(easy_days) >= 2 - (phase == "taper"):
                 light_day = next((d for d in free if (L - d) % 7 != 1), free[0])
                 q_types = {q.type for q in quality}
-                avoid = ({"fartlek_light"} if q_types & {"fartlek", "hills"} else set()) | ({"progression_light"} if q_types & {"progression", "tempo"} else set())
+                avoid = ({"fartlek_light"} if q_types & {"fartlek", "hills", "intervals"} else set()) | ({"progression_light"} if q_types & {"progression", "tempo"} else set())
                 lt = picker.pick("strides" if phase == "taper" else "light", ctx, wi, avoid=avoid)
                 if lt.intensity != "low" and lw.intensity != "low":
                     lt = W.easy_with_strides(paces, vol * 0.18)
