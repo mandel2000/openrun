@@ -26,19 +26,35 @@ function DayPicker({ value, onChange, max, label }: { value: number[]; onChange:
   )
 }
 
+// Number fields are kept as text while typing: a numeric state turns an emptied box into "0"
+// and drops the decimal comma that Spanish keyboards type.
+const dec = (v: string) => v.replace(',', '.').replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')
+const num = (v: unknown): number | undefined => (v === '' || v == null || Number.isNaN(+v) ? undefined : +v)
+/** Times as typed on a numeric keypad: "4530" → "45:30", "14500" → "1:45:00". */
+const clock = (v: string) => {
+  if (/[:.]/.test(v)) return v.replace(/[.]/g, ':').replace(/[^0-9:]/g, '')
+  const d = v.replace(/\D/g, '').slice(0, 6)
+  return d.length <= 2 ? d : d.length <= 4 ? `${d.slice(0, -2)}:${d.slice(-2)}` : `${d.slice(0, -4)}:${d.slice(-4, -2)}:${d.slice(-2)}`
+}
+
 /** The athlete's preferences from the active plan, to pre-fill a new one. */
 export function planPrefs(plan?: Plan | null): Record<string, unknown> | undefined {
-  if (!plan?.run_days) return undefined
+  if (!plan) return undefined
+  const base = {
+    goal: plan.goal, ...(plan.level ? { level: plan.level } : {}), goal_time: plan.goal_time ?? '',
+    race_date: plan.race_date && plan.race_date > iso(new Date()) ? plan.race_date : '',  // a past race is not a target any more
+  }
+  if (!plan.run_days) return base
   return {
-    run_days: plan.run_days, long_run_day: plan.long_run_day ?? 6, max_weekly_km: plan.max_weekly_km ?? '',
+    ...base, run_days: plan.run_days, long_run_day: plan.long_run_day ?? 6, max_weekly_km: plan.max_weekly_km ?? '',
     include_strength: !!plan.strength_days?.length, strength_days: plan.strength_days ?? [], hills: plan.hills ?? true,
   }
 }
 
 export function PlanForm({ onCreated, onCancel, initial }: { onCreated: () => void; onCancel?: () => void; initial?: Record<string, unknown> }) {
   const [f, setF] = useState(() => ({
-    goal: 'half', race_date: '', weeks: '', run_days: DEFAULT_RUN_DAYS, long_run_day: 6, current_weekly_km: 25,
-    longest_recent_run_km: 12, level: 'intermediate', recent_race_distance: '10k', recent_race_time: '', goal_time: '',
+    goal: 'half', race_date: '', weeks: '', run_days: DEFAULT_RUN_DAYS, long_run_day: 6, current_weekly_km: '25' as number | string,
+    longest_recent_run_km: '12' as number | string, level: 'intermediate', recent_race_distance: '10k', recent_race_time: '', goal_time: '',
     max_weekly_km: '' as number | string, hills: true, include_strength: false, strength_days: [] as number[], ...initial,
   }))
   const [busy, setBusy] = useState(false)
@@ -52,10 +68,13 @@ export function PlanForm({ onCreated, onCancel, initial }: { onCreated: () => vo
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!runDays.length) { setErr(t('Pick at least one day to run.')); return }
+    if (f.race_date && f.race_date <= iso(new Date())) { setErr(t('The race date must be in the future.')); return }
+    const km = num(f.current_weekly_km), longest = num(f.longest_recent_run_km)
+    if (km === undefined || longest === undefined) { setErr(t('Fill in your current km per week and your longest recent run.')); return }
     setBusy(true)
     setErr(null)
-    const body: Record<string, unknown> = { ...f, long_run_day: longDay, weeks: f.weeks ? +f.weeks : undefined,
-      max_weekly_km: f.max_weekly_km ? +f.max_weekly_km : undefined }
+    const body: Record<string, unknown> = { ...f, long_run_day: longDay, weeks: f.race_date ? undefined : num(f.weeks),
+      max_weekly_km: num(f.max_weekly_km) || undefined, current_weekly_km: km, longest_recent_run_km: longest }
     for (const k of ['race_date', 'recent_race_time', 'goal_time']) if (!body[k]) delete body[k]
     if (!f.recent_race_time) delete body.recent_race_distance
     if (f.goal === 'base') delete body.goal_time
@@ -78,14 +97,19 @@ export function PlanForm({ onCreated, onCancel, initial }: { onCreated: () => vo
         <label className="field">{t('Goal')}
           <select value={f.goal} onChange={(e) => set('goal', e.target.value)}>{GOALS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         </label>
-        <label className="field">{t('Race date')}
-          <input type="date" value={f.race_date} onChange={(e) => set('race_date', e.target.value)} />
-        </label>
+        <div className="field">
+          <label htmlFor="pf-race-date">{t('Race date')}</label>
+          <div className="input-clear">
+            <input id="pf-race-date" type="date" min={addDays(iso(new Date()), 1)} value={f.race_date} onChange={(e) => set('race_date', e.target.value)} />
+            {f.race_date && <button type="button" className="btn btn-icon" onClick={() => set('race_date', '')} aria-label={t('Clear the race date')}><Icon name="x" /></button>}
+          </div>
+        </div>
         <label className="field">{t('…or number of weeks')}
-          <input type="number" min={4} max={24} value={f.weeks} placeholder="auto" onChange={(e) => set('weeks', e.target.value)} />
+          <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={2} value={f.race_date ? '' : f.weeks} disabled={!!f.race_date}
+            placeholder={f.race_date ? t('Set by the race date') : 'auto'} onChange={(e) => set('weeks', e.target.value.replace(/\D/g, ''))} />
         </label>
         <label className="field">{t('Goal time (optional)')}
-          <input placeholder="1:45:00" value={f.goal_time} onChange={(e) => set('goal_time', e.target.value)} />
+          <input placeholder="1:45:00" inputMode="numeric" autoComplete="off" value={f.goal_time} onChange={(e) => set('goal_time', clock(e.target.value))} />
         </label>
         <div className="field" style={{ gridColumn: '1 / -1' }}>
           <span>{t('Running days')} <span className="muted">· {t('{n} per week', { n: runDays.length })}</span></span>
@@ -100,14 +124,14 @@ export function PlanForm({ onCreated, onCancel, initial }: { onCreated: () => vo
           </select>
         </label>
         <label className="field">{t('Max km per week (optional)')}
-          <input type="number" min={5} max={300} inputMode="numeric" placeholder={t('No limit')} value={f.max_weekly_km}
-            onChange={(e) => set('max_weekly_km', e.target.value)} />
+          <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={3} placeholder={t('No limit')} value={f.max_weekly_km}
+            onChange={(e) => set('max_weekly_km', e.target.value.replace(/\D/g, ''))} />
         </label>
         <label className="field">{t('Current km/week')}
-          <input type="number" value={f.current_weekly_km} onChange={(e) => set('current_weekly_km', +e.target.value)} />
+          <input type="text" inputMode="decimal" maxLength={5} value={f.current_weekly_km} onChange={(e) => set('current_weekly_km', dec(e.target.value))} />
         </label>
         <label className="field">{t('Longest recent run (km)')}
-          <input type="number" value={f.longest_recent_run_km} onChange={(e) => set('longest_recent_run_km', +e.target.value)} />
+          <input type="text" inputMode="decimal" maxLength={5} value={f.longest_recent_run_km} onChange={(e) => set('longest_recent_run_km', dec(e.target.value))} />
         </label>
         <label className="field">{t('Level')}
           <select value={f.level} onChange={(e) => set('level', e.target.value)}>
@@ -123,7 +147,7 @@ export function PlanForm({ onCreated, onCancel, initial }: { onCreated: () => vo
           <select value={f.recent_race_distance} onChange={(e) => set('recent_race_distance', e.target.value)}>{DIST.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         </label>
         <label className="field">{t('Recent race: time')}
-          <input placeholder="45:30" value={f.recent_race_time} onChange={(e) => set('recent_race_time', e.target.value)} />
+          <input placeholder="45:30" inputMode="numeric" autoComplete="off" value={f.recent_race_time} onChange={(e) => set('recent_race_time', clock(e.target.value))} />
         </label>
         <div className="field" style={{ gridColumn: '1 / -1' }}>
           <label className="row" style={{ gap: 8, alignItems: 'center' }}>

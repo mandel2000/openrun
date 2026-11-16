@@ -43,7 +43,7 @@ function SyncChip({ st, onSynced }: { st: GStatus | null; onSynced: () => void }
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   if (!st) return null
-  if (!st.connected) return <a className="chip chip-warn" href="#ajustes"><Icon name="watch" size={14} />{t('Connect Garmin')}</a>
+  if (!st.connected) return <a className="chip chip-warn" href="#ajustes" aria-label={t('Connect Garmin')}><Icon name="watch" size={14} /><span className="topbar-label">{t('Connect Garmin')}</span><span className="topbar-short">Garmin</span></a>
   return (
     <button className="btn btn-sm btn-ghost" disabled={busy} title={err ?? t('Sync with Garmin')} aria-label={t('Sync with Garmin')}
       onClick={async () => {
@@ -52,7 +52,7 @@ function SyncChip({ st, onSynced }: { st: GStatus | null; onSynced: () => void }
         try { await api.post('/api/garmin/sync?days=14'); onSynced() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
       }}>
       <Icon name="refresh" size={16} className={busy ? 'spin' : ''} />
-      <span className="small">{busy ? t('Syncing…') : err ? t('Sync failed') : `Sync ${ago(st.last_sync)}`}</span>
+      <span className="small">{busy ? t('Syncing…') : err ? t('Sync failed') : <><span className="topbar-label">Sync </span>{ago(st.last_sync)}</>}</span>
     </button>
   )
 }

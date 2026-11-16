@@ -791,6 +791,26 @@ def move(wid: int, body: MoveIn, s: Session = DB):
         raise HTTPException(400, str(e)) from e
 
 
+@app.get("/api/workouts/{wid}/alternatives")
+def workout_alternatives(wid: int, s: Session = DB):
+    try:
+        return S.workout_alternatives(s, wid)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+class SwapIn(BaseModel):
+    key: str
+
+
+@app.post("/api/workouts/{wid}/swap")
+def workout_swap(wid: int, body: SwapIn, s: Session = DB):
+    try:
+        return S.swap_workout(s, wid, body.key)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @app.post("/api/workouts/{wid}/done")
 def mark_done(wid: int, s: Session = DB):
     """Manual completion (strength / mobility sessions have no GPS activity to match)."""

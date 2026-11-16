@@ -35,6 +35,7 @@ export type Workout = {
   duration_min: number
   sport: 'running' | 'strength'
   exercises?: { name: string; sets: number; reps: string; rest_s: number; cue: string; load?: string }[]
+  swapped_from?: string
 }
 
 export type PlanWeek = {
@@ -61,6 +62,7 @@ export type Plan = {
   start_date: string
   race_date: string | null
   goal_time: string | null
+  level?: string
   vdot_start: number
   vdot_goal: number | null
   paces_start: Record<string, PaceRange | number>

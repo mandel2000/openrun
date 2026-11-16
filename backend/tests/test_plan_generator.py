@@ -76,7 +76,7 @@ def test_weekly_km_ceiling():
 
 
 def test_variety_and_hills_not_every_week():
-    plan = generate_plan(PlanRequest(goal="half", start_date=START, days_per_week=4, current_weekly_km=30, weeks=16))
+    plan = generate_plan(PlanRequest(goal="half", start_date=START, days_per_week=5, current_weekly_km=40, weeks=16))
     quality = [[x for x in _runs(w) if x["intensity"] != "low" and x["type"] != "long"] for w in plan["weeks"]]
     titles = {x["title"].split(" ")[0] for wk in quality for x in wk}
     assert len({x["type"] for wk in quality for x in wk}) >= 6
@@ -118,3 +118,56 @@ def test_norwegian_4x4_shows_up():
         p = generate_plan(PlanRequest(goal="10k", start_date=START, days_per_week=5, current_weekly_km=40, seed=seed))
         found |= {x["title"] for w in p["weeks"] for x in w["workouts"] if x["title"].startswith("Norwegian")}
     assert found <= {"Norwegian 4×4′", "Norwegian 3×4′"} and found
+
+
+def test_long_run_follows_the_week_not_the_longest_recent_run():
+    # 30 km/week and a recent 20 km run: a 10K plan must not pin every long run at ~19 km
+    plan = generate_plan(PlanRequest(goal="10k", start_date=START, run_days=[0, 2, 4, 5], long_run_day=5, hills=False,
+                                     current_weekly_km=30, longest_recent_run_km=20))
+    longs = [x["distance_km"] for w in plan["weeks"] for x in _runs(w) if x["type"] == "long"]
+    assert max(longs) <= 16 and longs[0] <= 30 * 0.36
+    assert len(set(longs)) >= 5  # and it changes from week to week
+    for w in plan["weeks"][:-1]:
+        runs = _runs(w)
+        long = next(x for x in runs if x["type"] == "long")
+        assert long["distance_km"] == max(x["distance_km"] for x in runs)  # no other run rivals it
+        assert min(x["distance_km"] for x in runs) >= 4  # and no token 3 km runs
+
+
+def test_hard_day_rotates_and_easy_days_differ():
+    plan = generate_plan(PlanRequest(goal="10k", start_date=START, run_days=[0, 2, 4, 5], long_run_day=5, current_weekly_km=30))
+    hard_days, easy_titles = set(), set()
+    for w in plan["weeks"][:-1]:
+        runs = _runs(w)
+        hard = [x for x in runs if x["type"] != "long" and x["intensity"] != "low"]
+        hard_days |= {_weekday(x) for x in hard}
+        for x in hard:  # never the day before or after the long run
+            assert _weekday(x) not in (4, 6)
+        easy_titles |= {x["title"].rsplit(" ", 2)[0] for x in runs if x["type"] == "easy"}
+    assert hard_days == {0, 2}
+    assert len(easy_titles) >= 3
+    fixed = generate_plan(PlanRequest(goal="10k", start_date=START, run_days=[0, 2, 4, 5], long_run_day=5, current_weekly_km=30,
+                                      rotate_days=False))
+    days = {_weekday(x) for w in fixed["weeks"][:-1] if not w["is_recovery"] and w["phase"] != "taper" for x in _runs(w)
+            if x.get("family") not in ("long", "easy", "light")}
+    assert len(days) == 1
+
+
+def test_alternatives_for_a_session():
+    from app.training.plan import alternatives
+    plan = generate_plan(PlanRequest(goal="10k", start_date=START, days_per_week=5, current_weekly_km=40))
+    ws = [x for w in plan["weeks"] for x in _runs(w)]
+    q = next(x for x in ws if x["type"] == "intervals")
+    alts = alternatives(q, goal="10k", vdot=45, weekly_km=45)
+    assert 4 <= len(alts) <= 7 and q["title"] not in {a.title for a in alts}
+    assert len({f"{a.family}:{a.variant}" for a in alts}) == len(alts)
+    assert alts[0].family == "vo2" and alts[-1].type == "easy"  # same stimulus first, an easy way out last
+    assert all(a.distance_km <= q["distance_km"] * 1.15 + 0.5 for a in alts)
+    long = next(x for x in ws if x["type"] == "long")
+    assert {a.type for a in alternatives(long, goal="10k", vdot=45, weekly_km=45)} == {"long"}
+    easy = next(x for x in ws if x["type"] == "easy")
+    assert all(a.intensity == "low" for a in alternatives(easy, goal="10k", vdot=45, weekly_km=45))
+    assert alternatives({"type": "race", "sport": "running"}, goal="10k", vdot=45, weekly_km=45) == []
+    # plans made before sessions carried their family still get alternatives (from the type)
+    old = {k: v for k, v in q.items() if k not in ("family", "variant")}
+    assert alternatives(old, goal="10k", vdot=45, weekly_km=45)
