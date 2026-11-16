@@ -71,9 +71,13 @@ class Workout:
     low_intensity_min: float = 0.0
     sport: Literal["running", "strength"] = "running"
     exercises: list[dict] | None = None  # strength sessions: [{name, sets, reps, rest_s, cue, load}]
+    family: str = ""  # stimulus family and format, so a session can be swapped for an equivalent one
+    variant: str = ""
 
     def to_dict(self) -> dict:
         extra = {"exercises": self.exercises} if self.exercises else {}
+        if self.family:
+            extra |= {"family": self.family, "variant": self.variant}
         return {**extra,
             "type": self.type,
             "title": self.title,
@@ -100,6 +104,8 @@ class Workout:
             date=d.get("date"),
             sport=d.get("sport", "running"),
             exercises=d.get("exercises"),
+            family=d.get("family", ""),
+            variant=d.get("variant", ""),
         )
         recompute(w)
         return w
@@ -167,12 +173,25 @@ def _round_km(x: float, step: float = 0.5) -> float:
 # ---------------------------------------------------------------- library
 
 
-def easy_run(paces: TrainingPaces, km: float) -> Workout:
+def easy_run(paces: TrainingPaces, km: float, flavor: str = "easy") -> Workout:
     km = _round_km(km)
-    return _mk("easy", _("Easy run {km} km", km=f"{km:g}"),
-               _("Aerobic base: mitochondrial density and capillarisation at a low recovery cost. "
-                 "It should feel conversational (RPE 3-4/10). ~80% of the weekly volume goes here (Seiler 2010)."),
-               [_pace_step("run", paces, "easy", meters=km * 1000)], "low")
+    base = _("Aerobic base: mitochondrial density and capillarisation at a low recovery cost. "
+             "It should feel conversational (RPE 3-4/10). ~80% of the weekly volume goes here (Seiler 2010).")
+    if flavor == "feel":
+        title = _("Easy run by feel {km} km", km=f"{km:g}")
+        base = _("Easy run by feel: don't look at the pace, just keep it conversational (RPE 3-4/10). "
+                 "Learning to pace by effort is a skill that pays off on race day (Hudson; Fitzgerald).")
+    elif flavor == "soft":
+        title = _("Easy run on soft ground {km} km", km=f"{km:g}")
+        base = _("Easy run on trails, grass or dirt if you can: same aerobic work with a different load on the legs "
+                 "and more work for feet and ankles. Pace doesn't matter here, effort does (RPE 3-4/10).")
+    elif flavor == "medium":
+        title = _("Medium-long run {km} km", km=f"{km:g}")
+        base = _("The second longest run of the week, at easy pace: more endurance without another hard day "
+                 "(Pfitzinger's medium-long run). Keep it conversational.")
+    else:
+        title = _("Easy run {km} km", km=f"{km:g}")
+    return _mk("easy", title, base, [_pace_step("run", paces, "easy", meters=km * 1000)], "low")
 
 
 def recovery_run(paces: TrainingPaces, km: float) -> Workout:
@@ -192,6 +211,35 @@ def easy_with_strides(paces: TrainingPaces, km: float, n: int = 6) -> Workout:
                                                 Step("recovery", "time", 60, note=_("Walk / very easy jog"))])], "low")
 
 
+def easy_with_pickups(paces: TrainingPaces, km: float, n: int = 6) -> Workout:
+    km = _round_km(max(km, 4))
+    seg = round(((km - 2) / n - 30 / paces.five_k.mid()) * 20) / 20  # the title's km is the whole run
+    return _mk("strides", _("Easy {km} km with {n} pickups", km=f"{km:g}", n=n),
+               _("Easy run with short 30 s pickups at 5K effort spread through the middle: wakes the legs up "
+                 "without turning the day into a workout."),
+               [_pace_step("run", paces, "easy", meters=1000),
+                Step("repeat", repeat=n, steps=[_pace_step("run", paces, "five_k", seconds=30, note=_("Quick and relaxed")),
+                                                _pace_step("run", paces, "easy", meters=max(seg, 0.3) * 1000)]),
+                _pace_step("run", paces, "easy", meters=1000)], "low")
+
+
+def pad(w: Workout, extra_km: float) -> Workout:
+    """Lengthen the easy running around a session (its warm-up and cool-down)."""
+    extra_m = round(extra_km * 2) / 2 * 1000
+    if extra_m <= 0:
+        return w
+    # only warm-ups and cool-downs: sessions whose title carries their distance stay as titled
+    easy = [s for s in w.steps if s.kind in ("warmup", "cooldown") and s.duration_type == "distance"]
+    if not easy:
+        return w
+    if len(easy) >= 2 and extra_m >= 1000:
+        easy[0].duration_value += extra_m / 2
+        easy[-1].duration_value += extra_m / 2
+    else:
+        easy[0].duration_value += extra_m
+    return recompute(w)
+
+
 def hills(paces: TrainingPaces, reps: int = 8, seconds: int = 60) -> Workout:
     return _mk("hills", _("Hills {reps}×{sec} s", reps=reps, sec=seconds),
                _("Short hills at ~5K effort: specific strength, power and economy with less impact "
@@ -209,7 +257,7 @@ def hill_sprints(paces: TrainingPaces, km: float, reps: int = 8) -> Workout:
                  "and tendon stiffness with almost no fatigue (neuromuscular work, Barnes 2013; Paavolainen 1999)."),
                [_pace_step("run", paces, "easy", meters=km * 1000),
                 Step("repeat", repeat=reps, steps=[Step("run", "time", 10, "repetition", note=_("Steep hill (6-10%), all out but relaxed")),
-                                                   Step("recovery", "time", 120, note=_("Walk down, full recovery"))])], "moderate")
+                                                   Step("recovery", "time", 120, note=_("Walk down, full recovery"))])], "low")
 
 
 def long_hills(paces: TrainingPaces, reps: int = 5, seconds: int = 150) -> Workout:
@@ -281,6 +329,35 @@ def progressive_tempo(paces: TrainingPaces, minutes: int) -> Workout:
                  "and practice at pacing by feel."),
                [_wu(paces), _pace_step("run", paces, "marathon", seconds=half * 60),
                 _pace_step("run", paces, "threshold", seconds=half * 60), _cd(paces)], "moderate")
+
+
+def alternations(paces: TrainingPaces, reps: int = 3) -> Workout:
+    return _mk("threshold", _("Alternations {reps}×(1 km 10K pace / 1 km steady)", reps=reps),
+               _("Continuous run that alternates 1 km at 10K pace with 1 km at marathon pace, without stopping: "
+                 "the body learns to clear lactate while still running fast (Canova's alternations; 'over-unders')."),
+               [_wu(paces), Step("repeat", repeat=reps, steps=[_pace_step("run", paces, "ten_k", meters=1000),
+                                                             _pace_step("run", paces, "marathon", meters=1000, note=_("Steady float, don't jog"))]),
+                _cd(paces)], "high")
+
+
+def tempo_plus_reps(paces: TrainingPaces, minutes: int = 15, reps: int = 4) -> Workout:
+    return _mk("tempo", _("Tempo {min}′ + {reps}×200 m fast", min=minutes, reps=reps),
+               _("A threshold block followed by short fast reps: holds form and leg speed on tired legs. "
+                 "Daniels mixes T and R work like this to cover two stimuli in one session."),
+               [_wu(paces), _pace_step("run", paces, "threshold", seconds=minutes * 60),
+                Step("recovery", "time", 180, note=_("Easy jog")),
+                Step("repeat", repeat=reps, steps=[_pace_step("run", paces, "repetition", meters=200, note=_("Relaxed and fast, not a sprint")),
+                                                   Step("recovery", "time", 75, note=_("Jog"))]),
+                _cd(paces)], "moderate")
+
+
+def floating_400s(paces: TrainingPaces, reps: int = 8) -> Workout:
+    return _mk("intervals", _("{reps}×400 m with 200 m float", reps=reps),
+               _("400 m at 5K pace with a 200 m 'float' at steady pace instead of a slow jog (de Castella's quarters): "
+                 "the recovery is never complete, so oxygen uptake stays high the whole session."),
+               [_wu(paces, 2.5), Step("repeat", repeat=reps, steps=[_pace_step("run", paces, "five_k", meters=400),
+                                                                  _pace_step("recovery", paces, "marathon", meters=200, note=_("Steady float, don't stop"))]),
+                _cd(paces, 2)], "high")
 
 
 def cruise_intervals(paces: TrainingPaces, reps: int, rep_m: int) -> Workout:

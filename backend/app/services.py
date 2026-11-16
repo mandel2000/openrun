@@ -17,7 +17,7 @@ from .integrations.garmin import GARMIN_FORMAT, garmin
 from .training import adapt, load
 from .training import records as R
 from .training import workouts as W
-from .training.plan import PlanRequest, generate_plan, resolve_vdot
+from .training.plan import TYPE_FAMILY, PlanRequest, alternatives, generate_plan, resolve_vdot
 from .training.vdot import RACE_DISTANCES_M, fmt_time, parse_time, race_predictions, training_paces, vdot_from_race
 
 
@@ -276,6 +276,49 @@ def move_workout(s: Session, workout_id: int, new_date: str, swap: bool = False)
     pushed = push_to_garmin(s, on_watch) if on_watch else []  # re-schedule on the watch (push deletes the old copy)
     return {**workout_dict(pw), "moved": [{"id": x.id, "date": x.date, "title": x.data.get("title")} for x in changed],
             "warnings": _hard_day_warnings(s, {old_date, new_date}),
+            "watch": {"ok": sum(1 for r in pushed if r.get("ok")), "failed": sum(1 for r in pushed if not r.get("ok"))}}
+
+
+def _swap_context(s: Session, pw: PlannedWorkout) -> dict:
+    """Fitness and weekly volume the plan had in mind for that week (falls back to the athlete's)."""
+    a = get_athlete(s)
+    plan = s.get(Plan, pw.plan_id) if pw.plan_id else active_plan(s)
+    meta = next((w for w in (plan.summary.get("weeks", []) if plan else []) if w.get("index") == pw.week), {})
+    d = dt.date.fromisoformat(pw.date)
+    return {"goal": plan.goal if plan else "base", "vdot": a.vdot or meta.get("vdot") or 40.0,
+            "weekly_km": meta.get("target_km") or _run_km(s, d - dt.timedelta(days=d.weekday())) or 30.0,
+            "hills": bool(plan.summary.get("hills", True)) if plan else True}
+
+
+def workout_alternatives(s: Session, workout_id: int) -> list[dict]:
+    pw = s.get(PlannedWorkout, workout_id)
+    if not pw:
+        raise ValueError(_("workout does not exist"))
+    if pw.status == "done":
+        return []
+    own = pw.data.get("family") or TYPE_FAMILY.get(pw.data.get("type", ""))
+    return [{"key": f"{w.family}:{w.variant}", "same_stimulus": w.family == own or pw.data.get("type") in ("long", "easy", "recovery") and w.family in ("long", "easy"),
+             **{k: v for k, v in w.to_dict().items() if k in ("type", "title", "description", "intensity", "distance_km", "duration_min", "steps")}}
+            for w in alternatives(pw.data, **_swap_context(s, pw))]
+
+
+def swap_workout(s: Session, workout_id: int, key: str) -> dict:
+    """Replace a planned session with one of its alternatives (same day)."""
+    pw = s.get(PlannedWorkout, workout_id)
+    if not pw:
+        raise ValueError(_("workout does not exist"))
+    if pw.status == "done":
+        raise ValueError(_("That workout is already done"))
+    w = next((x for x in alternatives(pw.data, **_swap_context(s, pw)) if f"{x.family}:{x.variant}" == key), None)
+    if not w:
+        raise ValueError(_("That alternative is not available for this workout"))
+    w.date, w.phase = pw.date, pw.data.get("phase", "")
+    pw.data = {**w.to_dict(), "swapped_from": pw.data.get("swapped_from") or pw.data.get("title")}
+    pw.status = "modified"
+    s.add(pw)
+    s.commit()
+    pushed = push_to_garmin(s, [pw.id]) if pw.garmin_workout_id else []
+    return {**workout_dict(pw), "warnings": _hard_day_warnings(s, {pw.date}),
             "watch": {"ok": sum(1 for r in pushed if r.get("ok")), "failed": sum(1 for r in pushed if not r.get("ok"))}}
 
 

@@ -12,8 +12,16 @@ Principles (see docs/science.md for full references):
   spikes predict overuse injury better than weekly change (Frandsen et al. 2025, BJSM).
 - Taper: reduce volume 40-60% over ~2 weeks (3 for marathon), keep intensity and
   frequency (Bosquet et al. 2007 meta-analysis; Mujika & Padilla 2003).
-- Long run <= ~30% weekly volume and time-capped (Daniels); fewer running days -> lower
-  sustainable weekly volume and a larger long-run share.
+- Long run sized from the week, not from the athlete's longest run: ~25-30% of weekly volume
+  (Daniels: 30% under ~65 km/week, 25% above, never over 150 min), a larger share with fewer
+  running days, and a ceiling by goal and level (a 10K needs 13-16 km, not 20: Higdon's
+  intermediate 10K peaks at 8 miles; 8-14 miles / 1.5-2 h in most 10K plans). Long runs with
+  faster running are a bit shorter, and the distance alternates once it reaches the ceiling.
+- Easy days are not all equal: a shorter day after hard work, a medium-long run midweek
+  (Pfitzinger), and the hard day moves between the valid weekdays from week to week. Less
+  monotony at the same load (Foster 1998), always keeping hard days apart (Bowerman's hard/easy).
+- One hard session + long run for most runners on <= 4 days (about 1 hard session in 5, Seiler
+  2010; Higdon's intermediate plans); the other runs can carry strides or hill sprints.
 - Variety: each stimulus (hills, fartlek, threshold, VO2max, speed, race pace) has several formats
   that rotate without repeating within ~2 weeks. Any uphill format works (Barnes et al. 2013) and
   short or long intervals both raise VO2max (Billat 2001; Rønnestad 2015;
@@ -50,9 +58,14 @@ PEAK_VOLUME_KM = {  # typical peak weekly volume by goal/level (Daniels, Pfitzin
     "marathon": {"beginner": 50, "intermediate": 70, "advanced": 100},
     "base": {"beginner": 30, "intermediate": 45, "advanced": 65},
 }
-LONG_RUN_CAP = {  # (km, minutes)
-    "5k": (16, 90), "10k": (20, 105), "half": (24, 130), "marathon": (35, 180), "base": (18, 100),
+LONG_RUN_CAP = {  # longest long run by goal and level, km (Higdon, Pfitzinger, Daniels)
+    "5k": {"beginner": 10, "intermediate": 13, "advanced": 16},
+    "10k": {"beginner": 12, "intermediate": 16, "advanced": 19},
+    "half": {"beginner": 18, "intermediate": 21, "advanced": 24},
+    "marathon": {"beginner": 30, "intermediate": 32, "advanced": 35},
+    "base": {"beginner": 12, "intermediate": 16, "advanced": 19},
 }
+LONG_RUN_MIN = {"5k": 90, "10k": 110, "half": 135, "marathon": 180, "base": 105}  # minutes (Daniels: <= 150, marathon aside)
 TAPER = {"5k": [0.65], "10k": [0.65], "half": [0.75, 0.55], "marathon": [0.75, 0.6, 0.45], "base": []}
 WEEKS_RANGE = {"5k": (6, 16), "10k": (8, 18), "half": (8, 20), "marathon": (12, 24), "base": (4, 16)}
 VDOT_GAIN_PER_WEEK = {"beginner": 0.3, "intermediate": 0.2, "advanced": 0.1}  # conservative expected gains
@@ -64,7 +77,8 @@ DEFAULT_RUN_OFFSETS = {1: [6], 2: [2, 6], 3: [1, 3, 6], 4: [1, 3, 5, 6], 5: [1, 
 # otherwise get too long (session spikes) or too intense.
 FREQ_VOLUME = {1: 0.35, 2: 0.55, 3: 0.7, 4: 0.85, 5: 0.95, 6: 1.0, 7: 1.0}
 MIN_START_KM = {1: 5, 2: 8, 3: 12, 4: 16, 5: 20, 6: 25, 7: 30}
-LONG_SHARE = {1: 1.0, 2: 0.55, 3: 0.33, 4: 0.30, 5: 0.28, 6: 0.26, 7: 0.25}
+LONG_SHARE = {1: 1.0, 2: 0.55, 3: 0.40, 4: 0.34, 5: 0.30, 6: 0.27, 7: 0.25}
+SPIKE_WINDOW = 4  # weeks: Frandsen compares with the longest run of the previous 30 days
 SESSION_SPIKE = 1.10  # max ratio vs the longest run so far (Frandsen 2025)
 
 
@@ -91,6 +105,7 @@ class PlanRequest:
     max_weekly_km: float | None = None  # athlete's own weekly ceiling
     hills: bool = True  # has hills nearby (else hill sessions are swapped for fartlek/speed)
     seed: int | None = None  # varies session choice between athletes, stable for the same request
+    rotate_days: bool = True  # move the hard day between valid weekdays from week to week
 
 
 @dataclass
@@ -160,31 +175,39 @@ def _circ(a: int, b: int) -> int:
     return min(d, 7 - d)
 
 
-def day_roles(run_days: list[int], long_day: int, n_q: int) -> dict[int, str]:
-    """Give each running day a role: L (long), Q1/Q2 (quality), E (easy), R (recovery).
+def day_layouts(run_days: list[int], long_day: int, n_q: int, limit: int = 2) -> list[dict[int, str]]:
+    """Ways to give each running day a role: L (long), Q1/Q2 (quality), E (easy), R (recovery).
 
     Hard days are spread as far apart as possible (hard/easy principle) and never the day before
-    the long run if it can be avoided; Q1 is the first quality day after the long run."""
+    the long run if it can be avoided; Q1 is the first quality day after the long run. The first
+    layout is the best one; the rest are other layouts that still keep an easy day between hard
+    days, so the plan can alternate them without breaking the rule."""
     days = sorted(set(run_days))
-    roles = {long_day: "L"}
     others = [d for d in days if d != long_day]
     n_q = min(n_q, len(others))
-    best: tuple | None = None
+    scored = []
     for combo in itertools.combinations(others, n_q):
         pts = [long_day, *combo]
         spread = min((_circ(a, b) for a, b in itertools.combinations(pts, 2)), default=7)
         before_long = sum(1 for q in combo if (long_day - q) % 7 == 1)
-        key = (spread, -before_long, -sum((q - long_day) % 7 for q in combo))
-        if best is None or key > best[0]:
-            best = (key, combo)
-    qs = sorted(best[1] if best else (), key=lambda q: (q - long_day) % 7)
-    for i, q in enumerate(qs):
-        roles[q] = f"Q{i + 1}"
+        scored.append(((spread, -before_long, -sum((q - long_day) % 7 for q in combo)), combo))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    picked = [c for i, (key, c) in enumerate(scored) if i == 0 or (key[0] >= 2 and key[1] == 0)][:limit] if n_q else [()]
     after_long = (long_day + 1) % 7
-    for d in others:
-        if d not in roles:
-            roles[d] = "R" if len(days) >= 6 and d == after_long else "E"
-    return roles
+    out = []
+    for combo in picked:
+        roles = {long_day: "L"}
+        for i, q in enumerate(sorted(combo, key=lambda q: (q - long_day) % 7)):
+            roles[q] = f"Q{i + 1}"
+        for d in others:
+            if d not in roles:
+                roles[d] = "R" if len(days) >= 6 and d == after_long else "E"
+        out.append(roles)
+    return out
+
+
+def day_roles(run_days: list[int], long_day: int, n_q: int) -> dict[int, str]:
+    return day_layouts(run_days, long_day, n_q)[0]
 
 
 # ---------------------------------------------------------------- session selection
@@ -267,11 +290,14 @@ def _families(c: _Ctx) -> dict[str, list[tuple[str, Builder]]]:
             ("split_tempo", lambda k, s: W.split_tempo(P, 2 if t_total < 27 else 3,
                                                        max(6, round(t_total * s / (2 if t_total < 27 else 3))))),
             ("progressive_tempo", lambda k, s: W.progressive_tempo(P, max(16, round((c.t_min + 6) * s)))),
+            ("alternations", lambda k, s: W.alternations(P, max(2, min(5, round(c.t_km * s / 1.4))))),
+            ("tempo_reps", lambda k, s: W.tempo_plus_reps(P, max(10, round((c.t_min - 5) * s)), 4 if c.r_km < 2.5 else 6)),
         ],
         "vo2": [
             ("vo2_dist", lambda k, s: W.vo2_intervals(P, n(c.i_km * 1000 / [800, 1000, 1200][k % 3], s, 3), [800, 1000, 1200][k % 3])),
             ("vo2_time", lambda k, s: W.vo2_time(P, max(3, min(6, round(i_total_s * s / 180))), 3)),
             ("norwegian_4x4", lambda k, s: W.norwegian_4x4(P, 4 if i_total_s * s >= 14 * 60 else 3)),
+            ("float_400", lambda k, s: W.floating_400s(P, max(5, min(12, n(c.i_km * 1000 / 400, s, 5))))),
             ("short_30_30", lambda k, s: W.short_intervals(P, 2 if c.i_km < 4 else 3, max(6, min(10, round(c.i_km * 1000 * s / (30 / i_pace * 1000) / 2))))),
         ],
         "speed": [
@@ -284,11 +310,20 @@ def _families(c: _Ctx) -> dict[str, list[tuple[str, Builder]]]:
             ("progression_light", lambda k, s: W.progression_run(P, max(5, wk * 0.15 * s))),
         ],
         "strides": [("strides", lambda k, s: W.easy_with_strides(P, wk * 0.15))],
+        # the second, lighter session of the week when there is a single hard day
+        "light": [
+            ("strides", lambda k, s: W.easy_with_strides(P, wk * 0.18 * s)),
+            ("strides_8", lambda k, s: W.easy_with_strides(P, wk * 0.18 * s, 8)),
+            ("pickups", lambda k, s: W.easy_with_pickups(P, wk * 0.18 * s)),
+            ("fartlek_light", lambda k, s: W.fartlek(P, "classic", 6)),
+            ("progression_light", lambda k, s: W.progression_run(P, max(5, wk * 0.16 * s))),
+        ],
     }
     if c.i_km >= 3.4:  # a full pyramid fits Daniels' I-volume limit
         fam["vo2"].append(("vo2_pyramid", lambda k, s: W.vo2_pyramid(P, 1200 if c.i_km >= 3.6 and s >= 1 else 800)))
     if c.hills:
         fam["speed"].append(("hill_sprints", fam["hills"][0][1]))
+        fam["light"].append(("hill_sprints", fam["hills"][0][1]))
         fam["threshold"].append(("long_hills", fam["hills"][3][1]))
     else:
         fam["hills"] = fam["fartlek"]
@@ -310,6 +345,10 @@ def _families(c: _Ctx) -> dict[str, list[tuple[str, Builder]]]:
     return fam
 
 
+_HILLY = {"hill_sprints", "long_hills", "hills_60", "hills_90"}
+_SAME = {"progression_light": "progression", "fartlek_light": "fartlek_classic", "strides_8": "strides"}  # look-alikes
+
+
 class _Picker:
     """Rotates session formats: least-used first, never the same format within 2 weeks if avoidable,
     hills at most every other week. The order of formats is shuffled per athlete (seed)."""
@@ -326,24 +365,26 @@ class _Picker:
         if family == "hills" and c.hills and week - self.hill_week < 2:
             family = "fartlek"
         variants = dict(fams[family])
+        if week - self.hill_week < 2 and len(variants) > 1:  # hills at most every other week, whatever the family
+            variants = {k: v for k, v in variants.items() if k not in _HILLY} or variants
         if family not in self.order:
             o = list(variants)
             self.rng.shuffle(o)
             self.order[family] = o
         order = [x for x in self.order[family] if x in variants] + [x for x in variants if x not in self.order[family]]
-        recent = {x for w, x in self.recent if week - w <= 2} | (avoid or set())
-        name = min(order, key=lambda x: (x in recent, self.uses[x], order.index(x)))
+        recent = {x for w, x in self.recent if week - w <= 2} | {_SAME.get(x, x) for x in (avoid or set())}
+        name = min(order, key=lambda x: (_SAME.get(x, x) in recent, self.uses[x], order.index(x)))
         k = self.uses[name]
         self.uses[name] += 1
-        self.recent.append((week, name))
-        if family == "hills" or name in ("hill_sprints", "long_hills"):
+        self.recent.append((week, _SAME.get(name, name)))
+        if c.hills and name in _HILLY:
             self.hill_week = week
         w = None
         for s in (1.0, 0.8, 0.65, 0.5, 0.35):  # shrink the dose until it fits the session-spike budget
             w = variants[name](k, s)
             if w.distance_km <= c.budget_km:
                 break
-        w.variant = name  # type: ignore[attr-defined]
+        w.family, w.variant = family, name
         return w
 
 
@@ -370,8 +411,8 @@ QUALITY_PLAN: dict[str, dict[str, list[list[str]]]] = {
 }
 # With a single quality session per week, alternate the main stimuli week to week.
 SINGLE_QUALITY = {
-    "base": ["hills", "aerobic", "fartlek"],
-    "build": ["threshold", "vo2"],
+    "base": ["hills", "aerobic", "fartlek", "speed"],
+    "build": ["threshold", "vo2", "threshold", "speed"],
     "peak": ["race", "threshold", "race", "vo2"],
     "taper": ["taper"],
 }
@@ -394,11 +435,12 @@ def _quality_sessions(picker: _Picker, c: _Ctx, phase: str, wk_in_phase: int, n_
     rot = table.get(c.goal, table["*"])
     fams = rot[wk_in_phase % len(rot)]
     first = picker.pick(fams[0], c, week)
-    second = picker.pick(fams[1], c, week, avoid={getattr(first, "variant", "")})
+    second = picker.pick(fams[1], c, week, avoid={first.variant})
     return [first, second]
 
 
-def _long_style(goal: str, phase: str, n_days: int, wk_in_phase: int, is_rec: bool, level: Level) -> tuple[str, float]:
+def _long_style(goal: str, phase: str, n_days: int, wk_in_phase: int, is_rec: bool, level: Level,
+                single_hard: bool = False) -> tuple[str, float]:
     """(style, fast-finish share). Long runs vary too: easy, + strides, with surges, progressive,
     or with a goal-pace finish (specificity, Pfitzinger/Canova) for half and marathon."""
     if is_rec or phase == "taper":
@@ -413,9 +455,76 @@ def _long_style(goal: str, phase: str, n_days: int, wk_in_phase: int, is_rec: bo
         return ["surges", "progressive", "easy"][wk_in_phase % 3], 0
     if n_days <= 3:
         return ["easy", "surges"][wk_in_phase % 2], 0
+    if goal in ("5k", "10k", "base") and phase in ("build", "peak"):
+        # shorter races: the long run stays aerobic, with some faster running every other week
+        return ["easy", "surges", "easy", "progressive" if single_hard and level != "beginner" else "strides"][wk_in_phase % 4], 0
     if goal in ("half", "marathon") and phase == "build" and wk_in_phase % 3 == 2 and level != "beginner":
         return "progressive", 0
     return ("surges" if phase == "build" and wk_in_phase % 3 == 1 else "easy"), 0
+
+
+# ---------------------------------------------------------------- swapping a session
+
+TYPE_FAMILY = {"hills": "hills", "fartlek": "fartlek", "progression": "aerobic", "tempo": "threshold", "threshold": "threshold",
+               "intervals": "vo2", "reps": "speed", "race_pace": "race", "strides": "light"}
+# Families that train something close enough to stand in for each other.
+SIBLINGS = {"hills": ["fartlek", "speed"], "fartlek": ["hills", "aerobic"], "aerobic": ["threshold", "fartlek"],
+            "threshold": ["aerobic", "fartlek"], "vo2": ["fartlek", "hills"], "speed": ["hills", "fartlek"],
+            "race": ["threshold", "vo2"], "taper": ["threshold"], "recovery": ["light"], "light": ["fartlek"], "strides": ["light"]}
+
+
+def alternatives(data: dict, *, goal: str, vdot: float, weekly_km: float, hills: bool = True, limit: int = 7) -> list[W.Workout]:
+    """Sessions that can replace a planned one: first other formats of the same stimulus, then
+    related stimuli, then an easier option. Sized like the original so the week's load holds."""
+    if data.get("sport", "running") != "running" or data.get("type") in ("race", "shakeout"):
+        return []
+    paces = training_paces(vdot)
+    km0 = float(data.get("distance_km") or 5)
+    out: list[W.Workout] = []
+
+    def add(w: W.Workout, family: str, variant: str) -> None:
+        w.family, w.variant = family, variant
+        if w.title != data.get("title") and all(w.title != x.title for x in out):
+            out.append(w)
+
+    if data.get("type") == "long":
+        for style in ("easy", "strides", "surges", "progressive"):
+            add(W.long_run(paces, km0 * (0.9 if style in ("surges", "progressive") and data.get("variant") in ("easy", "strides", "", None) else 1), style=style), "long", style)
+        return out
+    if data.get("type") in ("easy", "recovery"):
+        for flavor in ("easy", "feel", "soft"):
+            add(W.easy_run(paces, km0, flavor), "easy", flavor)
+        add(W.easy_with_strides(paces, km0), "light", "strides")
+        add(W.easy_with_pickups(paces, km0), "light", "pickups")
+        add(W.recovery_run(paces, max(3, km0 * 0.8)), "easy", "recovery")
+        return out
+
+    c = _Ctx(goal, paces, max(weekly_km, km0 * 3), max(km0 * 1.1, 6.0), hills)
+    fams = _families(c)
+    own = data.get("family") or TYPE_FAMILY.get(data.get("type", ""), "fartlek")
+    if own not in fams:
+        own = "fartlek"
+
+    def build(family: str, name: str, fn: Builder) -> None:
+        w = None
+        for sc in (1.0, 0.8, 0.65, 0.5, 0.35):
+            w = fn(1, sc)
+            if w.distance_km <= c.budget_km:
+                break
+        W.pad(w, min(3.0, max(0.0, km0 - w.distance_km)))
+        add(w, family, name)
+
+    for name, fn in fams[own]:
+        if name != data.get("variant") and len(out) < limit - 3:
+            build(own, name, fn)
+    for sib in SIBLINGS.get(own, []):
+        for name, fn in fams.get(sib, [])[:1]:
+            if len(out) < limit - 2:
+                build(sib, name, fn)
+    out = out[:limit - 2]
+    add(W.easy_with_strides(paces, km0), "light", "strides")
+    add(W.easy_run(paces, km0), "easy", "easy")
+    return out
 
 
 def _week_dates(start: dt.date, week_index: int) -> list[dt.date]:
@@ -498,7 +607,7 @@ def generate_plan(req: PlanRequest) -> dict:
         warnings.append(_("With {n} running day(s) a week the plan stays conservative: for a {goal} at least 3 days are recommended.",
                           n=n_days, goal=_label(req.goal)))
 
-    cap_km, cap_min = LONG_RUN_CAP[req.goal]
+    cap_km, cap_min = LONG_RUN_CAP[req.goal][req.level], LONG_RUN_MIN[req.goal]
     peak = max(PEAK_VOLUME_KM[req.goal][req.level] * FREQ_VOLUME[n_days], req.current_weekly_km)
     if req.max_weekly_km:
         if req.max_weekly_km < PEAK_VOLUME_KM[req.goal]["beginner"] * FREQ_VOLUME[n_days] * 0.7:
@@ -510,16 +619,24 @@ def generate_plan(req: PlanRequest) -> dict:
     if req.max_weekly_km:
         vols = [min(v, req.max_weekly_km) for v in vols]
     L = req.long_run_day
-    n_q_default = 0 if n_days == 1 else 1 if n_days <= 3 or (req.level == "beginner" and n_days <= 4) else 2
-    roles = day_roles(run_days, L, n_q_default)
+    # Hard sessions besides the long run: about 1 session in 5 is hard (Seiler 2010), so two only
+    # with 5+ running days (or 4 for advanced runners). With one, another run gets a light extra.
+    n_q_default = 0 if n_days == 1 else 2 if (n_days >= 5 and req.level != "beginner") or (n_days == 4 and req.level == "advanced") else 1
+    light_slot = n_q_default == 1 and n_days >= 4
+    layouts = day_layouts(run_days, L, n_q_default)
+    if not req.rotate_days:
+        layouts = layouts[:1]
     long_share = LONG_SHARE[n_days]
     if req.goal == "marathon" and n_days >= 3:  # marathoners need 28-35 km long runs (Pfitzinger/Hudson)
         long_share = max(long_share, 0.36)
     picker = _Picker(req.seed)
+    flavors = ["easy", "feel", "easy", "soft"]
+    picker.rng.shuffle(flavors)
 
     weeks: list[PlanWeek] = []
     phase_counter: dict[str, int] = {}
-    prev_long = max(req.longest_recent_run_km or 0, 3.0)
+    longs = [max(req.longest_recent_run_km or 0, 3.0)]  # longest run of each previous week
+    n_easy_runs = 0
     for wi, (phase, vol, is_rec) in enumerate(zip(phases, vols, recov)):
         # Paces progress conservatively toward goal fitness; re-calibrate from real results.
         vdot = vdot0 + VDOT_GAIN_PER_WEEK[req.level] * wi * 0.5
@@ -530,60 +647,100 @@ def generate_plan(req: PlanRequest) -> dict:
         phase_counter[phase] = wk_in_phase + 1
         dates = _week_dates(req.start_date, wi)
         is_race_week = req.goal != "base" and wi == n_weeks - 1
-        spike_cap = prev_long * SESSION_SPIKE
+        spike_cap = max(longs[-SPIKE_WINDOW:]) * SESSION_SPIKE
+        roles = layouts[wi % len(layouts)]
 
-        # Long run: share of the week, time + distance capped, and <= +10% vs the longest run so far.
+        # Long run: a share of the week, capped by goal/level, by time and by +10% over the longest
+        # run of the last weeks. It follows the weekly volume, so it drops on recovery and taper weeks.
         long_cap_by_time = cap_min * 60 / paces.long.mid()
         share = long_share + (0.06 if req.goal == "marathon" and phase == "peak" and n_days >= 3 else 0)
-        long_km = min(vol * share, cap_km, long_cap_by_time, spike_cap)
-        if is_rec or phase == "taper":
-            long_km = min(long_km, prev_long * 0.75 if is_rec else vol * long_share)
-        long_km = max(long_km, 3)
+        style, fast_share = _long_style(req.goal, phase, n_days, wk_in_phase, is_rec, req.level, n_q_default == 1)
+        want = vol * share
+        ceiling = min(cap_km, long_cap_by_time)
+        if style in ("surges", "progressive") or (want >= ceiling and wk_in_phase % 2 and n_days > 1):
+            want *= 0.9  # long runs with faster running are shorter; at the ceiling, alternate longer and shorter
+            ceiling *= 0.9
+        long_km = max(min(want, ceiling, spike_cap), 3)
 
         n_q = n_q_default
         # a quality session never outgrows the spike limit nor ~a quarter of the week
         ctx = _Ctx(req.goal, paces, vol, max(min(spike_cap, vol * 0.25), 6.0), req.hills)
         quality = _quality_sessions(picker, ctx, phase, wk_in_phase, n_q, req.level, is_rec, wi)
-        n_easy = sum(1 for r in roles.values() if r in ("E", "R")) + sum(1 for i in range(len(quality), n_q) if f"Q{i + 1}" in roles.values())
         q_km = sum(q.distance_km for q in quality)
-        # Few days: give the long run the volume the easy runs can't take (still within all caps).
-        if n_easy and not is_rec and phase != "taper":
-            ideal = (vol - q_km) / (1 + 0.85 * n_easy)
-            long_km = max(long_km, min(ideal, cap_km, long_cap_by_time, spike_cap))
-        elif not n_easy and not is_rec and phase != "taper":
+        n_easy = sum(1 for r in roles.values() if r in ("E", "R")) + max(0, n_q - len(quality))
+        if not n_easy and n_days > 1:  # nowhere else to put the volume: the long run takes it (within its caps)
             long_km = max(long_km, min(vol - q_km, cap_km, long_cap_by_time, spike_cap))
-        if not is_rec and phase != "taper":
-            long_km = max(long_km, min(prev_long, cap_km, long_cap_by_time))  # don't shrink the long run mid-block
-            prev_long = max(prev_long, long_km)
 
         long_km = math.floor(long_km * 2) / 2  # round down: never round past the spike limit
-        style, fast_share = _long_style(req.goal, phase, n_days, wk_in_phase, is_rec, req.level)
         if style == "fast":
             fast_zone = "marathon" if req.goal == "marathon" else "half"
             lw = W.long_run(paces, long_km, fast_finish_km=round(min(16 if req.goal == "marathon" else 8, long_km * fast_share)),
                             fast_zone=fast_zone)
         else:
             lw = W.long_run(paces, long_km, style=style)
+        lw.family, lw.variant = "long", style
         if lw.intensity != "low" and len(quality) > 1:
             # Long run already carries race-pace work: keep only 2 hard days/week (80/20)
             quality[1] = W.easy_with_strides(paces, vol * 0.15)
+            quality[1].family, quality[1].variant = "light", "strides"
 
         assigned: dict[int, W.Workout | None] = {}
-        easy_days: list[tuple[int, str]] = []
+        easy_days: list[int] = []
+        hard_days = {L}
         for day, role in roles.items():
             if role == "L":
                 assigned[day] = lw
             elif role in ("Q1", "Q2") and int(role[1]) <= len(quality):
                 assigned[day] = quality[int(role[1]) - 1]
+                hard_days.add(day)
             else:
-                easy_days.append((day, "R" if role == "R" else "E"))
+                easy_days.append(day)
+        longs.append(max([lw.distance_km] + [q.distance_km for q in quality]))
 
-        used = sum(w.distance_km for w in assigned.values() if w)
-        remaining = max(0.0, vol - used)
         if easy_days:
-            per = max(3.0, min(remaining / len(easy_days), long_km * 0.85, spike_cap))
-            for day, kind in easy_days:
-                assigned[day] = W.recovery_run(paces, per * 0.8) if kind == "R" else W.easy_run(paces, per)
+            # Easy days are not all the same: shorter the day after hard work and the day before the
+            # long run, and one of them longer (medium-long run) every other week.
+            gap = {d: min(_circ(d, h) for h in hard_days) for d in easy_days}
+            free = sorted(easy_days, key=lambda d: (-gap[d], (L - d) % 7 == 1, d))
+            light_day = None
+            if light_slot and not is_race_week and not is_rec and len(easy_days) >= 2 - (phase == "taper"):
+                light_day = next((d for d in free if (L - d) % 7 != 1), free[0])
+                q_types = {q.type for q in quality}
+                avoid = ({"fartlek_light"} if q_types & {"fartlek", "hills"} else set()) | ({"progression_light"} if q_types & {"progression", "tempo"} else set())
+                lt = picker.pick("strides" if phase == "taper" else "light", ctx, wi, avoid=avoid)
+                if lt.intensity != "low" and lw.intensity != "low":
+                    lt = W.easy_with_strides(paces, vol * 0.18)
+                lt.family, lt.variant = "light", lt.variant or "strides"
+                assigned[light_day] = lt
+            plain = [d for d in easy_days if d != light_day]
+            remaining = max(0.0, vol - sum(w.distance_km for w in assigned.values() if w))
+            weight = {d: 0.8 if roles[d] == "R" or any((d - h) % 7 == 1 for h in hard_days) else
+                      0.9 if (L - d) % 7 == 1 else 1.0 for d in plain}
+            medium = None
+            if len(plain) >= 2 and not is_rec and phase != "taper" and wi % 2 == 0:
+                medium = max(plain, key=lambda d: (weight[d], gap[d], -d))
+                weight[medium] = 1.35
+            tot_w = sum(weight.values())
+            # An easy day never rivals the long run (less so the day before it). What doesn't fit goes
+            # into longer warm-ups and cool-downs of the week's sessions, as coaches do.
+            limit = {d: long_km * (0.65 if (L - d) % 7 == 1 else 0.9 if d == medium else 0.7 if weight[d] < 0.9 else 0.8) for d in plain}
+            spare = sum(max(0.0, remaining * weight[d] / tot_w - limit[d]) for d in plain)
+            sessions = [w for d, w in assigned.items() if w and d != L and w.type != "race"]
+            if spare >= 1 and sessions and not is_race_week:
+                room = min(max(ctx.budget_km, vol * 0.28), max(long_km * 0.85, 6.0))
+                for w in sessions:
+                    W.pad(w, min(spare / len(sessions), 3.0, max(0.0, room - w.distance_km)))
+            for d in plain:
+                km = max(3.0, min(remaining * weight[d] / tot_w, limit[d], spike_cap))
+                if roles[d] == "R":
+                    w = W.recovery_run(paces, km)
+                    w.family, w.variant = "easy", "recovery"
+                else:
+                    flavor = "medium" if d == medium and km >= 8 else flavors[n_easy_runs % len(flavors)]
+                    n_easy_runs += 1
+                    w = W.easy_run(paces, km, flavor)
+                    w.family, w.variant = "easy", flavor
+                assigned[d] = w
 
         if is_race_week:
             race_day = (req.race_date or dates[L]).weekday()
@@ -598,7 +755,7 @@ def generate_plan(req: PlanRequest) -> dict:
                 assigned[race_day - 1] = W.shakeout(paces)
             assigned[race_day] = W.race(paces, req.goal, dist, zone)
             if not req.race_date:  # no target race: end with a time trial to re-calibrate VDOT
-                assigned[race_day].title = f"🏁 Test {req.goal.upper()} (contrarreloj)"
+                assigned[race_day].title = "🏁 " + _("{goal} test (time trial)", goal=_label(req.goal))
 
         week = PlanWeek(wi + 1, phase, vol if n_days > 1 else round(long_km, 1), vdot, is_recovery=is_rec)
         for day in sorted(d for d, w in assigned.items() if w):

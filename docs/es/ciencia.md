@@ -36,17 +36,28 @@ Nota: un reportaje del WSJ (febrero 2026) citado por the5krunner recogía fisiot
 
 ### Volumen por sesión (Daniels)
 - Umbral ≤ 10 % del volumen semanal; I ≤ min(10 km, 8 %), repeticiones de 3–5 min con recuperación ≈ igual; R ≤ min(8 km, 5 %), recuperación completa.
-- Tirada larga ≤ 25–33 % del volumen semanal (hasta 42 % en el pico de maratón) y con tope de tiempo.
+- La tirada larga sale de la semana, no de la salida más larga del corredor: 25–34 % del volumen semanal con 4–7 días (Daniels: 30 % por debajo de ~65 km/semana, 25 % por encima, nunca más de 150 min), 40 % con 3 días, hasta 42 % en el pico de maratón.
+- Tope por objetivo y nivel (principiante / intermedio / avanzado): 5K 10 / 13 / 16 km; 10K 12 / 16 / 19 km; media 18 / 21 / 24 km; maratón 30 / 32 / 35 km. Un 10K no necesita tiradas de 20 km: el plan intermedio de 10K de Higdon llega a 8 millas (13 km) y la mayoría de planes usan 8–14 millas o 1,5–2 h.
+- Las tiradas con ritmo (cambios, progresiva) son ~10 % más cortas y, al llegar al tope, la distancia alterna entre el tope y ~10 % menos. En semanas de descarga y afinamiento baja con la semana.
+- Los días suaves no son iguales: más cortos el día después de una sesión dura (≤ 70 % de la tirada) y la víspera de la tirada (≤ 65 %), y una semana sí y otra no uno pasa a ser un rodaje medio-largo (Pfitzinger). Lo que no cabe va a calentamientos y vueltas a la calma más largos.
 - Ninguna salida más de ~10 % más larga que la más larga hasta la fecha. Frandsen et al. 2025 (BJSM, 5.205 corredores con datos de Garmin): los picos de una sola sesión > 10 % sobre la salida más larga de los 30 días previos aumentaron las lesiones por sobrecarga (+64 % con 10–30 %, ×2,3 por encima del 100 %); el cambio semanal no.
 
 ### Variedad de sesiones
 - Cada estímulo tiene varios formatos que rotan (primero el menos usado, nunca el mismo en 2 semanas si se puede evitar). El orden se baraja por atleta: dos amigos con los mismos datos reciben planes distintos pero estables.
   - Cuestas: sprints de 8–10 s, 60 s, 90 s, cuestas largas de 2′30–3′; como mucho una semana sí y otra no. Barnes et al. 2013: todos los formatos en cuesta mejoraron el 5K. Sin cuestas cerca, se cambian por fartlek.
   - Fartlek: 1′/1′, pirámide 1-2-3-2-1′, "Mona" (90-60-30-15 s).
-  - Umbral: intervalos cruise, tempo continuo, 2–3 bloques largos, tempo progresivo (Daniels).
+  - Umbral: intervalos cruise, tempo continuo, 2–3 bloques largos, tempo progresivo, tempo + 200 m rápidos (Daniels), alternancias de 1 km a ritmo 10K / 1 km a ritmo maratón (Canova).
   - VO₂máx: 800–1200 m, series de 3′, pirámide 400-800-1200-800-400, 4×4 noruego (4′ al 90–95 % de la FC máx. / 3′ de recuperación activa; Helgerud et al. 2007), series 30/30 s. Las series largas y las cortas mejoran el VO₂máx (Billat 2001; Rønnestad et al. 2015; Wen et al. 2019, meta-análisis).
   - Tiradas largas: suave, con rectas, con cambios de 1′, progresiva o con final a ritmo objetivo (pico de media/maratón).
+  - VO₂máx (además): 400 m con 200 m «flotando» a ritmo sostenido (De Castella).
+  - Rodajes: normal, por sensaciones (sin mirar el ritmo), por terreno blando, medio-largo, con rectas, con cambios cortos de 30 s o con sprints en cuesta.
 - La poca variación de un día a otro ("monotonía") se asocia a enfermedad y estancamiento (Foster 1998).
+- Sesiones duras por semana además de la tirada larga: una hasta con 4 días de carrera (dos para avanzados con 4), dos con 5 o más. Aproximadamente 1 de cada 5 sesiones debe ser dura (Seiler 2010) y los planes intermedios de Higdon usan una sola sesión de calidad por semana. Con una sola, otro rodaje lleva un extra ligero (rectas, cambios cortos, sprints en cuesta, fartlek corto).
+- El día duro cambia entre los días que dejan un día suave a cada lado, alternando de una semana a otra, para que el mismo rodaje no caiga siempre el mismo día.
+
+### Sustituir una sesión
+- Cualquier entreno de carrera planificado se puede cambiar desde su pantalla de detalle. Las alternativas salen del mismo motor: primero otros formatos del mismo estímulo (un tempo por unos intervalos cruise), después un estímulo parecido y al final una opción más suave (rodaje con rectas, rodaje suave).
+- Las alternativas tienen un tamaño parecido al original, así la carga de la semana y el reparto 80/20 se mantienen. Si la sesión ya estaba en Garmin, se reemplaza la copia del reloj.
 
 ### Días de carrera (1–7)
 - El atleta elige los días de la semana y el de la tirada larga. Los días de calidad se separan lo máximo posible y nunca la víspera de la tirada larga si se puede evitar; con 6–7 días, el día después de la tirada larga es regenerativo.

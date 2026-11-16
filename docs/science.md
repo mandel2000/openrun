@@ -36,17 +36,27 @@ A February 2026 WSJ report cited by the5krunner described physiotherapists seein
 
 ### Volume per session (Daniels)
 - Threshold ≤ 10 % of weekly volume; I ≤ min(10 km, 8 %), 3–5 min repetitions with about equal recovery; R ≤ min(8 km, 5 %), full recovery.
-- Long run ≤ 25–33 % of weekly volume (up to 42 % at a marathon peak) with a time cap.
-- No single run more than ~10 % longer than the longest run so far. Frandsen et al. 2025 (BJSM, 5,205 runners with Garmin data): single-session spikes > 10 % over the longest run of the previous 30 days raised overuse-injury rates (+64 % for 10–30 %, ×2.3 above 100 %), while week-to-week change did not.
+- Long run sized from the week, not from the runner's longest run: 25–34 % of weekly volume with 4–7 days (Daniels: 30 % under ~65 km/week, 25 % above, never over 150 min), 40 % with 3 days, up to 42 % at a marathon peak.
+- Ceiling by goal and level (beginner / intermediate / advanced): 5K 10 / 13 / 16 km; 10K 12 / 16 / 19 km; half 18 / 21 / 24 km; marathon 30 / 32 / 35 km. A 10K does not need 20 km long runs: Higdon's intermediate 10K peaks at 8 miles (13 km), and most 10K plans use 8–14 miles or 1.5–2 h.
+- Long runs with faster running (surges, progressive) are ~10 % shorter, and once the ceiling is reached the distance alternates between the ceiling and ~10 % less. It drops with the week on recovery and taper weeks.
+- Easy days differ: shorter the day after a hard session (≤ 70 % of the long run) and the day before the long run (≤ 65 %), and every other week one becomes a medium-long run (Pfitzinger). What doesn't fit goes into longer warm-ups and cool-downs of the week's sessions.
+- No single run more than ~10 % longer than the longest run of the previous 4 weeks. Frandsen et al. 2025 (BJSM, 5,205 runners with Garmin data): single-session spikes > 10 % over the longest run of the previous 30 days raised overuse-injury rates (+64 % for 10–30 %, ×2.3 above 100 %), while week-to-week change did not.
 
 ### Variety of sessions
 - Each stimulus has several formats that rotate (least used first, never the same one within 2 weeks if avoidable). The order is shuffled per athlete, so two friends with the same inputs get different but stable plans.
   - Hills: 8–10 s sprints, 60 s, 90 s, 2′30–3′ long hills; at most every other week. Barnes et al. 2013: every uphill format improved 5K performance. Without hills nearby they become fartlek.
   - Fartlek: 1′/1′, pyramid 1-2-3-2-1′, "Mona" (90-60-30-15 s).
-  - Threshold: cruise intervals, continuous tempo, 2–3 long blocks, progressive tempo (Daniels).
-  - VO₂max: 800–1200 m, 3′ reps, 400-800-1200-800-400 pyramid, Norwegian 4×4 (4′ at 90–95 % HRmax / 3′ active recovery; Helgerud et al. 2007), 30/30 s sets. Long and short intervals both raise VO₂max (Billat 2001; Rønnestad et al. 2015; Wen et al. 2019 meta-analysis).
+  - Threshold: cruise intervals, continuous tempo, 2–3 long blocks, progressive tempo, tempo + 200 m reps (Daniels), alternations of 1 km at 10K pace / 1 km at marathon pace (Canova).
+  - VO₂max: 800–1200 m, 3′ reps, 400-800-1200-800-400 pyramid, Norwegian 4×4 (4′ at 90–95 % HRmax / 3′ active recovery; Helgerud et al. 2007), 30/30 s sets, 400 m with a 200 m float (de Castella). Long and short intervals both raise VO₂max (Billat 2001; Rønnestad et al. 2015; Wen et al. 2019 meta-analysis).
   - Long runs: easy, + strides, with 1′ surges, progressive, or with a goal-pace finish (half/marathon peak).
+  - Easy runs: plain, by feel (no pace on the watch), on soft ground, medium-long, with strides, with 30 s pickups, or with hill sprints.
 - Low day-to-day variation ("monotony") goes with illness and staleness (Foster 1998).
+- Hard sessions per week besides the long run: one with up to 4 running days (two for advanced runners on 4), two with 5 or more. About 1 session in 5 should be hard (Seiler 2010), and Higdon's intermediate plans use a single workout a week. With one hard session, another run gets a light extra (strides, pickups, hill sprints, a short fartlek).
+- The hard day moves between the weekdays that keep an easy day on both sides, alternating from week to week, so the same run does not always fall on the same day.
+
+### Swapping a session
+- Any planned run can be swapped from its detail screen. The alternatives come from the same engine: first other formats of the same stimulus (a tempo for cruise intervals), then a related stimulus, then an easier option (easy run with strides, plain easy run).
+- Alternatives are sized like the original, so the week's load and the 80/20 split hold. The watch copy is replaced when the session was already on Garmin.
 
 ### Running days (1–7)
 - The athlete picks the weekdays and the long-run day. Quality days are spread as far apart as possible, never the day before the long run if it can be avoided; with 6–7 days the day after the long run is a recovery run.
