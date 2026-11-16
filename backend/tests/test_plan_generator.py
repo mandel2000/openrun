@@ -171,3 +171,19 @@ def test_alternatives_for_a_session():
     # plans made before sessions carried their family still get alternatives (from the type)
     old = {k: v for k, v in q.items() if k not in ("family", "variant")}
     assert alternatives(old, goal="10k", vdot=45, weekly_km=45)
+
+
+def test_short_peak_keeps_race_pace_and_no_twin_sessions():
+    plan = generate_plan(PlanRequest(goal="10k", start_date=START, run_days=[0, 2, 4, 5], long_run_day=5, hills=False,
+                                     current_weekly_km=30, longest_recent_run_km=20, seed=100003 + START.toordinal()))
+    peak = [x for w in plan["weeks"] if w["phase"] == "peak" for x in _runs(w)]
+    assert any(x["type"] == "race_pace" for x in peak)  # even when half of the peak is a recovery week
+    for seed in range(8):
+        p = generate_plan(PlanRequest(goal="10k", start_date=START, run_days=[0, 2, 4, 5], long_run_day=5, hills=False,
+                                      current_weekly_km=30, seed=seed))
+        for w in p["weeks"]:
+            types = [x["type"] for x in _runs(w) if x["type"] in ("fartlek", "progression")]
+            assert len(types) == len(set(types)), (seed, w["index"], [x["title"] for x in _runs(w)])
+        special = [{x["title"] for x in _runs(w) if x["type"] not in ("easy", "long", "recovery")} for w in p["weeks"]]
+        for a, b in zip(special, special[1:]):
+            assert not a & b, (seed, a & b)  # nor the same session two weeks running
