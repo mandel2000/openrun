@@ -16,7 +16,7 @@ Fuentes: [the5krunner – Runna](https://the5krunner.com/runna/), [the5krunner �
 | Fuerza, calentamiento, movilidad | ✅ fuerza 2×/sem según fase; calentamientos en cada sesión de calidad |
 | Envío al reloj Garmin | ✅ Garmin Connect workout + calendario (se sincroniza al 265) |
 | Mileage Insights / briefings de sesión | ✅ % baja intensidad por semana, descripción fisiológica por sesión; el coach IA analiza |
-| Adapt for Heat | ✅ temperatura + punto de rocío (Open-Meteo) a tu hora de entreno |
+| Adapt for Heat | ➖ previsión informativa; los ritmos de entreno no cambian (solo estrategia de carrera) |
 | Coach conversacional | ✅ Claude con herramientas sobre tus datos (Runna no lo tiene) |
 | HRV / readiness | ✅ HRV de Garmin, Zepp o medición propia con la Helio Strap (Runna no lo usa) |
 
@@ -123,7 +123,7 @@ Nota: un reportaje del WSJ (febrero 2026) citado por the5krunner recogía fisiot
 - **Vuelta ↔ paso**: Garmin graba una vuelta por paso ejecutado (`wktStepIndex` = orden del paso − 1 en el entreno subido; las repeticiones comparten índice), así que cada serie se compara con su rango de ritmo. Tolerancia ±2 % fuera del rango.
 - **Veredicto** (solo sesiones de calidad): «más fácil» si las series van de media ≥ 2 % más rápidas sin FC por encima de LTHR+2 % (en umbral/maratón; en I/R la FC va retrasada y no se usa); «más dura» si la mitad de las series van ≥ 3 % más lentas o la FC supera LTHR+5 % yendo a ritmo.
 - **Ajuste de VDOT**: ±0,5 cuando 2 de las 3 últimas sesiones (21 días) coinciden; máximo una vez por semana y nunca en los 10 días previos a la carrera objetivo. Conservador para que un día bueno (o uno frío) no mueva todos los ritmos. Es la misma idea que *Pace Insights* de Runna, con reglas explícitas.
-- **Calor**: el rendimiento cae al aumentar el estrés térmico (Ely et al. 2007; El Helou et al. 2012, óptimo ~4–10 °C; Mantzios et al. 2022). Se usa la regla de entrenadores T + punto de rocío (°F) (Hadley): ≤ 100 sin ajuste, 101–110 +0,5 %, … , 171–180 +11 %, > 180 no hacer calidad al aire libre. Se mantiene el esfuerzo (y la adaptación buscada), no el ritmo. Se deshace solo si la previsión baja.
+- **Calor**: el rendimiento cae al aumentar el estrés térmico (Ely et al. 2007; El Helou et al. 2012, óptimo ~4–10 °C; Mantzios et al. 2022). En los entrenos se muestra la temperatura y el punto de rocío previstos a tu hora, pero los ritmos no cambian: un ajuste del 1–2 % a 12–16 °C con aire húmedo está dentro del ruido diario y solo hacía que los rodajes suaves se sintieran raros; con calor, corre por sensaciones. Por encima de T + rocío 180 °F aparece un aviso (temprano, en cinta o suave). En la estrategia de carrera sí se ralentiza el objetivo con la regla de entrenadores T + punto de rocío (°F) (Hadley): ≤ 100 sin ajuste, 101–110 +0,5 %, … , 171–180 +11 %.
 
 ## 7. Readiness 0–100
 

@@ -10,33 +10,15 @@ import { t } from '../i18n'
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-function WeatherChip({ date, w, onAdjusted }: { date: string; w: Workout; onAdjusted: () => void }) {
+function WeatherChip({ date, w }: { date: string; w: Workout }) {
   const { data } = useApi<Weather>(`/api/weather?date=${date}`)
-  const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
   if (!data || data.available === false || w.sport !== 'running') return null
-  const heated = !!(w as Workout & { _heat?: unknown })._heat
   return (
     <div style={{ marginTop: 12 }}>
-      <div className="row">
-        <span className={`chip ${data.pct >= 1 ? 'chip-warn' : ''}`} title={t('Temperature + dew point = {f} °F', { f: data.sum_f })}>
-          <Icon name="sun" size={14} />{t('{temp} °C · dew point {dew} °C at {hour}h', { temp: Math.round(data.temp), dew: Math.round(data.dew), hour: data.hour })}
-          {data.pct >= 1 ? ` · ${t('pace +{pct}%', { pct: data.pct })}` : ''}
-        </span>
-        {data.pct >= 1 && !heated && (
-          <button className="btn btn-sm" disabled={busy} onClick={async () => {
-            setBusy(true)
-            try {
-              const r = await api.post<{ changes: unknown[]; pushed: number }>('/api/heat/apply')
-              setMsg(t('{n} workouts adjusted for heat', { n: r.changes.length }) + (r.pushed ? t(', {n} updated on the watch', { n: r.pushed }) : '') + '.')
-              onAdjusted()
-            } catch (e) { setMsg((e as Error).message) } finally { setBusy(false) }
-          }}>{t('Adjust for heat')}</button>
-        )}
-        {heated && <span className="chip chip-good"><Icon name="check" size={13} />{t('Adjusted for heat')}</span>}
-      </div>
+      <span className="chip" title={t('Temperature + dew point = {f} °F', { f: data.sum_f })}>
+        <Icon name="sun" size={14} />{t('{temp} °C · dew point {dew} °C at {hour}h', { temp: Math.round(data.temp), dew: Math.round(data.dew), hour: data.hour })}
+      </span>
       {data.too_hot && <div style={{ marginTop: 8 }}><Banner>{t('Extreme heat: run first thing in the morning, on a treadmill, or swap it for an easy run. Drink before and during.')}</Banner></div>}
-      {msg && <div className="small muted" style={{ marginTop: 6 }}>{msg}</div>}
     </div>
   )
 }
@@ -80,7 +62,7 @@ function Hero({ w, date, next, onOpen, onPushed }: { w: Workout | null; date: st
       <h2 style={{ marginTop: 6, fontSize: 28, lineHeight: '34px' }}>{w.title}</h2>
       <div className="text-2 num" style={{ marginTop: 4 }}><WorkoutMeta w={w} />{w.sport === 'running' ? ` · ${levelLabel(lvl)}` : ''}</div>
       {w.sport === 'running' && <div style={{ marginTop: 16 }}><StepProfile steps={w.steps} /></div>}
-      {w.status !== 'done' && date >= iso(new Date()) && daysBetween(iso(new Date()), date) <= 2 && <WeatherChip date={date} w={w} onAdjusted={onPushed} />}
+      {w.status !== 'done' && date >= iso(new Date()) && daysBetween(iso(new Date()), date) <= 2 && <WeatherChip date={date} w={w} />}
       {w.note && <div style={{ marginTop: 12 }}><Banner>{w.note}</Banner></div>}
       <details style={{ marginTop: 12 }}>
         <summary className="small">{t('Steps and rationale')}</summary>

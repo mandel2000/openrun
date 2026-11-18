@@ -16,7 +16,7 @@ Sources: [the5krunner – Runna](https://the5krunner.com/runna/), [the5krunner �
 | **Not feeling 100 %** | ✅ reduce or active rest for 3–7 days, plus "I've been off N days" |
 | Strength, warm-up, mobility | ✅ structured sessions by phase, dynamic warm-up, post-run mobility |
 | Push workouts to Garmin | ✅ Garmin Connect workout + calendar |
-| Adapt for heat | ✅ temperature + dew point at your usual training hour |
+| Adapt for heat | ➖ forecast shown for information; training paces are not changed (race strategy only) |
 | Conversational coach | ✅ tool-using AI coach on your data (in-app or MCP) |
 | HRV / readiness | ✅ HRV, sleep, resting HR, load and a daily check-in (Runna does not use HRV) |
 
@@ -114,7 +114,8 @@ A February 2026 WSJ report cited by the5krunner described physiotherapists seein
 
 ### Heat
 - Performance drops as heat stress rises (Ely et al. 2007; El Helou et al. 2012, optimum ~4–10 °C; Mantzios et al. 2022).
-- Coaches' rule T + dew point (°F) (Hadley): ≤ 100 no change, 101–110 +0.5 %, …, 171–180 +11 %, > 180 no outdoor quality. Effort is kept, not pace. Reverted if the forecast cools.
+- Training: the forecast temperature and dew point at your usual hour are shown with the session, but paces are not changed. A small forecast slowdown (1–2 % at 12–16 °C with humid air) is within day-to-day noise and only made easy runs feel wrong; run by effort on hot days. Above T + dew point 180 °F a warning suggests running early, indoors or easy.
+- Race strategy: the coaches' rule T + dew point (°F) (Hadley) still slows the race-day target: ≤ 100 no change, 101–110 +0.5 %, …, 171–180 +11 %.
 
 ### Races during a plan
 - A = goal race (the plan is periodised towards it). B = tune-up: 3-day mini-taper (quality → easy + strides, the day before a shake-out), reducing volume while keeping intensity (Mujika & Padilla 2003; Bosquet 2007), then ~1 easy day per 3 km raced (Daniels). C = training race: no taper, counts as a quality session. Deleting a race restores the original plan.

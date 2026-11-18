@@ -33,7 +33,7 @@ Every data table carries `user_id`. The current user lives in a context variable
 
 ### Daily routine
 
-At each user's sync time (06:30 by default): Garmin sync → post-run analysis → missed sessions → pace insights → weekly review (Mondays) → heat adjustment → readiness adjustment → push changed workouts for the next 7 days → morning notification. Each step is logged and failures don't stop the others. Between 9:00 and 22:00 a lighter sync every ~2 h picks up new runs and notifies their analysis.
+At each user's sync time (06:30 by default): Garmin sync → post-run analysis → missed sessions → pace insights → weekly review (Mondays) → readiness adjustment → push changed workouts for the next 7 days → morning notification. Each step is logged and failures don't stop the others. Between 9:00 and 22:00 a lighter sync every ~2 h picks up new runs and notifies their analysis.
 
 ### The coach never computes paces
 

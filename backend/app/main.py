@@ -506,7 +506,6 @@ class SettingsIn(BaseModel):
     auto_adapt: bool | None = None
     auto_push: bool | None = None
     auto_pace: bool | None = None
-    heat_adjust: bool | None = None
     run_hour: int | None = None
     lat: float | None = None
     lon: float | None = None
@@ -650,13 +649,6 @@ def weather(date: str | None = None, s: Session = DB):
         return S.weather_for(s, date or dt.date.today().isoformat()) or {"available": False}
     except Exception as e:  # noqa: BLE001
         return {"available": False, "error": str(e)}
-
-
-@app.post("/api/heat/apply")
-def heat_apply(s: Session = DB):
-    changes = S.apply_heat(s)
-    pushed = S.push_changed(s, 2) if garmin.status().get("connected") else []
-    return {"changes": changes, "pushed": sum(1 for p in pushed if p["ok"])}
 
 
 # ---------------------------------------------------------------- athlete

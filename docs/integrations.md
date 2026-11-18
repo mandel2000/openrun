@@ -25,7 +25,7 @@ Zepp has no public API; the strap broadcasts the standard Bluetooth heart-rate p
 
 ## Weather
 
-[Open-Meteo](https://open-meteo.com) (no key needed): hourly forecast for the heat adjustment at your usual training hour, the race-day forecast in the race strategy, and terrain elevation for courses without altitude. Location comes from *Settings* or your latest run.
+[Open-Meteo](https://open-meteo.com) (no key needed): hourly forecast at your usual training hour (shown with the next sessions), the race-day forecast in the race strategy, and terrain elevation for courses without altitude. Location comes from *Settings* or your latest run.
 
 ## Maps
 

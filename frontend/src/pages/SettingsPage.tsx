@@ -475,7 +475,7 @@ function CoachCard({ admin }: { admin: boolean }) {
   )
 }
 
-type Settings = { auto_sync: boolean; sync_time: string; auto_adapt: boolean; auto_push: boolean; auto_pace: boolean; heat_adjust: boolean; run_hour: number; lat: number | null; lon: number | null; notify_morning: boolean; notify_analysis: boolean; notify_weekly: boolean }
+type Settings = { auto_sync: boolean; sync_time: string; auto_adapt: boolean; auto_push: boolean; auto_pace: boolean; run_hour: number; lat: number | null; lon: number | null; notify_morning: boolean; notify_analysis: boolean; notify_weekly: boolean }
 type DailyLog = { items?: { at: string; steps: { step: string; ok: boolean; result?: unknown; error?: string }[] }[]; last_date?: string }
 
 function Toggle({ label, help, checked, onChange }: { label: string; help: string; checked: boolean; onChange: (v: boolean) => void }) {
@@ -509,8 +509,8 @@ function AutomationCard({ selfHost }: { selfHost: boolean }) {
     <div className="card">
       <ConnHead icon="zap" title={t('Daily automation')} status={st.auto_sync ? t('Daily at {time}', { time: st.sync_time }) : t('Off')} tone={st.auto_sync ? 'good' : 'warn'} />
       <p className="small text-2" style={{ marginTop: 10 }}>{selfHost
-        ? t('Every morning: sync Garmin → analyse your workouts → adjust paces → adapt for heat and readiness → send the next 7 days to the watch (only what changed). If the computer was off at that time, it runs when OpenRun starts.')
-        : t('Every morning the server syncs Garmin, analyses your workouts, adjusts paces to the heat and to how you are, and sends the next 7 days to your watch. You don\'t need to do anything.')}</p>
+        ? t('Every morning: sync Garmin → analyse your workouts → adjust paces → adapt to readiness → send the next 7 days to the watch (only what changed). If the computer was off at that time, it runs when OpenRun starts.')
+        : t('Every morning the server syncs Garmin, analyses your workouts, adjusts paces to how you are, and sends the next 7 days to your watch. You don\'t need to do anything.')}</p>
       <Toggle label={t('Daily routine')} help={selfHost ? t('Needs OpenRun running (see “Start automatically” below).') : t('Runs on the server at this time, even with your phone off.')} checked={st.auto_sync} onChange={(v) => save({ auto_sync: v })} />
       <div className="row" style={{ paddingLeft: 32, marginBottom: 6 }}>
         <label className="field" style={{ width: 140 }}>{t('Routine time')}<input type="time" value={st.sync_time} onChange={(e) => e.target.value && save({ sync_time: e.target.value })} /></label>
@@ -520,7 +520,6 @@ function AutomationCard({ selfHost }: { selfHost: boolean }) {
       </div>
       <Toggle label={t('Send to watch')} help={t('Keeps the next 7 days in the Garmin calendar.')} checked={st.auto_push} onChange={(v) => save({ auto_push: v })} />
       <Toggle label={t('Adjust paces automatically')} help={t('Post-run analysis: VDOT ±0.5 if 2 of the last 3 quality sessions are easier or harder than planned.')} checked={st.auto_pace} onChange={(v) => save({ auto_pace: v })} />
-      <Toggle label={t('Heat adjustment')} help={t('Slows the paces according to the forecast temperature + dew point (Open-Meteo) at your training hour.')} checked={st.heat_adjust} onChange={(v) => save({ heat_adjust: v })} />
       <Toggle label={t('Adapt to readiness')} help={t('Low HRV/resting HR/sleep → reduce or change the day\'s session.')} checked={st.auto_adapt} onChange={(v) => save({ auto_adapt: v })} />
       <details style={{ marginTop: 6 }}>
         <summary className="small">{t('Location for the weather')} {st.lat != null ? `(${st.lat.toFixed(2)}, ${st.lon?.toFixed(2)})` : t('(automatic: start of your latest run)')}</summary>

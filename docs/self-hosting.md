@@ -24,7 +24,7 @@ cp .env.example .env    # optional: AI provider key, etc.
 
 `run.sh` creates the Python virtualenv, builds the web app when its sources change and starts the server. Requests from the same machine are trusted (no password); data goes to `~/.openrun/`.
 
-The **daily routine** (Garmin sync, analysis, pace and heat adjustments, readiness, pushing the next 7 days to the watch) only runs while the server is up, at 06:30 by default or as soon as it starts if that time has passed.
+The **daily routine** (Garmin sync, analysis, pace adjustments, readiness, pushing the next 7 days to the watch) only runs while the server is up, at 06:30 by default or as soon as it starts if that time has passed.
 
 ### Start automatically (macOS)
 

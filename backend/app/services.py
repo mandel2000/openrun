@@ -791,7 +791,7 @@ def recalibrate_paces(s: Session, new_vdot: float, source: str) -> dict:
     today = dt.date.today().isoformat()
     n, to_push = 0, []
     for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.date >= today, PlannedWorkout.status.in_(["planned", "modified"]))).all():
-        pw.data = {k: v for k, v in adapt.repace_workout(pw.data, new_vdot).items() if k != "_heat"}  # heat re-applied next run
+        pw.data = {k: v for k, v in adapt.repace_workout(pw.data, new_vdot).items() if k != "_heat"}
         if pw.garmin_workout_id:
             to_push.append(pw.id)
         s.add(pw)
@@ -1134,7 +1134,6 @@ DEFAULT_SETTINGS = {
     "auto_adapt": True,      # adjust today's session to readiness
     "auto_push": True,       # keep the next 7 days on the watch
     "auto_pace": True,       # apply pace insights automatically (VDOT ±0.5)
-    "heat_adjust": True,     # slow pace targets in heat
     "run_hour": 8,           # usual training hour (for the weather forecast)
     "lat": None, "lon": None,
     "notify_morning": True,  # push: today's session after the morning routine
@@ -1236,39 +1235,19 @@ def weather_for(s: Session, date: str) -> dict | None:
     return {**w, "date": date, "hour": hour, "pct": pct, "sum_f": sum_f, "too_hot": sum_f > HEAT.TOO_HOT, "lat": loc[0], "lon": loc[1]}
 
 
-def apply_heat(s: Session, days: int = 2) -> list[dict]:
-    """Slow pace targets of the next `days` running workouts by the forecast heat; restore when it cools."""
+def clear_heat(s: Session) -> list[dict]:
+    """Undo the old heat adjustment: restore original paces of future workouts that were slowed for heat.
+
+    Weather is shown for information only; it no longer changes the workout."""
     changes = []
-    today = dt.date.today()
-    for i in range(days):
-        date = (today + dt.timedelta(days=i)).isoformat()
-        try:
-            w = weather_for(s, date)
-        except Exception:  # noqa: BLE001 - no forecast, no change
-            w = None
-        if not w:
+    for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.date >= dt.date.today().isoformat(), PlannedWorkout.status.in_(["planned", "modified"]))).all():
+        h = pw.data.get("_heat")
+        if not h:
             continue
-        for pw in s.exec(select(PlannedWorkout).where(PlannedWorkout.date == date, PlannedWorkout.status.in_(["planned", "modified"]))).all():
-            if pw.data.get("sport") != "running":
-                continue
-            h = pw.data.get("_heat")
-            base = h["orig_steps"] if h else pw.data["steps"]
-            if w["pct"] >= 1:
-                if h and h["pct"] == w["pct"]:
-                    continue
-                note = _("Paces +{pct}% for heat ({temp} °C, dew point {dew} °C at {hour}h). Keep the effort, not the pace.",
-                         pct=f"{w['pct']:g}", temp=f"{w['temp']:.0f}", dew=f"{w['dew']:.0f}", hour=w["hour"])
-                if w["too_hot"] and pw.data.get("intensity") in ("moderate", "high"):
-                    note += " " + _("Extreme heat: better on a treadmill, first thing in the morning, or swap it for an easy run.")
-                pw.data = {**pw.data, "steps": HEAT.scale_steps(base, w["pct"]),
-                           "_heat": {"pct": w["pct"], "temp": w["temp"], "dew": w["dew"], "orig_steps": base}}
-                pw.note, pw.status = note, "modified"
-                changes.append({"id": pw.id, "date": date, "title": pw.data.get("title"), "pct": w["pct"]})
-            elif h:
-                pw.data = {k: v for k, v in pw.data.items() if k != "_heat"} | {"steps": base}
-                pw.note = None
-                changes.append({"id": pw.id, "date": date, "title": pw.data.get("title"), "pct": 0})
-            s.add(pw)
+        pw.data = {k: v for k, v in pw.data.items() if k != "_heat"} | {"steps": h.get("orig_steps") or pw.data["steps"]}
+        pw.note = None
+        changes.append({"id": pw.id, "date": pw.date, "title": pw.data.get("title")})
+        s.add(pw)
     s.commit()
     return changes
 
@@ -1302,7 +1281,7 @@ def push_changed(s: Session, days: int = 7) -> list[dict]:
 
 
 def daily_routine(s: Session, force: bool = False) -> dict:
-    """Morning routine: sync → analyse → pace insights → heat → readiness → push next 7 days."""
+    """Morning routine: sync → analyse → pace insights → readiness → push next 7 days."""
     st = get_settings(s)
     log: dict = {"at": dt.datetime.now().isoformat(timespec="seconds"), "steps": []}
 
@@ -1323,8 +1302,7 @@ def daily_routine(s: Session, force: bool = False) -> dict:
     step("paces", lambda: (lambda r: {"applied": r["applied"], "pending": r["pending"]})(pace_insights(s)))
     if dt.date.today().weekday() == 0:
         step("weekly review", lambda: (lambda r: {"ai": r["ai"]})(weekly_review(s)))
-    if st["heat_adjust"]:
-        step("heat", lambda: apply_heat(s))
+    step("heat", lambda: clear_heat(s) or None)  # legacy: restore paces slowed by the old heat adjustment
     if st["auto_adapt"]:
         step("readiness", lambda: adapt_today(s)["changes"])
     if connected and st["auto_push"]:
@@ -1361,8 +1339,6 @@ def today_message(s: Session) -> tuple[str, str] | None:
     if run:
         title = _("Today: {title}", title=run["title"])
         bits = [f"{run.get('distance_km')} km" if run.get("distance_km") else None]
-        if run.get("_heat"):
-            bits.append(_("paces +{pct}% for heat", pct=run["_heat"].get("pct")))
         if run["status"] == "modified":
             bits.append(_("adjusted to how you are today"))
         if other:
