@@ -1,6 +1,6 @@
 # Configuration
 
-OpenRun is configured with environment variables. Copy [`.env.example`](../.env.example) to `.env`: `docker compose` and `./run.sh` both read it. Empty values count as unset. Everything else (training days, sync time, notifications, heat adjustment, location, …) is set per user inside the app.
+OpenRun is configured with environment variables. Copy [`.env.example`](../.env.example) to `.env`: `docker compose` and `./run.sh` both read it. Empty values count as unset. Everything else (training days, sync time, notifications, training hour, location, …) is set per user inside the app.
 
 ## Access
 

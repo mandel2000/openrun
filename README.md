@@ -37,7 +37,7 @@
 - **Readiness 0–100** from HRV, sleep, resting HR, training load (form/ACWR) and a two-tap daily check-in. When you are tired it proposes a softer version of today's session; you accept or keep the plan, and the coach explains why.
 - **The plan adapts**: missed key sessions get a proposed slot later in the week (never next to another hard day), a run done a day late still counts, and "I've been off N days" (illness, injury, travel) eases you back and re-paces when needed.
 - **Post-run analysis**: every interval against its target; when sessions consistently come out easier or harder, paces are recalibrated (like *Pace Insights*).
-- **Heat adjustment**: forecast temperature and dew point at your usual training hour slow the pace targets.
+- **Weather**: forecast temperature and dew point at your usual training hour, shown with the next sessions (paces are not changed).
 - **Race strategy**: per-km pacing at even effort on the real course profile (GPX/TCX/KML or link), forecast heat on race day, fuelling plan, and a race workout on your watch.
 - **Activities**: map, synced pace/HR/elevation charts, km splits and running dynamics.
 - **Records and predictions** (1K to marathon), training load (TRIMP, CTL/ATL), weekly review with an AI comment.

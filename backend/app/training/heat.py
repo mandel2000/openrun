@@ -1,12 +1,15 @@
-"""Heat adjustment of pace targets (like Runna's "Adapt for Heat").
+"""Forecast heat stress (temperature + dew point at the usual training hour).
+
+Shown with each workout for information only: training paces are not changed (an easy run
+already runs by feel, and hard sessions are better judged by effort on the day). The Hadley
+table below is still used to slow the race-day target in the race strategy.
 
 Evidence: running performance falls as heat stress rises above ~10-15 °C, mostly through
 cardiovascular strain and thermoregulation; the effect grows with humidity (Ely et al. 2007,
 marathon times vs WBGT; El Helou et al. 2012, 1.8 M marathon results, optimum ~4-10 °C;
 Mantzios et al. 2022 meta-analysis). For training, the practical rule used by coaches is the
 temperature + dew point sum in °F (Hadley), which tracks heat stress better than temperature
-alone. The slowdown keeps the physiological intent (same effort/HR) of each session.
-"""
+alone. """
 
 from __future__ import annotations
 
@@ -30,19 +33,6 @@ def slowdown_pct(temp_c: float, dew_c: float) -> tuple[float, float]:
         if s <= bound:
             return pct, round(s)
     return 12.0, round(s)
-
-
-def scale_steps(steps: list[dict], pct: float) -> list[dict]:
-    out = []
-    for st in steps:
-        st = dict(st)
-        if st.get("kind") == "repeat":
-            st["steps"] = scale_steps(st.get("steps") or [], pct)
-        elif st.get("pace_slow") and st.get("pace_fast"):
-            st["pace_slow"] = round(st["pace_slow"] * (1 + pct / 100), 1)
-            st["pace_fast"] = round(st["pace_fast"] * (1 + pct / 100), 1)
-        out.append(st)
-    return out
 
 
 _cache: dict[tuple, tuple[float, dict]] = {}

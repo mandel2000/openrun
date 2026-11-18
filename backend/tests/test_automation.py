@@ -63,37 +63,38 @@ def test_pace_insight_rules():
     assert AN.pace_insight(old, today, None, None, 45.0) is None
 
 
-def test_heat_table_and_scaling():
+def test_heat_table():
     assert HEAT.slowdown_pct(10, 2)[0] == 0  # 50+35.6 °F
     pct, s = HEAT.slowdown_pct(28, 18)  # 82.4+64.4 = 146.8 °F
     assert pct == 5.3 and s == 147
     assert HEAT.slowdown_pct(38, 26)[0] == 11.0  # 179 °F
     assert HEAT.slowdown_pct(38, 29)[0] == 12.0  # > 180 °F
-    st = HEAT.scale_steps(PLAN["steps"], 5)
-    assert st[1]["steps"][0]["pace_fast"] == round(274 * 1.05, 1) and PLAN["steps"][1]["steps"][0]["pace_fast"] == 274
 
 
-def test_apply_heat_and_restore(monkeypatch):
+def test_heat_never_changes_workouts_and_old_adjustments_are_undone(monkeypatch):
     init_db()
     today = dt.date.today().isoformat()
+    slowed = [{**PLAN["steps"][0]}, {**PLAN["steps"][1], "steps": [{**PLAN["steps"][1]["steps"][0], "pace_fast": 290}]}]
     with Session(engine) as s:
         S.update_settings(s, lat=40.96, lon=-5.66, run_hour=8)
-        pw = PlannedWorkout(date=today, data={**PLAN, "date": today}, week=0)
-        s.add(pw)
+        fresh = PlannedWorkout(date=today, data={**PLAN, "date": today}, week=0)
+        old = PlannedWorkout(date=today, data={**PLAN, "date": today, "steps": slowed, "_heat": {"pct": 5.3, "orig_steps": PLAN["steps"]}},
+                             week=0, status="modified", note="Paces +5.3% for heat")
+        s.add(fresh)
+        s.add(old)
         s.commit()
-        s.refresh(pw)
-        hot = {f"{today}T08:00": {"temp": 28, "dew": 18, "rh": 55}}
-        monkeypatch.setattr(HEAT, "forecast", lambda lat, lon: hot)
-        ch = S.apply_heat(s, days=1)
-        assert any(c["id"] == pw.id and c["pct"] == 5.3 for c in ch)
-        s.refresh(pw)
-        assert pw.data["steps"][1]["steps"][0]["pace_fast"] == round(274 * 1.053, 1) and "heat" in pw.note
-        assert S.apply_heat(s, days=1) == [] or all(c["id"] != pw.id for c in S.apply_heat(s, days=1))  # idempotent
-        hot[f"{today}T08:00"] = {"temp": 12, "dew": 4, "rh": 60}
-        S.apply_heat(s, days=1)
-        s.refresh(pw)
-        assert pw.data["steps"][1]["steps"][0]["pace_fast"] == 274 and "_heat" not in pw.data
-        s.delete(pw)
+        monkeypatch.setattr(HEAT, "forecast", lambda lat, lon: {f"{today}T08:00": {"temp": 28, "dew": 18, "rh": 55}})
+        w = S.weather_for(s, today)
+        assert w["temp"] == 28 and w["sum_f"] == 147  # forecast still shown
+        ch = S.clear_heat(s)
+        assert [c["id"] for c in ch] == [old.id]
+        s.refresh(fresh)
+        s.refresh(old)
+        assert fresh.data["steps"] == PLAN["steps"] and "_heat" not in fresh.data
+        assert old.data["steps"] == PLAN["steps"] and "_heat" not in old.data and old.note is None
+        assert not hasattr(S, "apply_heat")
+        s.delete(fresh)
+        s.delete(old)
         s.commit()
 
 
@@ -410,11 +411,11 @@ def test_today_message(monkeypatch):
     with Session(engine) as s:
         for pw in s.exec(__import__("sqlmodel").select(PlannedWorkout).where(PlannedWorkout.date == today)).all():
             s.delete(pw)
-        s.add(PlannedWorkout(date=today, data={"title": "Series 6×800", "sport": "running", "distance_km": 9, "_heat": {"pct": 2.5}}))
+        s.add(PlannedWorkout(date=today, data={"title": "Series 6×800", "sport": "running", "distance_km": 9}))
         s.add(PlannedWorkout(date=today, data={"title": "Fuerza general", "sport": "strength"}))
         s.commit()
         title, body = S.today_message(s)
-        assert title == "Today: Series 6×800" and "9 km" in body and "heat" in body and "Fuerza general" in body
+        assert title == "Today: Series 6×800" and "9 km" in body and "heat" not in body and "Fuerza general" in body
 
 
 def test_reset_link_export_and_self_delete(monkeypatch):

@@ -1,6 +1,6 @@
 # Arranque automático y acceso desde el móvil
 
-OpenRun es un servidor local. Para que la **rutina diaria** (sync con Garmin, análisis, ajuste de ritmos, calor, readiness y envío al reloj) se ejecute cada mañana, el servidor tiene que estar en marcha. En macOS eso se consigue registrándolo en `launchd`. Para usarlo desde el **móvil**, el servidor se abre a la red local y pide un **PIN**.
+OpenRun es un servidor local. Para que la **rutina diaria** (sync con Garmin, análisis, ajuste de ritmos, readiness y envío al reloj) se ejecute cada mañana, el servidor tiene que estar en marcha. En macOS eso se consigue registrándolo en `launchd`. Para usarlo desde el **móvil**, el servidor se abre a la red local y pide un **PIN**.
 
 ## 1. Modos de arranque
 
@@ -59,7 +59,7 @@ rm ~/Library/LaunchAgents/com.openrun.server.plist
 - A la hora configurada en *Ajustes › Automatización diaria* (06:30 por defecto), una vez al día.
 - Si a esa hora el Mac estaba dormido o apagado, se ejecuta en cuanto OpenRun vuelve a estar en marcha. El planificador comprueba cada minuto.
 - Con el Mac apagado no se ejecuta.
-- Cada paso (sync, análisis, ritmos, calor, readiness, reloj) se puede activar o desactivar en la misma pantalla.
+- Cada paso (sync, análisis, ritmos, readiness, reloj) se puede activar o desactivar en la misma pantalla.
 
 ## 3. Acceso desde el móvil
 
