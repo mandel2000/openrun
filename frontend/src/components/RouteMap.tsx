@@ -18,7 +18,7 @@ export default function RouteMap({ coords, marks = [], highlight, height = 280 }
     if (!el.current || coords.length < 2) return
     const m = L.map(el.current, { zoomControl: true, attributionControl: true, scrollWheelZoom: false })
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 18, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(m)
     const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0E9F8E'
     const line = L.polyline(coords, { color: accent, weight: 4, opacity: 0.9 }).addTo(m)
