@@ -46,7 +46,7 @@ DB = Depends(get_session)
 
 # ---------------------------------------------------------------- access control (see app/auth.py)
 
-SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "same-origin", "X-Frame-Options": "DENY"}
+SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "strict-origin-when-cross-origin", "X-Frame-Options": "DENY"}
 
 
 @app.middleware("http")
